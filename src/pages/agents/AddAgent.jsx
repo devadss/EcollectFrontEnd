@@ -1,0 +1,389 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import DashboardLayout from '../../components/layouts/DashboardLayout';
+import LoadingAnimation from '../../components/common/LoadingAnimation';
+import { agentApi, merchantApi } from '../../services/api';
+import './AddAgent.css';
+
+const AddAgent = () => {
+  const navigate = useNavigate();
+  const { id } = useParams();
+  const isEdit = !!id;
+  const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [merchants, setMerchants] = useState([]);
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    agentCode: '',
+    merchantId: '',
+    branchId: '02',
+    commissionRate: '',
+    isActive: true,
+    address: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    description: '',
+  });
+
+  useEffect(() => {
+    loadData();
+  }, [id]);
+
+  const loadData = async () => {
+    try {
+      setPageLoading(true);
+      await loadMerchants();
+      if (isEdit) {
+        await loadAgent();
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setTimeout(() => {
+        setPageLoading(false);
+      }, 500);
+    }
+  };
+
+  const loadMerchants = async () => {
+    try {
+      const res = await merchantApi.getAll();
+      console.log(res.data.data);
+      
+      setMerchants(res.data.data || []);
+    } catch (error) {
+      console.error('Error loading merchants:', error);
+    }
+  };
+
+  const loadAgent = async () => {
+    try {
+      const res = await agentApi.getById(id);
+      setFormData(res.data);
+    } catch (error) {
+      console.error('Error loading agent:', error);
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  const [errors, setErrors] = useState({});
+      const validate = () => {
+      let tempErrors = {};
+
+      if (!formData.name) {
+        tempErrors.name = "Full name is required";
+      }
+
+      if (!formData.email) {
+        tempErrors.email = "Email is required";
+      }
+
+      if (!formData.phone) {
+        tempErrors.phone = "Phone is required";
+      }
+
+      // if (!formData.agentCode) {
+      //   tempErrors.phone = "Agent Code is required";
+      // }
+
+      if (!formData.merchantId) {
+        tempErrors.merchantId = "Merchant is required";
+      }
+
+      if (!formData.branchId) {
+        tempErrors.branchId = "Branch is required";
+      }
+      setErrors(tempErrors);
+
+      return Object.keys(tempErrors).length === 0;
+    };
+
+
+
+
+
+  const handleSubmit = async (e) => {
+    // e.preventDefault();
+    // setLoading(true);
+
+
+    e.preventDefault();
+    setLoading(true);
+
+    if (!validate()) {
+      return;
+    }
+
+    try {
+      if (isEdit) {
+        await agentApi.update(id, formData);
+      } else {
+
+        // console.log("test-data-123");
+        // console.log(formData);
+
+        await agentApi.create(formData);
+      }
+      navigate('/agents');
+    } catch (error) {
+      console.error('Error saving agent:', error);
+      alert('Failed to save agent. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Show loading animation while page is loading
+  if (pageLoading) {
+    return <LoadingAnimation message={isEdit ? 'Loading Agent' : 'Loading Form'} />;
+  }
+
+  return (
+    <DashboardLayout role="softwareadmin">
+      <div className="add-agent">
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">
+              <span className="gradient-text">{isEdit ? 'Edit' : 'Add'} Agent</span>
+            </h1>
+            <p className="page-subtitle">
+              {isEdit ? 'Update agent information' : 'Register a new agent'}
+            </p>
+          </div>
+          <button className="btn-outline" onClick={() => navigate('/agents')}>← Back</button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="agent-form">
+          <div className="form-section">
+            <h3>Personal Information</h3>
+            <div className="form-grid">
+              <div className="form-group">
+                <label>Full Name *</label>
+                <input
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  placeholder="Enter full name"
+                />
+                {errors.name && (
+                  <p style={{ color: "red" }}>{errors.name}</p>
+                )}
+              </div>
+                
+              <div className="form-group">
+                <label>Email *</label>
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  
+                  placeholder="Enter your email address"
+                />
+                {errors.email && (
+                  <p style={{ color: "red" }}>{errors.email}</p>
+                )}
+              </div>
+              <div className="form-group">
+                <label>Phone *</label>
+                <input
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  
+                  placeholder="Enter your mobile number"
+                />
+                {errors.phone && (
+                  <p style={{ color: "red" }}>{errors.phone}</p>
+                )}
+              </div>
+              <div className="form-group">
+                <label>Agent Code</label>
+                <input
+                  name="agentCode"
+                  value={formData.agentCode}
+                  onChange={handleChange}
+                  placeholder="Enter your agent code"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="form-section">
+            <h3>Assignment & Commission</h3>
+            <div className="form-grid">
+              <div className="form-group">
+                <label>Assign to Merchant *</label>
+                <select
+                  name="merchantId"
+                  value={formData.merchantId}
+                  onChange={handleChange}
+                >
+                  <option value="">Select Merchant...</option>
+                  {Array.isArray(merchants) &&
+  merchants.map((merchant) => (
+                    <option key={merchant.id} value={merchant.id}>
+                      {merchant.merchantName}
+                    </option>
+                  ))}
+                </select>
+                {errors.merchantId && (
+                  <p style={{ color: "red" }}>{errors.merchantId}</p>
+                )}
+              </div>
+              <div className="form-group">
+                <label>Assign to Branch *</label>
+                <select
+                  name="branchId"
+                  value={formData.branchId}
+                  onChange={handleChange}
+                  
+                >
+                  <option value="">Select Branch...</option>
+                  {/*{Array.isArray(merchants) &&
+  merchants.map((merchant) => (
+                    <option key={merchant.id} value={merchant.id}>
+                      {merchant.merchantName}
+                    </option>
+                  ))}
+
+
+
+                   { merchants.map((merchant) => (
+                        <option key={merchant.id} value={merchant.id}>
+                            {merchant.merchantName}
+                        </option>
+                    ))}*/}
+                </select>
+
+                {errors.branchId && (
+                  <p style={{ color: "red" }}>{errors.branchId}</p>
+                )}
+
+              </div>
+              <div className="form-group">
+                <label>Commission Rate (%)</label>
+                <input
+                  type="number"
+                  name="commissionRate"
+                  value={formData.commissionRate}
+                  onChange={handleChange}
+                  placeholder="Enter commission rate"
+                  step="0.1"
+                  min="0"
+                  max="100"
+                />
+              </div>
+              {/*<div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingTop: '24px' }}>
+                <label style={{ marginBottom: 0 }}>
+                  <input
+                    type="checkbox"
+                    name="isActive"
+                    checked={formData.isActive}
+                    onChange={handleChange}
+                  />
+                  {' '}Active
+                </label>
+              </div>*/}
+            </div>
+          </div>
+
+          <div className="form-section">
+            <h3>Address</h3>
+            <div className="form-grid">
+              <div className="form-group full-width">
+                <label>Address</label>
+                <input
+                  name="address"
+                  value={formData.address}
+                  onChange={handleChange}
+                  placeholder="Street address"
+                />
+              </div>
+              <div className="form-group">
+                <label>City</label>
+                <input
+                  name="city"
+                  value={formData.city}
+                  onChange={handleChange}
+                  placeholder="City"
+                />
+              </div>
+              <div className="form-group">
+                <label>State</label>
+                <input
+                  name="state"
+                  value={formData.state}
+                  onChange={handleChange}
+                  placeholder="State"
+                />
+              </div>
+              <div className="form-group">
+                <label>Zip Code</label>
+                <input
+                  name="zipCode"
+                  value={formData.zipCode}
+                  onChange={handleChange}
+                  placeholder="Enter ZIP/Postal Code"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="form-section">
+            <h3>Additional Information</h3>
+            <div className="form-grid">
+              <div className="form-group full-width">
+                <label>Description</label>
+                <textarea
+                  name="description"
+                  value={formData.description}
+                  onChange={handleChange}
+                  rows="3"
+                  placeholder="Additional notes about the agent..."
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="form-actions">
+            <button 
+              type="submit" 
+              className="btn-primary" 
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <span className="spinner"></span>
+                  {isEdit ? 'Updating...' : 'Creating...'}
+                </>
+              ) : (
+                isEdit ? 'Update Agent' : 'Create Agent'
+              )}
+            </button>
+            <button 
+              type="button" 
+              className="btn-outline" 
+              onClick={() => navigate('/agents')}
+              disabled={loading}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </DashboardLayout>
+  );
+};
+
+export default AddAgent;

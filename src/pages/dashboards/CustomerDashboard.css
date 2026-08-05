@@ -1,0 +1,71 @@
+/* ========================================
+   CUSTOMER DASHBOARD
+   ======================================== */
+
+.customer-dashboard .quick-actions {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.customer-dashboard .quick-action {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.6);
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.customer-dashboard .quick-action:hover {
+  background: rgba(201, 168, 76, 0.08);
+  border-color: rgba(201, 168, 76, 0.2);
+  color: #c9a84c;
+}
+
+.customer-dashboard .quick-action span {
+  display: block;
+  font-size: 24px;
+  margin-bottom: 6px;
+}
+
+.customer-dashboard .payment-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.customer-dashboard .summary-item {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+}
+
+.customer-dashboard .summary-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.customer-dashboard .summary-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+@media (max-width: 768px) {
+  .customer-dashboard .quick-actions {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .customer-dashboard .payment-summary {
+    grid-template-columns: 1fr;
+  }
+}
