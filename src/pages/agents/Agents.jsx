@@ -26,8 +26,11 @@ const Agents = () => {
         agentApi.getAll(),
         merchantApi.getAll()
       ]);
-      setAgents(agentsRes.data || []);
-      setMerchants(merchantsRes.data || []);
+      setAgents(agentsRes.data.data || []);
+      //console.log(agentsRes.data);
+
+      //debugger;
+      setMerchants(merchantsRes.data.data || []);
     } catch (error) {
       console.error('Error loading data:', error);
       setError(error.message || 'Failed to load agents');
@@ -43,6 +46,7 @@ const Agents = () => {
       try {
         await agentApi.delete(id);
         loadData();
+        navigate('/agents');
       } catch (error) {
         console.error('Error deleting agent:', error);
         alert('Failed to delete agent. Please try again.');
@@ -239,13 +243,13 @@ const Agents = () => {
                     >
                       ✏️
                     </button>
-                    <button 
+                    {/*<button 
                       className="action-btn toggle" 
                       onClick={() => handleToggleStatus(agent.id)}
                       title={agent.isActive ? 'Deactivate' : 'Activate'}
                     >
                       {agent.isActive ? '⏸️' : '▶️'}
-                    </button>
+                    </button>*/}
                     <button 
                       className="action-btn delete" 
                       onClick={() => handleDelete(agent.id)}

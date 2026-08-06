@@ -52,7 +52,7 @@ const AddAgent = () => {
   const loadMerchants = async () => {
     try {
       const res = await merchantApi.getAll();
-      console.log(res.data.data);
+      //console.log(res.data.data);
       
       setMerchants(res.data.data || []);
     } catch (error) {
@@ -93,9 +93,9 @@ const AddAgent = () => {
         tempErrors.phone = "Phone is required";
       }
 
-      // if (!formData.agentCode) {
-      //   tempErrors.phone = "Agent Code is required";
-      // }
+      if (!formData.agentCode) {
+        tempErrors.agentCode = "Agent Code is required";
+      }
 
       if (!formData.merchantId) {
         tempErrors.merchantId = "Merchant is required";
@@ -104,41 +104,60 @@ const AddAgent = () => {
       if (!formData.branchId) {
         tempErrors.branchId = "Branch is required";
       }
+
+      if (!formData.commissionRate) {
+        tempErrors.commissionRate = "Commission rate is required";
+      }
+
+      if (!formData.address) {
+        tempErrors.address = "Address is required";
+      }
+
+      if (!formData.city) {
+        tempErrors.city = "City is required";
+      }
+
+      if (!formData.state) {
+        tempErrors.state = "State is required";
+      }
+
+      if(!formData.zipCode) {
+        tempErrors.zipCode = "Zip code is required";
+      }
+
+      if(!formData.description) {
+        tempErrors.description = "Description is required";
+      }
+
       setErrors(tempErrors);
 
       return Object.keys(tempErrors).length === 0;
     };
 
-
-
-
-
   const handleSubmit = async (e) => {
-    // e.preventDefault();
-    // setLoading(true);
-
-
     e.preventDefault();
     setLoading(true);
 
     if (!validate()) {
+      setLoading(false);
       return;
     }
 
     try {
       if (isEdit) {
+        console.log(formData);
+
         await agentApi.update(id, formData);
       } else {
-
         // console.log("test-data-123");
         // console.log(formData);
-
+        // console.log(formData);
+        // console.log("test-here");
         await agentApi.create(formData);
       }
       navigate('/agents');
     } catch (error) {
-      console.error('Error saving agent:', error);
-      alert('Failed to save agent. Please try again.');
+      alert(error.response.data.message+'- Failed to save agent. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -209,13 +228,16 @@ const AddAgent = () => {
                 )}
               </div>
               <div className="form-group">
-                <label>Agent Code</label>
+                <label>Agent Code *</label>
                 <input
                   name="agentCode"
                   value={formData.agentCode}
                   onChange={handleChange}
                   placeholder="Enter your agent code"
                 />
+                {errors.agentCode && (
+                  <p style={{ color: "red" }}>{errors.agentCode}</p>
+                )}
               </div>
             </div>
           </div>
@@ -273,7 +295,7 @@ const AddAgent = () => {
 
               </div>
               <div className="form-group">
-                <label>Commission Rate (%)</label>
+                <label>Commission Rate (%)*</label>
                 <input
                   type="number"
                   name="commissionRate"
@@ -284,6 +306,9 @@ const AddAgent = () => {
                   min="0"
                   max="100"
                 />
+                {errors.commissionRate && (
+                  <p style={{ color: "red" }}>{errors.commissionRate}</p>
+                )}
               </div>
               {/*<div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingTop: '24px' }}>
                 <label style={{ marginBottom: 0 }}>
@@ -303,40 +328,52 @@ const AddAgent = () => {
             <h3>Address</h3>
             <div className="form-grid">
               <div className="form-group full-width">
-                <label>Address</label>
+                <label>Address *</label>
                 <input
                   name="address"
                   value={formData.address}
                   onChange={handleChange}
                   placeholder="Street address"
                 />
+                {errors.address && (
+                  <p style={{ color: "red" }}>{errors.address}</p>
+                )}
               </div>
               <div className="form-group">
-                <label>City</label>
+                <label>City *</label>
                 <input
                   name="city"
                   value={formData.city}
                   onChange={handleChange}
                   placeholder="City"
                 />
+                {errors.address && (
+                  <p style={{ color: "red" }}>{errors.city}</p>
+                )}
               </div>
               <div className="form-group">
-                <label>State</label>
+                <label>State *</label>
                 <input
                   name="state"
                   value={formData.state}
                   onChange={handleChange}
                   placeholder="State"
                 />
+                {errors.address && (
+                  <p style={{ color: "red" }}>{errors.state}</p>
+                )}
               </div>
               <div className="form-group">
-                <label>Zip Code</label>
+                <label>Zip Code *</label>
                 <input
                   name="zipCode"
                   value={formData.zipCode}
                   onChange={handleChange}
                   placeholder="Enter ZIP/Postal Code"
                 />
+                {errors.zipCode && (
+                  <p style={{ color: "red" }}>{errors.zipCode}</p>
+                )}
               </div>
             </div>
           </div>
@@ -345,7 +382,7 @@ const AddAgent = () => {
             <h3>Additional Information</h3>
             <div className="form-grid">
               <div className="form-group full-width">
-                <label>Description</label>
+                <label>Description *</label>
                 <textarea
                   name="description"
                   value={formData.description}
@@ -353,6 +390,9 @@ const AddAgent = () => {
                   rows="3"
                   placeholder="Additional notes about the agent..."
                 />
+                {errors.description && (
+                  <p style={{ color: "red" }}>{errors.description}</p>
+                )}
               </div>
             </div>
           </div>

@@ -22,7 +22,7 @@ const Branches = () => {
       setLoading(true);
       setError(null);
       const res = await branchApi.getAll();
-      setBranches(res.data || []);
+      setBranches(res.data.data || []);
     } catch (error) {
       console.error('Error loading branches:', error);
       setError(error.message || 'Failed to load branches');
@@ -210,10 +210,10 @@ const Branches = () => {
                   </div>
 
                   <div className="branch-stats-mini">
-                    <div className="stat-mini">
+                    {/*<div className="stat-mini">
                       <span className="stat-mini-value">{branch.merchantCount || 0}</span>
                       <span className="stat-mini-label">Merchants</span>
-                    </div>
+                    </div>*/}
                     <div className="stat-mini">
                       <span className="stat-mini-value">{branch.agentCount || 0}</span>
                       <span className="stat-mini-label">Agents</span>

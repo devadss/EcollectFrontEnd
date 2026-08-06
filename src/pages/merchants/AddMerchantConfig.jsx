@@ -61,7 +61,13 @@ const AddMerchantConfig = () => {
     try {
       const res = await merchantApi.getAllMerchantConfigById(id);
       console.log(res.data);
-      setFormData(res.data);
+      //setFormData(res.data);
+
+       setFormData({
+        ...res.data,
+        productType: res.data.productType?.toLowerCase() || "",
+      });
+       
     } catch (error) {
       console.error('Error loading agent:', error);
     }
@@ -270,7 +276,7 @@ const AddMerchantConfig = () => {
                   <option value="rd">RD</option>
                   <option value="fd">FD</option>
                   <option value="rdcl">RDCL</option>
-                  <option value="rd&loan">RD&Loan</option>
+                  <option value="loan">LOAN</option>
                 </select>
                 {errors.productType && (
                   <p style={{ color: "red" }}>{errors.productType}</p>

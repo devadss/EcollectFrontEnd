@@ -21,6 +21,7 @@ const AgentDetails = () => {
       setLoading(true);
       setError(null);
       const res = await agentApi.getById(id);
+      //console.log(res.data);
       setAgent(res.data);
     } catch (error) {
       console.error('Error loading agent:', error);
@@ -118,7 +119,6 @@ const AgentDetails = () => {
                   <span>{agent.commissionRate || '0'}%</span>
                 </div>
               </div>
-
               {agent.address && (
                 <div className="detail-row">
                   <div className="detail-item full-width">
@@ -144,12 +144,34 @@ const AgentDetails = () => {
 
               <div className="detail-row">
                 <div className="detail-item">
-                  <label>Created At</label>
-                  <span>{agent.createdAt ? new Date(agent.createdAt).toLocaleDateString() : 'N/A'}</span>
+                  <label>City</label>
+                  <span>{agent.city ?? 'N/A'}</span>
                 </div>
                 <div className="detail-item">
-                  <label>Last Updated</label>
-                  <span>{agent.updatedAt ? new Date(agent.updatedAt).toLocaleDateString() : 'N/A'}</span>
+                  <label>State</label>
+                  <span>{agent.state ?? 'N/A'}</span>
+                </div>
+              </div>
+
+              <div className="detail-row">
+                <div className="detail-item">
+                  <label>zipCode</label>
+                  <span>{agent.zipCode ?? 'N/A'}</span>
+                </div>
+                <div className="detail-item">
+                  <label>branchName</label>
+                  <span>{agent.branchName ?? 'N/A'}</span>
+                </div>
+              </div>
+
+              <div className="detail-row">
+                <div className="detail-item">
+                  <label>Merchant</label>
+                  <span>{agent.merchantName || 'Unassigned'}</span>
+                </div>
+                <div className="detail-item">
+                  <label>Commission Rate</label>
+                  <span>{agent.commissionRate || '0'}%</span>
                 </div>
               </div>
             </div>
@@ -159,16 +181,28 @@ const AgentDetails = () => {
             <h3>Statistics</h3>
             <div className="stats-grid-mini">
               <div className="stat-mini">
-                <span className="stat-mini-value">0</span>
-                <span className="stat-mini-label">Payments</span>
+                <span className="stat-mini-value">{agent.stats.totalPayments}</span>
+                <span className="stat-mini-label">Total Payments</span>
               </div>
               <div className="stat-mini">
-                <span className="stat-mini-value">₹0</span>
-                <span className="stat-mini-label">Commission</span>
+                <span className="stat-mini-value">{agent.stats.totalCommission}</span>
+                <span className="stat-mini-label">Total Commission</span>
               </div>
               <div className="stat-mini">
-                <span className="stat-mini-value">0</span>
-                <span className="stat-mini-label">Customers</span>
+                <span className="stat-mini-value">{agent.stats.totalCustomers}</span>
+                <span className="stat-mini-label">Total Customers</span>
+              </div>
+              <div className="stat-mini">
+                <span className="stat-mini-value">{agent.stats.totalRevenue}</span>
+                <span className="stat-mini-label">Total Revenue</span>
+              </div>
+              <div className="stat-mini">
+                <span className="stat-mini-value">{agent.stats.pendingCommission}</span>
+                <span className="stat-mini-label">Pending Commission</span>
+              </div>
+              <div className="stat-mini">
+                <span className="stat-mini-value">{agent.stats.dueCustomers}</span>
+                <span className="stat-mini-label">Due Customers</span>
               </div>
             </div>
           </div>

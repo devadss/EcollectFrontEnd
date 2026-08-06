@@ -167,9 +167,9 @@
 }
 
 /* Agent Card Animations */
-.animate-slide-up {
+/*.animate-slide-up {
   animation: slideUp 0.4s ease-out;
-}
+}*/
 
 @keyframes slideUp {
   from {

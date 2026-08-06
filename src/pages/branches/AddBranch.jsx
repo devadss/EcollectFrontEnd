@@ -90,16 +90,16 @@ const AddBranch = () => {
                   value={formData.name}
                   onChange={handleChange}
                   required
-                  placeholder="Mumbai Central"
+                  placeholder="Enter branch name"
                 />
               </div>
               <div className="form-group">
-                <label>Branch Code</label>
+                <label>Branch Code *</label>
                 <input
                   name="code"
                   value={formData.code}
                   onChange={handleChange}
-                  placeholder="BR-MUM-001"
+                  placeholder="Enter branch code"
                 />
               </div>
               <div className="form-group full-width">
@@ -109,7 +109,7 @@ const AddBranch = () => {
                   value={formData.address}
                   onChange={handleChange}
                   required
-                  placeholder="Street address"
+                  placeholder="Enter address"
                 />
               </div>
               <div className="form-group">
@@ -119,7 +119,7 @@ const AddBranch = () => {
                   value={formData.city}
                   onChange={handleChange}
                   required
-                  placeholder="Mumbai"
+                  placeholder="Enter city"
                 />
               </div>
               <div className="form-group">
@@ -129,25 +129,25 @@ const AddBranch = () => {
                   value={formData.state}
                   onChange={handleChange}
                   required
-                  placeholder="Maharashtra"
+                  placeholder="Enter State"
                 />
               </div>
               <div className="form-group">
-                <label>Zip Code</label>
+                <label>Zip Code *</label>
                 <input
                   name="zipCode"
                   value={formData.zipCode}
                   onChange={handleChange}
-                  placeholder="400001"
+                  placeholder="Enter ZIP code"
                 />
               </div>
               <div className="form-group">
-                <label>Country</label>
+                <label>Country *</label>
                 <input
                   name="country"
                   value={formData.country}
                   onChange={handleChange}
-                  placeholder="India"
+                  placeholder="Enter Country"
                 />
               </div>
             </div>
@@ -157,22 +157,22 @@ const AddBranch = () => {
             <h3>Contact Information</h3>
             <div className="form-grid">
               <div className="form-group">
-                <label>Phone Number</label>
+                <label>Phone Number *</label>
                 <input
                   name="phone"
                   value={formData.phone}
                   onChange={handleChange}
-                  placeholder="022-12345678"
+                  placeholder="Enter Phone Number"
                 />
               </div>
               <div className="form-group">
-                <label>Email Address</label>
+                <label>Email Address *</label>
                 <input
                   type="email"
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  placeholder="branch@company.com"
+                  placeholder="Enter Adress"
                 />
               </div>
             </div>
@@ -182,7 +182,7 @@ const AddBranch = () => {
             <h3>Additional Information</h3>
             <div className="form-grid">
               <div className="form-group full-width">
-                <label>Description</label>
+                <label>Description *</label>
                 <textarea
                   name="description"
                   value={formData.description}
@@ -191,7 +191,7 @@ const AddBranch = () => {
                   placeholder="Additional notes about this branch..."
                 />
               </div>
-              <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingTop: '8px' }}>
+              {/*<div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingTop: '8px' }}>
                 <label style={{ marginBottom: 0 }}>
                   <input
                     type="checkbox"
@@ -201,7 +201,7 @@ const AddBranch = () => {
                   />
                   {' '}Active
                 </label>
-              </div>
+              </div>*/}
             </div>
           </div>
 

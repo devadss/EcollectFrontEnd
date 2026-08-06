@@ -97,7 +97,6 @@ const BranchDetails = () => {
                   <span>{branch.country || 'India'}</span>
                 </div>
               </div>
-
               <div className="detail-row">
                 <div className="detail-item">
                   <label>Phone</label>
@@ -120,6 +119,17 @@ const BranchDetails = () => {
 
               <div className="detail-row">
                 <div className="detail-item">
+                  <label>Branch Admin Name</label>
+                  <span>{branch.branchAdminName || 'N/A'}</span>
+                </div>
+                {/*<div className="detail-item">
+                  <label>Email</label>
+                  <span>{branch.email || 'N/A'}</span>
+                </div>*/}
+              </div>
+
+              <div className="detail-row">
+                <div className="detail-item">
                   <label>Created At</label>
                   <span>{branch.createdAt ? new Date(branch.createdAt).toLocaleDateString() : 'N/A'}</span>
                 </div>
@@ -135,20 +145,28 @@ const BranchDetails = () => {
             <h3>Branch Statistics</h3>
             <div className="stats-grid-mini">
               <div className="stat-mini">
-                <span className="stat-mini-value">{branch.merchantCount || 0}</span>
+                <span className="stat-mini-value">{branch.totalMerchants || 0}</span>
                 <span className="stat-mini-label">Merchants</span>
               </div>
               <div className="stat-mini">
-                <span className="stat-mini-value">{branch.agentCount || 0}</span>
+                <span className="stat-mini-value">{branch.totalAgents || 0}</span>
                 <span className="stat-mini-label">Agents</span>
               </div>
               <div className="stat-mini">
-                <span className="stat-mini-value">₹{branch.revenue || 0}</span>
+                <span className="stat-mini-value">₹{branch.totalRevenue || 0}</span>
                 <span className="stat-mini-label">Revenue</span>
               </div>
               <div className="stat-mini">
-                <span className="stat-mini-value">{branch.transactions || 0}</span>
+                <span className="stat-mini-value">{branch.totalTransactions || 0}</span>
                 <span className="stat-mini-label">Transactions</span>
+              </div>
+              <div className="stat-mini">
+                <span className="stat-mini-value">{branch.pendingSettlements || 0}</span>
+                <span className="stat-mini-label">Total Pending Settlements</span>
+              </div>
+              <div className="stat-mini">
+                <span className="stat-mini-value">{branch.totalSettlements || 0}</span>
+                <span className="stat-mini-label">Total Settlements</span>
               </div>
             </div>
 

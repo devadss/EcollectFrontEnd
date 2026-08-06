@@ -47,9 +47,9 @@ export const merchantApi = {
 // AGENT API
 // ============================================================
 export const agentApi = {
-  getAll: () => api.get('/agent'),
+  getAll: () => api.get('/Agent/get-all'),
   getById: (id) => api.get(`/agent/${id}`),
-  create: (data) => api.post('/agent/create', data),
+  create: (data) => api.post('Agent/create', data),
   update: (id, data) => api.put(`/agent/${id}`, data),
   delete: (id) => api.delete(`/agent/${id}`),
   toggleStatus: (id) => api.patch(`/agent/${id}/toggle-status`),
@@ -60,7 +60,7 @@ export const agentApi = {
 // BRANCH API
 // ============================================================
 export const branchApi = {
-  getAll: () => api.get('/branch'),
+  getAll: () => api.get('/Branch/get-all'),
   getById: (id) => api.get(`/branch/${id}`),
   create: (data) => api.post('/branch/create', data),
   update: (id, data) => api.put(`/branch/${id}`, data),
