@@ -177,10 +177,10 @@ const navigate = useNavigate();
                   <option value="LLP">LLP</option>
                 </select>
               </div>
-              <div className="form-group full-width">
+              {/*<div className="form-group full-width">
                 <label>Website URL</label>
                 <input name="websiteUrl" value={formData.websiteUrl} onChange={handleChange} />
-              </div>
+              </div>*/}
               <div className="form-group full-width">
                 <label>Registered Address *</label>
                 <input name="registeredAddress" value={formData.registeredAddress} onChange={handleChange} required />
@@ -201,18 +201,18 @@ const navigate = useNavigate();
                 <label>GST State</label>
                 <input name="gstState" value={formData.gstState} onChange={handleChange} />
               </div>
-              <div className="form-group">
+              {/*<div className="form-group">
                 <label>Monthly Expected Volume</label>
                 <input type="number" name="monthlyExpectedVolume" value={formData.monthlyExpectedVolume} onChange={handleChange} />
-              </div>
-              <div className="form-group">
+              </div>*/}
+              {/*<div className="form-group">
                 <label>Monthly Transactions</label>
                 <input type="number" name="monthlyExpectedTransactionCount" value={formData.monthlyExpectedTransactionCount} onChange={handleChange} />
-              </div>
-              <div className="form-group">
+              </div>*/}
+              {/*<div className="form-group">
                 <label>Average Ticket Size</label>
                 <input type="number" name="averageTicketSize" value={formData.averageTicketSize} onChange={handleChange} />
-              </div>
+              </div>*/}
               <div className="form-group">
                 <label>Is Integrated  </label>
                 <select name="IntegrationStatus" value={formData.IntegrationStatus} onChange={handleChange}>
@@ -227,7 +227,7 @@ const navigate = useNavigate();
           </div>
 
           {/* Contact Person */}
-          <div className="form-section">
+          {/*<div className="form-section">
             <h3>Contact Person</h3>
             <div className="form-grid">
               <div className="form-group">
@@ -243,10 +243,10 @@ const navigate = useNavigate();
                 <input name="phoneNumber" value={formData.contactPerson?.phoneNumber} onChange={handleContactChange} required />
               </div>
             </div>
-          </div>
+          </div>*/}
 
           {/* Authorized Signatory */}
-          <div className="form-section">
+          {/*<div className="form-section">
             <h3>Authorized Signatory</h3>
             <div className="form-grid">
               <div className="form-group">
@@ -270,7 +270,7 @@ const navigate = useNavigate();
                 <input name="designation" value={formData.authorizedSignatory?.designation} onChange={handleSignatoryChange} />
               </div>
             </div>
-          </div>
+          </div>*/}
 
           {/* Settlement Accounts */}
           <div className="form-section">

@@ -44,9 +44,10 @@ const Agents = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this agent?')) {
       try {
-        await agentApi.delete(id);
+        const response = await agentApi.delete(id);
+        alert(response.data.message);
         loadData();
-        navigate('/agents');
+        //navigate('/agents');
       } catch (error) {
         console.error('Error deleting agent:', error);
         alert('Failed to delete agent. Please try again.');

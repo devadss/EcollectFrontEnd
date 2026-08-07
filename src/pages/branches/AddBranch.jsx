@@ -45,10 +45,72 @@ const AddBranch = () => {
       [name]: type === 'checkbox' ? checked : value
     }));
   };
+  const [errors, setErrors] = useState({});
+  const validate = () => {
+      let tempErrors = {};
+
+      if (!formData.name) {
+        tempErrors.name = "Branch name is required";
+      }
+
+      if (!formData.code) {
+        tempErrors.code = "Code is required";
+      }
+
+      if (!formData.address) {
+        tempErrors.address = "Address is required";
+      }
+
+      if (!formData.city) {
+        tempErrors.city = "City is required";
+      }
+
+      if (!formData.state) {
+        tempErrors.state = "State is required";
+      }
+
+      if (!formData.zipCode) {
+        tempErrors.zipCode = "zipCode is required";
+      }
+
+      if (!formData.country) {
+        tempErrors.country = "Country is required";
+      }
+
+      if (!formData.phone) {
+        tempErrors.phone = "Phone is required";
+      }
+
+      if (!formData.email) {
+        tempErrors.email = "Email is required";
+      }
+
+      // if (!formData.state) {
+      //   tempErrors.state = "State is required";
+      // }
+
+      // if(!formData.zipCode) {
+      //   tempErrors.zipCode = "Zip code is required";
+      // }
+
+      if(!formData.description) {
+        tempErrors.description = "Description is required";
+      }
+
+      setErrors(tempErrors);
+
+      return Object.keys(tempErrors).length === 0;
+    };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+
+    if (!validate()) {
+      setLoading(false);
+      return;
+    }
+
     try {
       if (isEdit) {
         await branchApi.update(id, formData);
@@ -89,9 +151,11 @@ const AddBranch = () => {
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
-                  required
                   placeholder="Enter branch name"
                 />
+                {errors.name && (
+                  <p style={{ color: "red" }}>{errors.name}</p>
+                )}
               </div>
               <div className="form-group">
                 <label>Branch Code *</label>
@@ -101,6 +165,9 @@ const AddBranch = () => {
                   onChange={handleChange}
                   placeholder="Enter branch code"
                 />
+                {errors.code && (
+                  <p style={{ color: "red" }}>{errors.code}</p>
+                )}
               </div>
               <div className="form-group full-width">
                 <label>Address *</label>
@@ -108,9 +175,11 @@ const AddBranch = () => {
                   name="address"
                   value={formData.address}
                   onChange={handleChange}
-                  required
                   placeholder="Enter address"
                 />
+                {errors.address && (
+                  <p style={{ color: "red" }}>{errors.address}</p>
+                )}
               </div>
               <div className="form-group">
                 <label>City *</label>
@@ -118,9 +187,11 @@ const AddBranch = () => {
                   name="city"
                   value={formData.city}
                   onChange={handleChange}
-                  required
                   placeholder="Enter city"
                 />
+                {errors.city && (
+                  <p style={{ color: "red" }}>{errors.city}</p>
+                )}
               </div>
               <div className="form-group">
                 <label>State *</label>
@@ -128,9 +199,11 @@ const AddBranch = () => {
                   name="state"
                   value={formData.state}
                   onChange={handleChange}
-                  required
                   placeholder="Enter State"
                 />
+                {errors.state && (
+                  <p style={{ color: "red" }}>{errors.state}</p>
+                )}
               </div>
               <div className="form-group">
                 <label>Zip Code *</label>
@@ -140,6 +213,9 @@ const AddBranch = () => {
                   onChange={handleChange}
                   placeholder="Enter ZIP code"
                 />
+                {errors.zipCode && (
+                  <p style={{ color: "red" }}>{errors.zipCode}</p>
+                )}
               </div>
               <div className="form-group">
                 <label>Country *</label>
@@ -149,6 +225,9 @@ const AddBranch = () => {
                   onChange={handleChange}
                   placeholder="Enter Country"
                 />
+                {errors.country && (
+                  <p style={{ color: "red" }}>{errors.country}</p>
+                )}
               </div>
             </div>
           </div>
@@ -164,6 +243,9 @@ const AddBranch = () => {
                   onChange={handleChange}
                   placeholder="Enter Phone Number"
                 />
+                {errors.phone && (
+                  <p style={{ color: "red" }}>{errors.phone}</p>
+                )}
               </div>
               <div className="form-group">
                 <label>Email Address *</label>
@@ -172,8 +254,11 @@ const AddBranch = () => {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  placeholder="Enter Adress"
+                  placeholder="Enter Email Address"
                 />
+                {errors.email && (
+                  <p style={{ color: "red" }}>{errors.email}</p>
+                )}
               </div>
             </div>
           </div>
@@ -190,6 +275,9 @@ const AddBranch = () => {
                   rows="3"
                   placeholder="Additional notes about this branch..."
                 />
+                {errors.description && (
+                  <p style={{ color: "red" }}>{errors.description}</p>
+                )}
               </div>
               {/*<div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingTop: '8px' }}>
                 <label style={{ marginBottom: 0 }}>

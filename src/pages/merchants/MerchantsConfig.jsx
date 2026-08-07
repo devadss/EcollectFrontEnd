@@ -38,7 +38,8 @@ const MerchantsConfig = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this merchant?')) {
       try {
-        await merchantApi.configMerchantDelete(id);
+        const response = await merchantApi.configMerchantDelete(id);
+        alert(response.data.message);
         loadMerchants();
       } catch (error) {
         console.error('Error deleting merchant:', error);

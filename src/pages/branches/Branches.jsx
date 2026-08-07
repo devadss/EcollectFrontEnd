@@ -36,7 +36,8 @@ const Branches = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this branch?')) {
       try {
-        await branchApi.delete(id);
+        const response = await branchApi.delete(id);
+        alert(response.data.message);
         loadBranches();
       } catch (error) {
         console.error('Error deleting branch:', error);
@@ -239,13 +240,13 @@ const Branches = () => {
                     >
                       ✏️
                     </button>
-                    <button 
+                    {/*<button 
                       className="action-btn toggle" 
                       onClick={() => handleToggleStatus(branch.id)}
                       title={branch.isActive ? 'Deactivate' : 'Activate'}
                     >
                       {branch.isActive ? '⏸️' : '▶️'}
-                    </button>
+                    </button>*/}
                     <button 
                       className="action-btn delete" 
                       onClick={() => handleDelete(branch.id)}

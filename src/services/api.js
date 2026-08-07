@@ -50,8 +50,8 @@ export const agentApi = {
   getAll: () => api.get('/Agent/get-all'),
   getById: (id) => api.get(`/agent/${id}`),
   create: (data) => api.post('Agent/create', data),
-  update: (id, data) => api.put(`/agent/${id}`, data),
-  delete: (id) => api.delete(`/agent/${id}`),
+  update: (id, data) => api.put(`/Agent/${id}`, data),
+  delete: (id) => api.delete(`/Agent/${id}`),
   toggleStatus: (id) => api.patch(`/agent/${id}/toggle-status`),
   getByMerchant: (merchantId) => api.get(`/agent/merchant/${merchantId}`),
 };
@@ -61,10 +61,10 @@ export const agentApi = {
 // ============================================================
 export const branchApi = {
   getAll: () => api.get('/Branch/get-all'),
-  getById: (id) => api.get(`/branch/${id}`),
-  create: (data) => api.post('/branch/create', data),
-  update: (id, data) => api.put(`/branch/${id}`, data),
-  delete: (id) => api.delete(`/branch/${id}`),
+  getById: (id) => api.get(`/Branch/${id}`),
+  create: (data) => api.post('/Branch/create', data),
+  update: (id, data) => api.put(`/Branch/${id}`, data),
+  delete: (id) => api.delete(`/Branch/${id}`),
   toggleStatus: (id) => api.patch(`/branch/${id}/toggle-status`),
 };
 
