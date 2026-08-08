@@ -20,8 +20,12 @@ const MerchantDetails = () => {
       setLoading(true);
       const res = await merchantApi.getById(id);
 
-      debugger;
-      setMerchant(res.data.data || []);  
+      console.log("test-data-123");
+
+      console.log(res.data);
+
+      //debugger;
+      setMerchant(res.data || []);  
       //setMerchant(res.data);
     } catch (error) {
       console.error('Error loading merchant:', error);
@@ -120,30 +124,30 @@ const MerchantDetails = () => {
           >
             📊 Overview
           </button>
-          <button 
+          {/*<button 
             className={`tab-btn ${activeTab === 'contact' ? 'active' : ''}`}
             onClick={() => setActiveTab('contact')}
           >
             📞 Contact
-          </button>
+          </button>*/}
           <button 
             className={`tab-btn ${activeTab === 'bank' ? 'active' : ''}`}
             onClick={() => setActiveTab('bank')}
           >
             🏦 Bank Details
           </button>
-          <button 
+          {/*<button 
             className={`tab-btn ${activeTab === 'transactions' ? 'active' : ''}`}
             onClick={() => setActiveTab('transactions')}
           >
             💳 Transactions
-          </button>
-          <button 
+          </button>*/}
+          {/*<button 
             className={`tab-btn ${activeTab === 'agents' ? 'active' : ''}`}
             onClick={() => setActiveTab('agents')}
           >
             👤 Agents
-          </button>
+          </button>*/}
         </div>
 
         {/* Tab Content */}
@@ -151,7 +155,7 @@ const MerchantDetails = () => {
           {activeTab === 'overview' && (
             <div className="overview-tab">
               {/* Stats Cards */}
-              <div className="stats-grid-mini">
+             {/* <div className="stats-grid-mini">
                 <div className="stat-mini-card">
                   <span className="stat-mini-icon">💳</span>
                   <div>
@@ -180,15 +184,27 @@ const MerchantDetails = () => {
                     <span className="stat-mini-value">₹{merchant.averageTicketSize || 0}</span>
                   </div>
                 </div>
-              </div>
+              </div>*/}
 
               {/* Business Details */}
               <div className="info-card">
                 <h3>Business Details</h3>
                 <div className="info-grid">
                   <div className="info-item">
+                    <label>Merchant Name</label>
+                    <span>{merchant.merchantName || 'N/A'}</span>
+                  </div>
+                  <div className="info-item">
                     <label>Legal Name</label>
                     <span>{merchant.merchantLegalName || 'N/A'}</span>
+                  </div>
+                  <div className="info-item">
+                    <label>Registered Email</label>
+                    <span>{merchant.registeredEmail || 'N/A'}</span>
+                  </div>
+                  <div className="info-item">
+                    <label>Registered Phone</label>
+                    <span>{merchant.registeredPhone || 'N/A'}</span>
                   </div>
                   <div className="info-item">
                     <label>Business Category</label>
@@ -233,7 +249,7 @@ const MerchantDetails = () => {
               </div>
 
               {/* Volume Details */}
-              <div className="info-card">
+             {/* <div className="info-card">
                 <h3>Business Volume</h3>
                 <div className="info-grid">
                   <div className="info-item">
@@ -249,7 +265,7 @@ const MerchantDetails = () => {
                     <span>₹{merchant.averageTicketSize || 'N/A'}</span>
                   </div>
                 </div>
-              </div>
+              </div>*/}
 
               {/* Timestamps */}
               <div className="info-card">
