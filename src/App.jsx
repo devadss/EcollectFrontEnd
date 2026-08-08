@@ -104,6 +104,9 @@ function App() {
   const [loading, setLoading] = useState(true);
   const role = getRole();
 
+  console.log(role);
+  
+
   const dashboardMap = {
     softwareadmin: <SoftwareAdminDashboard />,
     merchant: <MerchantDashboard />,

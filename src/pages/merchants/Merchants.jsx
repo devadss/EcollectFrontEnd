@@ -231,13 +231,13 @@ const Merchants = () => {
                             >
                               ✏️
                             </button>
-                            <button 
+                           {/* <button 
                               className="action-btn toggle" 
                               onClick={() => handleToggleStatus(m.id)}
                               title={m.isActive ? 'Deactivate' : 'Activate'}
                             >
                               {m.isActive ? '⏸️' : '▶️'}
-                            </button>
+                            </button>*/}
                             <button 
                               className="action-btn delete" 
                               onClick={() => handleDelete(m.id)}

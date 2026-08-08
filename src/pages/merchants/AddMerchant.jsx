@@ -12,7 +12,7 @@ const navigate = useNavigate();
      // const res =   merchantApi.getMerchantById(id);
 
   const [formData, setFormData] = useState({
-     
+    merchantName:'', 
     merchantLegalName: '',
     registeredEmail: '',
     registeredPhone: '',
@@ -58,11 +58,16 @@ const navigate = useNavigate();
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    //const accounts = [...formData.settlementAccounts];
+    //accounts[index][name] = value;
+    //setFormData(prev => ({ ...prev, [name]: value, ...formData,settlementAccounts: accounts }));
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleContactChange = (e) => {
+  const handleContactChange = (index,e) => {
     const { name, value } = e.target;
+    
+    
     setFormData(prev => ({
       ...prev,
       contactPerson: { ...prev.contactPerson, [name]: value }
@@ -77,6 +82,119 @@ const navigate = useNavigate();
     }));
   };
 
+
+  // const validate = () => {
+  //   const errors = [];
+
+    
+
+  //   return errors;
+  // };
+
+  const [errors, setErrors] = useState({});
+      //const errors = [];
+      const validate = () => {
+      let tempErrors = {};
+
+      if (!formData.merchantName) {
+        tempErrors.merchantName = "Merchant Name is required";
+      }
+
+      if (!formData.merchantLegalName) {
+        tempErrors.merchantLegalName = "Merchant Legal Name is required";
+      }
+
+      if (!formData.registeredEmail) {
+        tempErrors.registeredEmail = "Registered email is required";
+      }
+
+      if (!formData.registeredPhone) {
+        tempErrors.registeredPhone = "Registered phone is required";
+      }
+
+      if (!formData.businessCategory) {
+        tempErrors.businessCategory = "Business Category is required";
+      }
+
+      if (!formData.entityType) {
+        tempErrors.entityType = "Entity Type is required";
+      }
+
+      if (!formData.registeredAddress) {
+        tempErrors.registeredAddress = "Registered address is required";
+      }
+
+      if (!formData.entityPAN) {
+        tempErrors.entityPAN = "PAN is required";
+      }
+
+      if (!formData.gstNumber) {
+        tempErrors.gstNumber = "GST Number is required";
+      }
+
+      if (!formData.nameOnPAN) {
+        tempErrors.nameOnPAN = "PAN Name is required";
+      }
+
+      if (!formData.gstState) {
+        tempErrors.gstState = "GST State is required";
+      }
+
+      if (!formData.IntegrationStatus) {
+        tempErrors.gstState = "Integaration status is required";
+      }
+
+
+      formData.settlementAccounts.forEach((account, index) => {
+        //console.log("test-here-123");
+        //const accountErrors = {};
+
+        if (!account.accountHolderName.trim()) {
+           tempErrors[`accountHolderName_${index}`] = "Account holder name is required";
+        }
+
+        if (!account.accountNumber.trim()) {
+           tempErrors[`accountNumber_${index}`] = "Account number is required";
+        } 
+        // else if (!/^\d{9,18}$/.test(account.accountNumber)) {
+        //   accountErrors.accountNumber =
+        //     "Account number must be between 9 and 18 digits";
+        // }
+
+        //tempErrors[index] = accountErrors;
+      });
+
+      // if (!formData.accountHolderName.trim()) {
+      //   tempErrors.accountHolderName = "Account holder name is required";
+      // }
+
+      // if (!formData.accountNumber.trim()) {
+      //   tempErrors.accountNumber = "Account number is required";
+      // } else if (!/^\d{9,18}$/.test(tempErrors.accountNumber)) {
+      //   tempErrors.accountNumber =
+      //     "Account number must be between 9 and 18 digits";
+      // }
+
+      // if (!formData.city) {
+      //   tempErrors.city = "City is required";
+      // }
+
+      // if (!formData.state) {
+      //   tempErrors.state = "State is required";
+      // }
+
+      // if(!formData.zipCode) {
+      //   tempErrors.zipCode = "Zip code is required";
+      // }
+
+      // if(!formData.description) {
+      //   tempErrors.description = "Description is required";
+      // }
+
+      setErrors(tempErrors);
+
+      return Object.keys(tempErrors).length === 0;
+  };
   const handleAccountChange = (index, e) => {
     const { name, value } = e.target;
     const updatedAccounts = [...formData.settlementAccounts];
@@ -103,6 +221,13 @@ const navigate = useNavigate();
     setLoading(true);
     try {
        
+        if (!validate()) {
+          setLoading(false);
+          return;
+        }
+
+
+
           //alert(formData.merchantName);
        if (id) {
             //alert('hi');
@@ -123,7 +248,8 @@ const navigate = useNavigate();
 
     } catch (error) {
       console.error('Error creating merchant:', error); 
-       alert(JSON.stringify(error.response?.data, null, 2));
+      alert(error.response?.data?.message);
+      //alert(JSON.stringify(error.response?.data, null, 2));
 
     } finally {
       setLoading(false);
@@ -148,26 +274,41 @@ const navigate = useNavigate();
             <div className="form-grid">
               <div className="form-group">
                 <label>Merchant Name *</label>
-                <input name="merchantName" value={formData.merchantName} onChange={handleChange} required />
+                <input name="merchantName" value={formData.merchantName || ""} onChange={handleChange}/>
+                {errors.merchantName && (
+                  <p style={{ color: "red" }}>{errors.merchantName}</p>
+                )}
               </div>
               <div className="form-group">
                 <label>Legal Name *</label>
-                <input name="merchantLegalName" value={formData.merchantLegalName} onChange={handleChange} required />
+                <input name="merchantLegalName" value={formData.merchantLegalName} onChange={handleChange}/>
+                {errors.merchantLegalName && (
+                  <p style={{ color: "red" }}>{errors.merchantLegalName}</p>
+                )}
               </div>
               <div className="form-group">
                 <label>Email *</label>
-                <input type="email" name="registeredEmail" value={formData.registeredEmail} onChange={handleChange} required />
+                <input type="email" name="registeredEmail" value={formData.registeredEmail} onChange={handleChange}/>
+                {errors.registeredEmail && (
+                  <p style={{ color: "red" }}>{errors.registeredEmail}</p>
+                )}
               </div>
               <div className="form-group">
                 <label>Phone *</label>
-                <input name="registeredPhone" value={formData.registeredPhone} onChange={handleChange} required />
+                <input name="registeredPhone" value={formData.registeredPhone} onChange={handleChange}/>
+                {errors.registeredPhone && (
+                  <p style={{ color: "red" }}>{errors.registeredPhone}</p>
+                )}
               </div>
               <div className="form-group">
-                <label>Business Category</label>
+                <label>Business Category *</label>
                 <input name="businessCategory" value={formData.businessCategory} onChange={handleChange} />
+                {errors.businessCategory && (
+                  <p style={{ color: "red" }}>{errors.businessCategory}</p>
+                )}
               </div>
               <div className="form-group">
-                <label>Entity Type</label>
+                <label>Entity Type  *</label>
                 <select name="entityType" value={formData.entityType} onChange={handleChange}>
                   <option value="">Select...</option>
                   <option value="Pvt Ltd">Pvt Ltd</option>
@@ -176,6 +317,9 @@ const navigate = useNavigate();
                   <option value="Society">Society</option>
                   <option value="LLP">LLP</option>
                 </select>
+                {errors.entityType && (
+                  <p style={{ color: "red" }}>{errors.entityType}</p>
+                )}
               </div>
               {/*<div className="form-group full-width">
                 <label>Website URL</label>
@@ -183,23 +327,38 @@ const navigate = useNavigate();
               </div>*/}
               <div className="form-group full-width">
                 <label>Registered Address *</label>
-                <input name="registeredAddress" value={formData.registeredAddress} onChange={handleChange} required />
+                <input name="registeredAddress" value={formData.registeredAddress} onChange={handleChange}/>
+                {errors.registeredAddress && (
+                  <p style={{ color: "red" }}>{errors.registeredAddress}</p>
+                )}
               </div>
               <div className="form-group">
                 <label>PAN *</label>
-                <input name="entityPAN" value={formData.entityPAN} onChange={handleChange} required />
+                <input name="entityPAN" value={formData.entityPAN} onChange={handleChange}/>
+                {errors.entityPAN && (
+                  <p style={{ color: "red" }}>{errors.entityPAN}</p>
+                )}
               </div>
               <div className="form-group">
-                <label>Name on PAN</label>
+                <label>Name on PAN*</label>
                 <input name="nameOnPAN" value={formData.nameOnPAN} onChange={handleChange} />
+                {errors.nameOnPAN && (
+                  <p style={{ color: "red" }}>{errors.nameOnPAN}</p>
+                )}
               </div>
               <div className="form-group">
-                <label>GST Number</label>
+                <label>GST Number *</label>
                 <input name="gstNumber" value={formData.gstNumber} onChange={handleChange} />
+                {errors.gstNumber && (
+                  <p style={{ color: "red" }}>{errors.gstNumber}</p>
+                )}
               </div>
               <div className="form-group">
-                <label>GST State</label>
+                <label>GST State *</label>
                 <input name="gstState" value={formData.gstState} onChange={handleChange} />
+                {errors.gstState && (
+                  <p style={{ color: "red" }}>{errors.gstState}</p>
+                )}
               </div>
               {/*<div className="form-group">
                 <label>Monthly Expected Volume</label>
@@ -214,13 +373,16 @@ const navigate = useNavigate();
                 <input type="number" name="averageTicketSize" value={formData.averageTicketSize} onChange={handleChange} />
               </div>*/}
               <div className="form-group">
-                <label>Is Integrated  </label>
+                <label>Is Integrated  *</label>
                 <select name="IntegrationStatus" value={formData.IntegrationStatus} onChange={handleChange}>
                    
                   <option value="Y">Yes</option>
                   <option value="N">No</option>
                    
                 </select>
+                {errors.IntegrationStatus && (
+                  <p style={{ color: "red" }}>{errors.IntegrationStatus}</p>
+                )}
               </div>
               
             </div>
@@ -286,14 +448,24 @@ const navigate = useNavigate();
                 <div className="form-grid">
                   <div className="form-group">
                     <label>Account Holder Name *</label>
-                    <input name="accountHolderName" value={account.accountHolderName} onChange={(e) => handleAccountChange(index, e)} required />
+                    <input name="accountHolderName" value={account.accountHolderName} onChange={(e) => handleAccountChange(index, e)}/>
+                        {errors[`accountHolderName_${index}`] && (
+                          <span style={{ color: "red" }} >
+                            {errors[`accountHolderName_${index}`]}
+                          </span>
+                        )}
                   </div>
                   <div className="form-group">
                     <label>Account Number *</label>
-                    <input name="accountNumber" value={account.accountNumber} onChange={(e) => handleAccountChange(index, e)} required />
+                    <input name="accountNumber" value={account.accountNumber} onChange={(e) => handleAccountChange(index, e)}/>
+                      {errors[index]?.accountNumber && (
+                        <span style={{ color: "red" }} >
+                          {errors[index].accountNumber}
+                        </span>
+                      )}
                   </div>
                   <div className="form-group">
-                    <label>Account Type</label>
+                    <label>Account Type *</label>
                     <select name="accountType" value={account.accountType} onChange={(e) => handleAccountChange(index, e)}>
                       <option value="">Select...</option>
                       <option value="Current">Current</option>
@@ -302,15 +474,15 @@ const navigate = useNavigate();
                   </div>
                   <div className="form-group">
                     <label>Bank Name *</label>
-                    <input name="bankName" value={account.bankName} onChange={(e) => handleAccountChange(index, e)} required />
+                    <input name="bankName" value={account.bankName} onChange={(e) => handleAccountChange(index, e)}/>
                   </div>
                   <div className="form-group">
-                    <label>Bank Branch</label>
+                    <label>Bank Branch *</label>
                     <input name="bankBranch" value={account.bankBranch} onChange={(e) => handleAccountChange(index, e)} />
                   </div>
                   <div className="form-group">
                     <label>IFSC Code *</label>
-                    <input name="IFSC_Code" value={account.IFSC_Code} onChange={(e) => handleAccountChange(index, e)} required />
+                    <input name="IFSC_Code" value={account.IFSC_Code} onChange={(e) => handleAccountChange(index, e)}/>
                   </div>
                 </div>
               </div>

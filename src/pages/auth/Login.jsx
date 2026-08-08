@@ -22,6 +22,33 @@ const Login = () => {
 
   const accentColor = theme.accent || '#6C63FF';
 
+  // const handleLogin = async (e) => {
+  //   e.preventDefault();
+
+  //   try {
+  //     const response = await authApi.login(formData);
+
+  //     const { token, user } = response.data;
+
+  //     localStorage.setItem("token", token);
+  //     localStorage.setItem("user", JSON.stringify(user));
+
+  //     if (user.role === "bankadmin") {
+  //       navigate("/bankadmin/dashboard");
+  //     } else if (user.role === "merchant") {
+  //       navigate("/merchant/dashboard");
+  //     } else if (user.role === "agent") {
+  //       navigate("/agent/dashboard");
+  //     }
+
+  //   } catch (error) {
+  //     alert(
+  //       error.response?.data?.message ||
+  //       "Login failed"
+  //     );
+  //   }
+  // };
+
   return (
     <div className="login-container">
       {/* Left Side - Branding */}
