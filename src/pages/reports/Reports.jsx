@@ -45,11 +45,6 @@ const Reports = () => {
     statusDistribution: [],
   });
 
-  // Accent color
-  const accent = '#6366f1';
-  const accentLight = '#818cf8';
-  const accentDark = '#4f46e5';
-
   useEffect(() => {
     loadReportData();
   }, [reportType, dateRange]);
@@ -58,12 +53,14 @@ const Reports = () => {
     setLoading(true);
     try {
       const res = await reportsApi.getOverview(dateRange);
-      setData(res.data || getDefaultData());
+      setData(res?.data || getDefaultData());
     } catch (error) {
       console.error('Error loading reports:', error);
       setData(getDefaultData());
     } finally {
-      setLoading(false);
+      setTimeout(() => {
+        setLoading(false);
+      }, 450);
     }
   };
 
@@ -75,22 +72,22 @@ const Reports = () => {
     statusDistribution: { labels: ['Success', 'Failed', 'Pending', 'Refunded'], data: [65, 15, 12, 8] },
   });
 
-  // Revenue Chart - Single Color
+  // Revenue Chart - Vibrant Palette
   const revenueData = {
     labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     datasets: [{
       label: 'Revenue (₹)',
       data: data.revenue,
       backgroundColor: [
-        accent + 'CC', accent + '88', accent + 'CC', accent + '88',
-        accent + 'CC', accent + '88', accent + 'CC', accent + '88',
-        accent + 'CC', accent + '88', accent + 'CC', accent + 'E6'
+        '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6',
+        '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6',
+        '#06b6d4', '#3b82f6', '#6366f1', '#10b981'
       ],
-      borderColor: accent,
-      borderWidth: 2,
+      borderColor: '#06b6d4',
+      borderWidth: 1.5,
       borderRadius: 8,
-      barPercentage: 0.6,
-      hoverBackgroundColor: accent,
+      barPercentage: 0.55,
+      hoverBackgroundColor: '#06b6d4',
     }]
   };
 
@@ -100,15 +97,15 @@ const Reports = () => {
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: '#ffffff',
-        titleColor: '#1a1a2e',
-        bodyColor: '#666666',
+        backgroundColor: '#111827',
+        titleColor: '#ffffff',
+        bodyColor: '#cbd5e1',
         cornerRadius: 12,
-        padding: 14,
-        borderColor: accent + '30',
+        padding: 12,
+        borderColor: 'rgba(6, 182, 212, 0.3)',
         borderWidth: 1,
         callbacks: {
-          label: (context) => `₹ ${context.parsed.y.toLocaleString()}`
+          label: (context) => ` Revenue: ₹ ${context.parsed.y.toLocaleString()}`
         }
       }
     },
@@ -116,43 +113,41 @@ const Reports = () => {
       y: {
         beginAtZero: true,
         ticks: {
-          color: '#94a3b8',
-          font: { size: 11, weight: '500' },
+          color: '#64748b',
+          font: { size: 11, weight: '600' },
           callback: (value) => value >= 1000 ? `₹${value/1000}k` : `₹${value}`
         },
-        grid: { color: 'rgba(148, 163, 184, 0.12)' }
+        grid: { color: 'rgba(255, 255, 255, 0.06)' }
       },
       x: {
-        ticks: { color: '#94a3b8', font: { size: 11, weight: '500' } },
+        ticks: { color: '#64748b', font: { size: 11, weight: '600' } },
         grid: { display: false }
       }
     }
   };
 
-  // Transaction Growth Chart - Single Color
+  // Transaction Growth Chart
   const growthData = {
     labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     datasets: [{
       label: 'Transactions',
       data: data.transactions,
-      borderColor: accent,
+      borderColor: '#6366f1',
       backgroundColor: (context) => {
         const chart = context.chart;
         const { ctx, chartArea } = chart;
-        if (!chartArea) return 'rgba(0, 0, 0, 0)';
+        if (!chartArea) return 'rgba(0,0,0,0)';
         const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-        gradient.addColorStop(0, accent + '40');
-        gradient.addColorStop(0.5, accent + '15');
-        gradient.addColorStop(1, accent + '00');
+        gradient.addColorStop(0, 'rgba(99, 102, 241, 0.4)');
+        gradient.addColorStop(1, 'rgba(99, 102, 241, 0.0)');
         return gradient;
       },
-      tension: 0.4,
+      tension: 0.38,
       fill: true,
-      pointBackgroundColor: accent,
+      pointBackgroundColor: '#6366f1',
       pointBorderColor: '#ffffff',
       pointBorderWidth: 3,
-      pointRadius: 6,
-      pointHoverRadius: 10,
+      pointRadius: 5,
       borderWidth: 3,
     }]
   };
@@ -162,47 +157,40 @@ const Reports = () => {
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        labels: { color: '#64748b', font: { size: 12, weight: '500' } }
+        labels: { color: '#cbd5e1', font: { size: 12, weight: '600' } }
       },
       tooltip: {
-        backgroundColor: '#ffffff',
-        titleColor: '#1a1a2e',
-        bodyColor: '#666666',
+        backgroundColor: '#111827',
+        titleColor: '#ffffff',
+        bodyColor: '#cbd5e1',
         cornerRadius: 12,
-        padding: 14,
-        borderColor: accent + '30',
+        padding: 12,
+        borderColor: 'rgba(99, 102, 241, 0.3)',
         borderWidth: 1,
       }
     },
     scales: {
       y: {
         beginAtZero: true,
-        ticks: { color: '#94a3b8', font: { size: 11, weight: '500' } },
-        grid: { color: 'rgba(148, 163, 184, 0.12)' }
+        ticks: { color: '#64748b', font: { size: 11, weight: '600' } },
+        grid: { color: 'rgba(255, 255, 255, 0.06)' }
       },
       x: {
-        ticks: { color: '#94a3b8', font: { size: 11, weight: '500' } },
+        ticks: { color: '#64748b', font: { size: 11, weight: '600' } },
         grid: { display: false }
       }
     }
   };
 
-  // Merchant Growth - Single Color
+  // Merchant Growth Chart
   const merchantData = {
     labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     datasets: [{
       label: 'Merchants',
       data: data.merchants,
-      backgroundColor: [
-        accent + 'CC', accent + '88', accent + 'CC', accent + '88',
-        accent + 'CC', accent + '88', accent + 'CC', accent + '88',
-        accent + 'CC', accent + '88', accent + 'CC', accent + 'E6'
-      ],
-      borderColor: accent,
-      borderWidth: 2,
-      borderRadius: 8,
+      backgroundColor: '#3b82f6',
+      borderRadius: 6,
       barPercentage: 0.5,
-      hoverBackgroundColor: accent,
     }]
   };
 
@@ -212,90 +200,63 @@ const Reports = () => {
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: '#ffffff',
-        titleColor: '#1a1a2e',
-        bodyColor: '#666666',
+        backgroundColor: '#111827',
+        titleColor: '#ffffff',
+        bodyColor: '#cbd5e1',
         cornerRadius: 12,
-        padding: 14,
-        borderColor: accent + '30',
-        borderWidth: 1,
+        padding: 12,
       }
     },
     scales: {
       y: {
         beginAtZero: true,
-        ticks: { color: '#94a3b8', font: { size: 11, weight: '500' } },
-        grid: { color: 'rgba(148, 163, 184, 0.12)' }
+        ticks: { color: '#64748b', font: { size: 11, weight: '600' } },
+        grid: { color: 'rgba(255, 255, 255, 0.06)' }
       },
       x: {
-        ticks: { color: '#94a3b8', font: { size: 11, weight: '500' } },
+        ticks: { color: '#64748b', font: { size: 11, weight: '600' } },
         grid: { display: false }
       }
     }
   };
 
-  // Payment Methods - Single Color
+  // Payment Methods Doughnut
   const paymentData = {
-    labels: data.paymentMethods.labels || ['UPI', 'Credit Card', 'Net Banking', 'Wallet', 'Debit Card'],
+    labels: data.paymentMethods?.labels || ['UPI', 'Credit Card', 'Net Banking', 'Wallet', 'Debit Card'],
     datasets: [{
-      data: data.paymentMethods.data || [35, 25, 20, 12, 8],
-      backgroundColor: [
-        accent,
-        accent + 'CC',
-        accent + '99',
-        accent + '66',
-        accent + '33'
-      ],
-      borderColor: '#ffffff',
+      data: data.paymentMethods?.data || [35, 25, 20, 12, 8],
+      backgroundColor: ['#06b6d4', '#6366f1', '#3b82f6', '#8b5cf6', '#ec4899'],
+      borderColor: '#111827',
       borderWidth: 4,
-      hoverOffset: 15,
     }]
   };
 
   const paymentOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    cutout: '65%',
+    cutout: '72%',
     plugins: {
       legend: {
         position: 'bottom',
         labels: {
-          color: '#64748b',
-          padding: 18,
+          color: '#cbd5e1',
+          padding: 14,
           usePointStyle: true,
           pointStyle: 'circle',
-          font: { size: 12, weight: '500' }
-        }
-      },
-      tooltip: {
-        backgroundColor: '#ffffff',
-        titleColor: '#1a1a2e',
-        bodyColor: '#666666',
-        cornerRadius: 12,
-        padding: 14,
-        borderColor: accent + '30',
-        borderWidth: 1,
-        callbacks: {
-          label: (context) => `${context.label}: ${context.parsed}%`
+          font: { size: 12, weight: '600' }
         }
       }
     }
   };
 
-  // Status Distribution - Single Color
+  // Status Distribution Pie
   const statusData = {
-    labels: data.statusDistribution.labels || ['Success', 'Failed', 'Pending', 'Refunded'],
+    labels: data.statusDistribution?.labels || ['Success', 'Failed', 'Pending', 'Refunded'],
     datasets: [{
-      data: data.statusDistribution.data || [65, 15, 12, 8],
-      backgroundColor: [
-        accent,
-        accent + 'CC',
-        accent + '88',
-        accent + '44'
-      ],
-      borderColor: '#ffffff',
+      data: data.statusDistribution?.data || [65, 15, 12, 8],
+      backgroundColor: ['#10b981', '#ef4444', '#f59e0b', '#8b5cf6'],
+      borderColor: '#111827',
       borderWidth: 4,
-      hoverOffset: 15,
     }]
   };
 
@@ -306,49 +267,37 @@ const Reports = () => {
       legend: {
         position: 'bottom',
         labels: {
-          color: '#64748b',
-          padding: 18,
+          color: '#cbd5e1',
+          padding: 14,
           usePointStyle: true,
           pointStyle: 'circle',
-          font: { size: 12, weight: '500' }
-        }
-      },
-      tooltip: {
-        backgroundColor: '#ffffff',
-        titleColor: '#1a1a2e',
-        bodyColor: '#666666',
-        cornerRadius: 12,
-        padding: 14,
-        borderColor: accent + '30',
-        borderWidth: 1,
-        callbacks: {
-          label: (context) => `${context.label}: ${context.parsed}%`
+          font: { size: 12, weight: '600' }
         }
       }
     }
   };
 
   return (
-    <DashboardLayout role="softwareadmin">
+    <DashboardLayout role="softwareadmin" pageTitle="Reports Telemetry">
       <div className="reports-page">
+        
         {/* Header */}
         <div className="page-header">
           <div>
             <div className="header-badge">
-              <span className="header-badge-icon">✦</span>
-              <span>Analytics Dashboard</span>
+              <span className="pulse-dot"></span> System Telemetry & Insights
             </div>
             <h1 className="page-title">
-              <span className="gradient-text">Reports & Analytics</span>
+              Reports & <span className="gradient-text">Analytics</span>
             </h1>
-            <p className="page-subtitle">Comprehensive insights and analytics</p>
+            <p className="page-subtitle">Comprehensive performance metrics and financial breakdown</p>
           </div>
           <div className="header-actions">
-            <button className="btn-outline" onClick={() => navigate('/reports/export')}>
-              <span className="btn-icon">📥</span> Export Report
+            <button className="btn-outline-action" onClick={() => navigate('/reports/export')}>
+              <span>📥 Export CSV</span>
             </button>
-            <button className="btn-primary" onClick={() => window.print()}>
-              <span className="btn-icon">🖨️</span> Print
+            <button className="btn-primary-gradient" onClick={() => window.print()}>
+              <span>🖨️ Print Report</span>
             </button>
           </div>
         </div>
@@ -359,32 +308,34 @@ const Reports = () => {
             className={`tab-btn ${reportType === 'overview' ? 'active' : ''}`}
             onClick={() => setReportType('overview')}
           >
-            <span className="tab-icon">📊</span> Overview
+            <span>📊 Overview</span>
           </button>
           <button 
             className={`tab-btn ${reportType === 'revenue' ? 'active' : ''}`}
             onClick={() => setReportType('revenue')}
           >
-            <span className="tab-icon">💰</span> Revenue
+            <span>💰 Revenue</span>
           </button>
           <button 
             className={`tab-btn ${reportType === 'merchants' ? 'active' : ''}`}
             onClick={() => setReportType('merchants')}
           >
-            <span className="tab-icon">🏪</span> Merchants
+            <span>🏪 Merchants</span>
           </button>
           <button 
             className={`tab-btn ${reportType === 'payments' ? 'active' : ''}`}
             onClick={() => setReportType('payments')}
           >
-            <span className="tab-icon">💳</span> Payments
+            <span>💳 Payments</span>
           </button>
         </div>
 
         {/* Date Range Filter */}
-        <div className="date-filter">
-          <div className="filter-icon">📅</div>
-          <label>Date Range</label>
+        <div className="date-filter-bar">
+          <div className="filter-label-group">
+            <span className="filter-icon">📅</span>
+            <span>Date Range Filter:</span>
+          </div>
           <input
             type="date"
             value={dateRange.start}
@@ -398,69 +349,66 @@ const Reports = () => {
             onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
             className="date-input"
           />
-          <button className="btn-primary apply-btn" onClick={loadReportData}>
+          <button className="btn-primary-gradient small" onClick={loadReportData}>
             Apply Filter
           </button>
         </div>
 
         {loading ? (
-          <div className="loading-spinner">
+          <div className="reports-loading-box">
             <div className="spinner"></div>
-            <span>Loading reports...</span>
+            <span>Generating Analytics Telemetry...</span>
           </div>
         ) : (
           <>
             {/* KPI Cards */}
             <div className="kpi-grid">
               <div className="kpi-card">
-                <div className="kpi-card-glow"></div>
-                <div className="kpi-icon">💰</div>
+                <div className="kpi-icon-box cyan">💰</div>
                 <div className="kpi-info">
                   <span className="kpi-label">Total Revenue</span>
-                  <span className="kpi-value">₹{data.revenue.reduce((a, b) => a + b, 0).toLocaleString()}</span>
+                  <span className="kpi-value text-cyan">₹{(data.revenue || []).reduce((a, b) => a + b, 0).toLocaleString()}</span>
                   <span className="kpi-change up">↑ 18.5% from last period</span>
                 </div>
               </div>
+
               <div className="kpi-card">
-                <div className="kpi-card-glow"></div>
-                <div className="kpi-icon">💳</div>
+                <div className="kpi-icon-box purple">💳</div>
                 <div className="kpi-info">
                   <span className="kpi-label">Total Transactions</span>
-                  <span className="kpi-value">{data.transactions.reduce((a, b) => a + b, 0)}</span>
+                  <span className="kpi-value text-purple">{(data.transactions || []).reduce((a, b) => a + b, 0)}</span>
                   <span className="kpi-change up">↑ 12.3% from last period</span>
                 </div>
               </div>
+
               <div className="kpi-card">
-                <div className="kpi-card-glow"></div>
-                <div className="kpi-icon">🏪</div>
+                <div className="kpi-icon-box blue">🏪</div>
                 <div className="kpi-info">
                   <span className="kpi-label">Active Merchants</span>
-                  <span className="kpi-value">{data.merchants[data.merchants.length - 1] || 0}</span>
+                  <span className="kpi-value text-blue">{data.merchants[data.merchants.length - 1] || 0}</span>
                   <span className="kpi-change up">↑ 8.7% from last period</span>
                 </div>
               </div>
+
               <div className="kpi-card">
-                <div className="kpi-card-glow"></div>
-                <div className="kpi-icon">✅</div>
+                <div className="kpi-icon-box green">✅</div>
                 <div className="kpi-info">
                   <span className="kpi-label">Success Rate</span>
-                  <span className="kpi-value">{(data.statusDistribution.data[0] || 65)}%</span>
+                  <span className="kpi-value text-green">{(data.statusDistribution?.data?.[0] || 65)}%</span>
                   <span className="kpi-change up">↑ 2.5% from last period</span>
                 </div>
               </div>
             </div>
 
-            {/* Charts Grid */}
-            <div className="charts-grid">
+            {/* Row 1 Charts */}
+            <div className="charts-grid-two">
               <div className="chart-card large">
                 <div className="chart-header">
                   <div>
-                    <div className="chart-title">
-                      <span className="gradient-text">Revenue</span> Overview
-                    </div>
+                    <div className="chart-title">Revenue <span className="gradient-text">Overview</span></div>
                     <div className="chart-subtitle">Monthly revenue trend</div>
                   </div>
-                  <div className="chart-badge">📈 +23%</div>
+                  <div className="chart-badge-pill">📈 +23%</div>
                 </div>
                 <div className="chart-wrapper">
                   <Bar data={revenueData} options={revenueOptions} />
@@ -470,10 +418,8 @@ const Reports = () => {
               <div className="chart-card">
                 <div className="chart-header">
                   <div>
-                    <div className="chart-title">
-                      <span className="gradient-text">Transaction</span> Growth
-                    </div>
-                    <div className="chart-subtitle">Monthly transaction volume</div>
+                    <div className="chart-title">Transaction <span className="gradient-text">Growth</span></div>
+                    <div className="chart-subtitle">Monthly transaction volume trajectory</div>
                   </div>
                 </div>
                 <div className="chart-wrapper">
@@ -482,14 +428,13 @@ const Reports = () => {
               </div>
             </div>
 
-            <div className="charts-grid">
+            {/* Row 2 Charts */}
+            <div className="charts-grid-three">
               <div className="chart-card">
                 <div className="chart-header">
                   <div>
-                    <div className="chart-title">
-                      <span className="gradient-text">Merchant</span> Growth
-                    </div>
-                    <div className="chart-subtitle">New merchants per month</div>
+                    <div className="chart-title">Merchant <span className="gradient-text">Growth</span></div>
+                    <div className="chart-subtitle">New merchants onboarded</div>
                   </div>
                 </div>
                 <div className="chart-wrapper">
@@ -500,10 +445,8 @@ const Reports = () => {
               <div className="chart-card">
                 <div className="chart-header">
                   <div>
-                    <div className="chart-title">
-                      <span className="gradient-text">Payment</span> Methods
-                    </div>
-                    <div className="chart-subtitle">Distribution by method</div>
+                    <div className="chart-title">Payment <span className="gradient-text">Methods</span></div>
+                    <div className="chart-subtitle">Channel share</div>
                   </div>
                 </div>
                 <div className="chart-wrapper">
@@ -514,10 +457,8 @@ const Reports = () => {
               <div className="chart-card">
                 <div className="chart-header">
                   <div>
-                    <div className="chart-title">
-                      <span className="gradient-text">Status</span> Distribution
-                    </div>
-                    <div className="chart-subtitle">Transaction status breakdown</div>
+                    <div className="chart-title">Status <span className="gradient-text">Distribution</span></div>
+                    <div className="chart-subtitle">Transaction status ratio</div>
                   </div>
                 </div>
                 <div className="chart-wrapper">
@@ -527,40 +468,40 @@ const Reports = () => {
             </div>
 
             {/* Summary Table */}
-            <div className="summary-card">
-              <div className="summary-header">
+            <div className="table-card">
+              <div className="table-header">
                 <div>
-                  <h3>📊 Monthly Summary</h3>
-                  <span className="summary-subtitle">Detailed breakdown by month</span>
+                  <div className="table-title-text">📊 Monthly Financial Audit</div>
+                  <div className="table-subtitle">Detailed telemetry breakdown by month</div>
                 </div>
-                <button className="btn-outline small">View All →</button>
               </div>
+              
               <div className="table-wrapper">
                 <table>
                   <thead>
                     <tr>
                       <th>Month</th>
-                      <th>Revenue</th>
+                      <th>Revenue (₹)</th>
                       <th>Transactions</th>
-                      <th>Merchants</th>
-                      <th>Growth %</th>
+                      <th>Active Merchants</th>
+                      <th>Growth Trajectory</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.revenue.map((rev, i) => (
-                      <tr key={i}>
+                    {(data.revenue || []).map((rev, i) => (
+                      <tr key={i} className="table-row-hover">
                         <td>
-                          <span className="month-name">
+                          <span className="month-name-badge">
                             {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][i]}
                           </span>
                         </td>
                         <td>
-                          <span className="tx-amount">₹{rev.toLocaleString()}</span>
+                          <span className="revenue-val">₹{rev.toLocaleString()}</span>
                         </td>
                         <td>{data.transactions[i] || 0}</td>
                         <td>{data.merchants[i] || 0}</td>
                         <td>
-                          <span className={`growth-badge ${i > 0 && rev > data.revenue[i-1] ? 'positive' : 'negative'}`}>
+                          <span className={`growth-pill ${i > 0 && rev > data.revenue[i-1] ? 'positive' : 'negative'}`}>
                             {i > 0 ? `${((rev - data.revenue[i-1]) / data.revenue[i-1] * 100).toFixed(1)}%` : '-'}
                           </span>
                         </td>

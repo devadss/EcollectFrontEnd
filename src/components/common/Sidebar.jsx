@@ -1,6 +1,5 @@
-// Sidebar.jsx
 import React from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import './Sidebar.css';
 
 const Sidebar = ({ 
@@ -12,6 +11,7 @@ const Sidebar = ({
   isMobile = false
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const getMenuByRole = (role) => {
     const MENU_CONFIG = {
@@ -159,7 +159,6 @@ const Sidebar = ({
     
     try {
       navigate(path);
-      
       if (isMobile && onMobileClose) {
         onMobileClose();
       }
@@ -189,28 +188,35 @@ const Sidebar = ({
     return null;
   }
 
-  const sidebarClass = `sidebar ${collapsed ? 'collapsed' : ''} ${isMobile ? 'mobile' : ''} ${mobileOpen ? 'open' : ''}`;
+  const sidebarClass = `sidebar-ultra ${collapsed ? 'collapsed' : ''} ${isMobile ? 'mobile' : ''} ${mobileOpen ? 'open' : ''}`;
 
   return (
     <aside className={sidebarClass}>
       <div className="sidebar-inner">
-        {/* Brand - Premium Design */}
+        
+        {/* Brand Header */}
         <div className="sidebar-brand">
-          <div className="sidebar-brand-logo">⚡</div>
+          <div className="sidebar-brand-logo-container">
+            <div className="sidebar-brand-logo">⚡</div>
+          </div>
           {!collapsed && (
             <span className="sidebar-brand-text">
-              Ecollect<span>PG</span>
+              Ecollect<span className="brand-accent"></span>
+              <span className="brand-dot"></span>
             </span>
           )}
+          
           {!isMobile && (
             <button 
               className="sidebar-collapse-btn" 
               onClick={onToggle}
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              title={collapsed ? 'Expand' : 'Collapse'}
             >
               {collapsed ? '→' : '←'}
             </button>
           )}
+
           {isMobile && (
             <button 
               className="sidebar-close-btn" 
@@ -222,15 +228,20 @@ const Sidebar = ({
           )}
         </div>
 
-        {/* Role Badge - Premium */}
+        {/* Role Access Badge */}
         {!collapsed && (
           <div className="sidebar-role-badge">
-            <span className="sidebar-role-icon">{menuConfig.icon}</span>
-            <span className="sidebar-role-name">{menuConfig.role}</span>
+            <div className="sidebar-role-icon-box">{menuConfig.icon}</div>
+            <div className="sidebar-role-info">
+              <span className="sidebar-role-name">{menuConfig.role}</span>
+              <span className="sidebar-role-status">
+                <span className="online-dot"></span> Portal Active
+              </span>
+            </div>
           </div>
         )}
 
-        {/* Menu - Premium Items */}
+        {/* Navigation Menu */}
         <nav className="sidebar-menu" role="navigation" aria-label="Main navigation">
           {menuConfig.menu.map((section, idx) => (
             <div key={idx} className="sidebar-menu-section">
@@ -238,30 +249,26 @@ const Sidebar = ({
                 <div className="sidebar-menu-label">{section.section}</div>
               )}
               {section.items.map((item, itemIdx) => {
-                const isActiveRoute = (match, location) => {
-                  if (!match) return false;
-                  if (item.path === '/dashboard') {
-                    return match && match.isExact;
-                  }
-                  return location.pathname.startsWith(item.path);
-                };
+                const isActive = item.path === '/dashboard' 
+                  ? location.pathname === '/dashboard' 
+                  : location.pathname.startsWith(item.path);
 
                 return (
                   <NavLink
                     key={itemIdx}
                     to={item.path}
-                    isActive={isActiveRoute}
-                    className={({ isActive }) => {
-                      const active = isActive || window.location.pathname.startsWith(item.path);
-                      return `sidebar-menu-item ${active ? 'active' : ''}`;
-                    }}
+                    className={`sidebar-menu-item ${isActive ? 'active' : ''}`}
                     onClick={(e) => handleNavigation(item.path, e)}
-                    aria-current={window.location.pathname.startsWith(item.path) ? 'page' : undefined}
+                    title={collapsed ? item.label : undefined}
+                    aria-current={isActive ? 'page' : undefined}
                   >
+                    <div className="menu-active-pill"></div>
                     <span className="sidebar-menu-icon" aria-hidden="true">{item.icon}</span>
+                    
                     {!collapsed && (
                       <span className="sidebar-menu-label-text">{item.label}</span>
                     )}
+                    
                     {!collapsed && item.badge && (
                       <span className="sidebar-menu-badge">{item.badge}</span>
                     )}
@@ -272,17 +279,19 @@ const Sidebar = ({
           ))}
         </nav>
 
-        {/* Footer - Premium Logout */}
+        {/* Footer Logout Action */}
         <div className="sidebar-footer">
           <button 
-            className="sidebar-logout"
+            className="sidebar-logout-btn"
             onClick={handleLogout}
             aria-label="Logout"
+            title={collapsed ? 'Logout' : undefined}
           >
             <span className="sidebar-menu-icon" aria-hidden="true">🚪</span>
-            {!collapsed && <span className="sidebar-menu-label-text">Logout</span>}
+            {!collapsed && <span className="sidebar-menu-label-text">Sign Out</span>}
           </button>
         </div>
+
       </div>
     </aside>
   );

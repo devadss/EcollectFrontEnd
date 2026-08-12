@@ -22,14 +22,15 @@ const Branches = () => {
       setLoading(true);
       setError(null);
       const res = await branchApi.getAll();
-      setBranches(res.data.data || []);
+      const listData = res?.data?.data || res?.data || [];
+      setBranches(Array.isArray(listData) ? listData : []);
     } catch (error) {
       console.error('Error loading branches:', error);
-      setError(error.message || 'Failed to load branches');
+      setError(error?.response?.data?.message || error.message || 'Failed to load branches');
     } finally {
       setTimeout(() => {
         setLoading(false);
-      }, 500);
+      }, 450);
     }
   };
 
@@ -37,11 +38,11 @@ const Branches = () => {
     if (window.confirm('Are you sure you want to delete this branch?')) {
       try {
         const response = await branchApi.delete(id);
-        alert(response.data.message);
+        alert(response?.data?.message || 'Branch deleted successfully');
         loadBranches();
       } catch (error) {
         console.error('Error deleting branch:', error);
-        alert('Failed to delete branch. Please try again.');
+        alert(error?.response?.data?.message || 'Failed to delete branch. Please try again.');
       }
     }
   };
@@ -56,7 +57,7 @@ const Branches = () => {
     }
   };
 
-  // Calculate stats
+  // Calculate stats safely
   const totalBranches = branches.length;
   const activeBranches = branches.filter(b => b.isActive).length;
   const inactiveBranches = branches.filter(b => !b.isActive).length;
@@ -65,10 +66,10 @@ const Branches = () => {
 
   const filteredBranches = branches.filter(branch => {
     const matchesSearch = 
-      branch.name?.toLowerCase().includes(search.toLowerCase()) ||
-      branch.code?.toLowerCase().includes(search.toLowerCase()) ||
-      branch.city?.toLowerCase().includes(search.toLowerCase()) ||
-      branch.address?.toLowerCase().includes(search.toLowerCase());
+      (branch.name || '').toLowerCase().includes(search.toLowerCase()) ||
+      (branch.code || '').toLowerCase().includes(search.toLowerCase()) ||
+      (branch.city || '').toLowerCase().includes(search.toLowerCase()) ||
+      (branch.address || '').toLowerCase().includes(search.toLowerCase());
     
     const matchesStatus = filterStatus ? branch.isActive === (filterStatus === 'active') : true;
     
@@ -77,32 +78,38 @@ const Branches = () => {
 
   return (
     <>
-      {/* Loading overlay with blur - shown when loading */}
-      {loading && <LoadingAnimation message="Loading Branches" />}
+      {/* Loading overlay */}
+      {loading && <LoadingAnimation message="Loading Branch Network..." />}
       
-      {/* Main content */}
-      <DashboardLayout role="softwareadmin">
+      <DashboardLayout role="softwareadmin" pageTitle="Branch Network">
         <div className={`branches-page ${loading ? 'content-blurred' : ''}`}>
+          
           {/* Header */}
           <div className="page-header">
             <div>
-              <h1 className="page-title"><span className="gradient-text">Branches</span></h1>
-              <p className="page-subtitle">Manage all branch locations</p>
+              <div className="header-badge">
+                <span className="pulse-dot"></span> Regional Infrastructure
+              </div>
+              <h1 className="page-title">
+                Branch <span className="gradient-text">Network</span>
+              </h1>
+              <p className="page-subtitle">Manage regional office locations, field teams, and localized revenue</p>
             </div>
-            <button className="btn-primary" onClick={() => navigate('/branches/add')}>
-              ➕ Add Branch
+
+            <button className="btn-primary-gradient" onClick={() => navigate('/branches/add')}>
+              <span>➕ Add Branch Location</span>
             </button>
           </div>
 
-          {/* Error Message */}
+          {/* Error Banner */}
           {error && (
             <div className="error-banner">
               <span>⚠️ {error}</span>
-              <button onClick={loadBranches} className="retry-btn">Retry</button>
+              <button onClick={loadBranches} className="retry-btn">Retry Load</button>
             </div>
           )}
 
-          {/* Stats Cards */}
+          {/* Stats Summary Cards */}
           <div className="stats-cards">
             <div className="stat-card-item">
               <div className="stat-card-icon">🏢</div>
@@ -112,141 +119,141 @@ const Branches = () => {
               </div>
               <div className="stat-card-trend up">↑ 6%</div>
             </div>
+
             <div className="stat-card-item">
-              <div className="stat-card-icon">✅</div>
+              <div className="stat-card-icon active-icon">✅</div>
               <div className="stat-card-info">
-                <span className="stat-card-label">Active</span>
-                <span className="stat-card-number" style={{ color: '#22c55e' }}>{activeBranches}</span>
+                <span className="stat-card-label">Active Offices</span>
+                <span className="stat-card-number active-num">{activeBranches}</span>
               </div>
               <div className="stat-card-trend up">↑ 4%</div>
             </div>
+
             <div className="stat-card-item">
-              <div className="stat-card-icon">⏸️</div>
+              <div className="stat-card-icon inactive-icon">⏸️</div>
               <div className="stat-card-info">
                 <span className="stat-card-label">Inactive</span>
-                <span className="stat-card-number" style={{ color: '#ef4444' }}>{inactiveBranches}</span>
+                <span className="stat-card-number inactive-num">{inactiveBranches}</span>
               </div>
               <div className="stat-card-trend down">↓ 2%</div>
             </div>
+
             <div className="stat-card-item">
-              <div className="stat-card-icon">🏪</div>
+              <div className="stat-card-icon merchant-icon">🏪</div>
               <div className="stat-card-info">
-                <span className="stat-card-label">Total Merchants</span>
-                <span className="stat-card-number" style={{ color: '#f59e0b' }}>{totalMerchants}</span>
+                <span className="stat-card-label">Assigned Merchants</span>
+                <span className="stat-card-number merchant-num">{totalMerchants}</span>
               </div>
               <div className="stat-card-trend up">↑ 10%</div>
             </div>
           </div>
 
-          {/* Search & Filter */}
-          <div className="filter-bar">
-            <div className="search-bar">
-              <div className="search-icon">🔍</div>
+          {/* Search & Filter Bar */}
+          <div className="filter-bar-container">
+            <div className="search-input-box">
+              <span className="search-icon">🔍</span>
               <input
                 type="text"
-                placeholder="Search by name, code, city or address..."
+                placeholder="Search by branch name, code, city or street address..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="search-input"
               />
               {search && (
-                <button className="search-clear" onClick={() => setSearch('')}>✕</button>
+                <button className="search-clear-btn" onClick={() => setSearch('')}>✕</button>
               )}
             </div>
+
             <div className="filter-group">
               <select 
                 value={filterStatus} 
                 onChange={(e) => setFilterStatus(e.target.value)}
                 className="filter-select"
               >
-                <option value="">All Status</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
+                <option value="">All Branch Statuses</option>
+                <option value="active">Active Only</option>
+                <option value="inactive">Inactive Only</option>
               </select>
             </div>
           </div>
 
-          {/* Grid */}
+          {/* Branch Grid */}
           <div className="branches-grid">
             {filteredBranches.length === 0 ? (
-              <div className="empty-state">
+              <div className="empty-state-card">
                 <span className="empty-icon">🏢</span>
                 <h3>No Branches Found</h3>
-                <p>Start by adding your first branch</p>
-                <button className="btn-primary" onClick={() => navigate('/branches/add')}>
-                  ➕ Add Branch
+                <p>No office locations match your search query</p>
+                <button className="btn-primary-gradient small" onClick={() => navigate('/branches/add')}>
+                  ➕ Add New Branch
                 </button>
               </div>
             ) : (
               filteredBranches.map((branch) => (
-                <div key={branch.id} className="branch-card animate-slide-up">
+                <div key={branch.id} className="branch-card">
                   <div className="branch-card-header">
                     <div className="branch-icon">{branch.icon || '🏢'}</div>
-                    <div className="branch-info">
-                      <h3 className="branch-name">{branch.name}</h3>
-                      <span className="branch-code">{branch.code || 'BR-' + branch.id}</span>
+                    <div className="branch-title-info">
+                      <h3 className="branch-name">{branch.name || 'Unnamed Branch'}</h3>
+                      <span className="branch-code-badge">{branch.code || 'BR-' + branch.id}</span>
                     </div>
-                    <span className={`branch-status ${branch.isActive ? 'active' : 'inactive'}`}>
+                    <span className={`status-pill ${branch.isActive ? 'active' : 'inactive'}`}>
+                      <span className="status-pulse-dot"></span>
                       {branch.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </div>
                   
-                  <div className="branch-details">
-                    <div className="branch-detail">
+                  <div className="branch-details-list">
+                    <div className="branch-detail-item">
                       <span className="detail-icon">📍</span>
-                      <span>{branch.address || 'No address'}</span>
+                      <span className="detail-text">{branch.address || 'No street address provided'}</span>
                     </div>
-                    <div className="branch-detail">
+                    
+                    <div className="branch-detail-item">
                       <span className="detail-icon">🏙️</span>
-                      <span>{branch.city || 'N/A'}, {branch.state || 'N/A'}</span>
+                      <span className="detail-text">{branch.city || 'N/A'}, {branch.state || 'N/A'}</span>
                     </div>
-                    <div className="branch-detail">
+                    
+                    <div className="branch-detail-item">
                       <span className="detail-icon">📞</span>
-                      <span>{branch.phone || 'N/A'}</span>
+                      <span className="detail-text">{branch.phone || 'N/A'}</span>
                     </div>
-                    <div className="branch-detail">
+                    
+                    <div className="branch-detail-item">
                       <span className="detail-icon">📧</span>
-                      <span>{branch.email || 'N/A'}</span>
+                      <span className="detail-text">{branch.email || 'N/A'}</span>
                     </div>
                   </div>
 
+                  {/* Mini Stats Bar */}
                   <div className="branch-stats-mini">
-                    {/*<div className="stat-mini">
-                      <span className="stat-mini-value">{branch.merchantCount || 0}</span>
-                      <span className="stat-mini-label">Merchants</span>
-                    </div>*/}
-                    <div className="stat-mini">
+                    <div className="stat-mini-box">
                       <span className="stat-mini-value">{branch.agentCount || 0}</span>
-                      <span className="stat-mini-label">Agents</span>
+                      <span className="stat-mini-label">Field Agents</span>
                     </div>
-                    <div className="stat-mini">
-                      <span className="stat-mini-value">₹{(branch.revenue || 0).toLocaleString()}</span>
-                      <span className="stat-mini-label">Revenue</span>
+                    
+                    <div className="stat-mini-box">
+                      <span className="stat-mini-value highlight">₹{(branch.revenue || 0).toLocaleString()}</span>
+                      <span className="stat-mini-label">Regional Volume</span>
                     </div>
                   </div>
 
-                  <div className="branch-actions">
+                  {/* Action Buttons */}
+                  <div className="branch-card-actions">
                     <button 
                       className="action-btn view" 
                       onClick={() => navigate(`/branches/${branch.id}`)}
-                      title="View Details"
+                      title="View Branch Details"
                     >
-                      👁️
+                      👁️ Details
                     </button>
                     <button 
                       className="action-btn edit" 
                       onClick={() => navigate(`/branches/edit/${branch.id}`)}
                       title="Edit Branch"
                     >
-                      ✏️
+                      ✏️ Edit
                     </button>
-                    {/*<button 
-                      className="action-btn toggle" 
-                      onClick={() => handleToggleStatus(branch.id)}
-                      title={branch.isActive ? 'Deactivate' : 'Activate'}
-                    >
-                      {branch.isActive ? '⏸️' : '▶️'}
-                    </button>*/}
                     <button 
                       className="action-btn delete" 
                       onClick={() => handleDelete(branch.id)}
@@ -260,10 +267,10 @@ const Branches = () => {
             )}
           </div>
 
-          {/* Footer */}
+          {/* Footer Bar */}
           {filteredBranches.length > 0 && (
             <div className="table-footer">
-              <span>Showing {filteredBranches.length} of {totalBranches} branches</span>
+              <span>Showing {filteredBranches.length} of {totalBranches} branch locations</span>
               <div className="table-pagination">
                 <button className="pagination-btn" disabled>←</button>
                 <span className="pagination-current">1</span>
@@ -271,6 +278,7 @@ const Branches = () => {
               </div>
             </div>
           )}
+
         </div>
       </DashboardLayout>
     </>

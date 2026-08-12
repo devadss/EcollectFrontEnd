@@ -34,6 +34,7 @@ ChartJS.register(
 const SoftwareAdminDashboard = () => {
   const { theme, currentTheme } = useTheme();
   const [chartKey, setChartKey] = useState(0);
+  const [activeRange, setActiveRange] = useState('Week'); // 'Week' | 'Month' | 'Year'
 
   // Force chart re-render when theme changes
   useEffect(() => {
@@ -49,8 +50,8 @@ const SoftwareAdminDashboard = () => {
       value: '1,234', 
       icon: '🏪', 
       change: '+12.5%',
-      color: theme.accent,
-      bgColor: theme.accent + '15',
+      color: theme.accent || '#06b6d4',
+      bgColor: (theme.accent || '#06b6d4') + '15',
       subtitle: 'Active merchants'
     },
     { 
@@ -58,8 +59,8 @@ const SoftwareAdminDashboard = () => {
       value: '456', 
       icon: '👤', 
       change: '+8.3%',
-      color: theme.accent,
-      bgColor: theme.accent + '15',
+      color: theme.accent || '#6366f1',
+      bgColor: (theme.accent || '#6366f1') + '15',
       subtitle: 'Active agents'
     },
     { 
@@ -67,8 +68,8 @@ const SoftwareAdminDashboard = () => {
       value: '89', 
       icon: '🏢', 
       change: '+5.2%',
-      color: theme.accent,
-      bgColor: theme.accent + '15',
+      color: theme.accent || '#3b82f6',
+      bgColor: (theme.accent || '#3b82f6') + '15',
       subtitle: 'Active branches'
     },
     { 
@@ -76,14 +77,14 @@ const SoftwareAdminDashboard = () => {
       value: '₹45.6L', 
       icon: '💰', 
       change: '+18.7%',
-      color: theme.accent,
-      bgColor: theme.accent + '15',
+      color: theme.accent || '#10b981',
+      bgColor: (theme.accent || '#10b981') + '15',
       subtitle: 'This month'
     },
   ];
 
   // ============================================================
-  // 1. REVENUE BAR CHART - With Theme Colors
+  // 1. REVENUE BAR CHART
   // ============================================================
   const revenueData = useMemo(() => ({
     labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
@@ -91,23 +92,23 @@ const SoftwareAdminDashboard = () => {
       label: 'Revenue (₹)',
       data: [12000, 19000, 15000, 25000, 22000, 30000, 28000],
       backgroundColor: [
-        theme.accent + 'D9',
-        theme.accent + '99',
-        theme.accent + 'D9',
-        theme.accent + '99',
-        theme.accent + 'D9',
-        theme.accent + '99',
-        theme.accent + 'E6'
+        (theme.accent || '#6366f1') + 'E6',
+        (theme.accent || '#6366f1') + 'B3',
+        (theme.accent || '#6366f1') + 'E6',
+        (theme.accent || '#6366f1') + 'B3',
+        (theme.accent || '#6366f1') + 'E6',
+        (theme.accent || '#6366f1') + 'B3',
+        (theme.accent || '#6366f1') + 'FF'
       ],
-      borderColor: theme.accent,
-      borderWidth: 3,
-      borderRadius: 10,
-      barPercentage: 0.65,
-      hoverBackgroundColor: theme.accent,
-      hoverBorderColor: theme.bgCard,
-      hoverBorderWidth: 4,
+      borderColor: theme.accent || '#6366f1',
+      borderWidth: 2,
+      borderRadius: 8,
+      barPercentage: 0.55,
+      hoverBackgroundColor: theme.accent || '#6366f1',
+      hoverBorderColor: theme.bgCard || '#ffffff',
+      hoverBorderWidth: 3,
     }]
-  }), [theme.accent]);
+  }), [theme.accent, theme.bgCard]);
 
   const revenueOptions = useMemo(() => ({
     responsive: true,
@@ -115,15 +116,16 @@ const SoftwareAdminDashboard = () => {
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: theme.bgCard,
-        titleColor: theme.textPrimary,
-        bodyColor: theme.textSecondary,
-        cornerRadius: 16,
-        padding: 16,
-        borderColor: theme.accent + '30',
+        backgroundColor: theme.bgCard || '#ffffff',
+        titleColor: theme.textPrimary || '#0f172a',
+        bodyColor: theme.textSecondary || '#475569',
+        cornerRadius: 12,
+        padding: 14,
+        boxPadding: 6,
+        borderColor: (theme.accent || '#6366f1') + '30',
         borderWidth: 1,
         callbacks: {
-          label: (context) => `₹ ${context.parsed.y.toLocaleString()}`
+          label: (context) => ` Revenue: ₹ ${context.parsed.y.toLocaleString()}`
         }
       }
     },
@@ -131,19 +133,19 @@ const SoftwareAdminDashboard = () => {
       y: {
         beginAtZero: true,
         ticks: {
-          color: theme.textMuted,
-          font: { size: 12, weight: '500' },
+          color: theme.textMuted || '#94a3b8',
+          font: { size: 11, weight: '600' },
           callback: (value) => value >= 1000 ? `₹${value/1000}k` : `₹${value}`
         },
         grid: { 
-          color: theme.border + '40',
+          color: (theme.border || '#e2e8f0') + '40',
           drawBorder: false,
         }
       },
       x: {
         ticks: { 
-          color: theme.textMuted, 
-          font: { size: 12, weight: '500' } 
+          color: theme.textMuted || '#94a3b8', 
+          font: { size: 11, weight: '600' } 
         },
         grid: { display: false }
       }
@@ -151,91 +153,91 @@ const SoftwareAdminDashboard = () => {
   }), [theme]);
 
   // ============================================================
-  // 2. PAYMENT METHODS DOUGHNUT - With Theme Colors
+  // 2. PAYMENT METHODS DOUGHNUT
   // ============================================================
   const paymentData = useMemo(() => ({
     labels: ['Credit Card', 'UPI', 'Net Banking', 'Wallet', 'Debit Card'],
     datasets: [{
       data: [35, 30, 20, 10, 5],
       backgroundColor: [
-        theme.accent,
-        theme.accent + 'CC',
-        theme.accent + '99',
-        theme.accent + '66',
-        theme.accent + '33'
+        theme.accent || '#6366f1',
+        (theme.accent || '#6366f1') + 'D9',
+        (theme.accent || '#6366f1') + 'A6',
+        (theme.accent || '#6366f1') + '73',
+        (theme.accent || '#6366f1') + '40'
       ],
-      borderColor: theme.bgCard,
-      borderWidth: 5,
-      hoverOffset: 20,
-      hoverBorderColor: theme.bgCard,
-      hoverBorderWidth: 6,
+      borderColor: theme.bgCard || '#ffffff',
+      borderWidth: 4,
+      hoverOffset: 12,
+      hoverBorderColor: theme.bgCard || '#ffffff',
+      hoverBorderWidth: 4,
     }]
   }), [theme.accent, theme.bgCard]);
 
   const paymentOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
-    cutout: '72%',
+    cutout: '74%',
     plugins: {
       legend: {
         position: 'bottom',
         labels: {
-          color: theme.textSecondary,
-          padding: 20,
+          color: theme.textSecondary || '#475569',
+          padding: 16,
           usePointStyle: true,
           pointStyle: 'circle',
-          font: { size: 13, weight: '500' },
-          boxWidth: 12,
-          boxHeight: 12,
+          font: { size: 12, weight: '600' },
+          boxWidth: 8,
+          boxHeight: 8,
         }
       },
       tooltip: {
-        backgroundColor: theme.bgCard,
-        titleColor: theme.textPrimary,
-        bodyColor: theme.textSecondary,
-        cornerRadius: 16,
-        padding: 16,
-        borderColor: theme.accent + '30',
+        backgroundColor: theme.bgCard || '#ffffff',
+        titleColor: theme.textPrimary || '#0f172a',
+        bodyColor: theme.textSecondary || '#475569',
+        cornerRadius: 12,
+        padding: 12,
+        borderColor: (theme.accent || '#6366f1') + '30',
         borderWidth: 1,
         callbacks: {
-          label: (context) => `${context.label}: ${context.parsed}%`
+          label: (context) => ` ${context.label}: ${context.parsed}%`
         }
       }
     }
   }), [theme]);
 
   // ============================================================
-  // 3. TRANSACTION VOLUME - With Theme Colors
+  // 3. TRANSACTION VOLUME
   // ============================================================
   const volumeData = useMemo(() => ({
     labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
     datasets: [{
       label: 'Transactions',
       data: [120, 150, 180, 210],
-      borderColor: theme.accent,
+      borderColor: theme.accent || '#6366f1',
       backgroundColor: (context) => {
         const chart = context.chart;
         const { ctx, chartArea } = chart;
         if (!chartArea) return 'rgba(0, 0, 0, 0)';
         const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-        gradient.addColorStop(0, theme.accent + '40');
-        gradient.addColorStop(0.5, theme.accent + '15');
-        gradient.addColorStop(1, theme.accent + '00');
+        gradient.addColorStop(0, (theme.accent || '#6366f1') + '45');
+        gradient.addColorStop(0.6, (theme.accent || '#6366f1') + '10');
+        gradient.addColorStop(1, (theme.accent || '#6366f1') + '00');
         return gradient;
       },
-      tension: 0.4,
+      tension: 0.38,
       fill: true,
       pointBackgroundColor: [
-        theme.accent,
-        theme.accent + 'CC',
-        theme.accent + '99',
-        theme.accent
+        theme.accent || '#6366f1',
+        (theme.accent || '#6366f1') + 'CC',
+        (theme.accent || '#6366f1') + '99',
+        theme.accent || '#6366f1'
       ],
-      pointBorderColor: theme.bgCard,
-      pointBorderWidth: 4,
-      pointRadius: 8,
-      pointHoverRadius: 14,
-      borderWidth: 4,
+      pointBorderColor: theme.bgCard || '#ffffff',
+      pointBorderWidth: 3,
+      pointRadius: 6,
+      pointHoverRadius: 10,
+      borderWidth: 3,
     }]
   }), [theme.accent, theme.bgCard]);
 
@@ -245,19 +247,19 @@ const SoftwareAdminDashboard = () => {
     plugins: {
       legend: {
         labels: { 
-          color: theme.textSecondary, 
-          font: { size: 13, weight: '500' },
+          color: theme.textSecondary || '#475569', 
+          font: { size: 12, weight: '600' },
           usePointStyle: true,
           pointStyle: 'circle',
         }
       },
       tooltip: {
-        backgroundColor: theme.bgCard,
-        titleColor: theme.textPrimary,
-        bodyColor: theme.textSecondary,
-        cornerRadius: 16,
-        padding: 16,
-        borderColor: theme.accent + '30',
+        backgroundColor: theme.bgCard || '#ffffff',
+        titleColor: theme.textPrimary || '#0f172a',
+        bodyColor: theme.textSecondary || '#475569',
+        cornerRadius: 12,
+        padding: 12,
+        borderColor: (theme.accent || '#6366f1') + '30',
         borderWidth: 1,
       }
     },
@@ -265,18 +267,18 @@ const SoftwareAdminDashboard = () => {
       y: {
         beginAtZero: true,
         ticks: { 
-          color: theme.textMuted, 
-          font: { size: 12, weight: '500' } 
+          color: theme.textMuted || '#94a3b8', 
+          font: { size: 11, weight: '600' } 
         },
         grid: { 
-          color: theme.border + '40',
+          color: (theme.border || '#e2e8f0') + '40',
           drawBorder: false,
         }
       },
       x: {
         ticks: { 
-          color: theme.textMuted, 
-          font: { size: 12, weight: '500' } 
+          color: theme.textMuted || '#94a3b8', 
+          font: { size: 11, weight: '600' } 
         },
         grid: { display: false }
       }
@@ -284,53 +286,53 @@ const SoftwareAdminDashboard = () => {
   }), [theme]);
 
   // ============================================================
-  // 4. STATUS DISTRIBUTION - With Theme Colors
+  // 4. STATUS DISTRIBUTION
   // ============================================================
   const statusData = useMemo(() => ({
     labels: ['Successful', 'Failed', 'Pending', 'Refunded'],
     datasets: [{
       data: [65, 15, 12, 8],
       backgroundColor: [
-        theme.accent,
-        theme.accent + 'CC',
-        theme.accent + '88',
-        theme.accent + '44'
+        '#10b981', // Success Green
+        '#ef4444', // Failed Red
+        '#f59e0b', // Pending Yellow
+        '#8b5cf6'  // Refunded Purple
       ],
-      borderColor: theme.bgCard,
-      borderWidth: 5,
-      hoverOffset: 20,
-      hoverBorderColor: theme.bgCard,
-      hoverBorderWidth: 6,
+      borderColor: theme.bgCard || '#ffffff',
+      borderWidth: 4,
+      hoverOffset: 12,
+      hoverBorderColor: theme.bgCard || '#ffffff',
+      hoverBorderWidth: 4,
     }]
-  }), [theme.accent, theme.bgCard]);
+  }), [theme.bgCard]);
 
   const statusOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
-    cutout: '68%',
+    cutout: '72%',
     plugins: {
       legend: {
         position: 'bottom',
         labels: {
-          color: theme.textSecondary,
-          padding: 20,
+          color: theme.textSecondary || '#475569',
+          padding: 16,
           usePointStyle: true,
           pointStyle: 'circle',
-          font: { size: 13, weight: '500' },
-          boxWidth: 12,
-          boxHeight: 12,
+          font: { size: 12, weight: '600' },
+          boxWidth: 8,
+          boxHeight: 8,
         }
       },
       tooltip: {
-        backgroundColor: theme.bgCard,
-        titleColor: theme.textPrimary,
-        bodyColor: theme.textSecondary,
-        cornerRadius: 16,
-        padding: 16,
-        borderColor: theme.accent + '30',
+        backgroundColor: theme.bgCard || '#ffffff',
+        titleColor: theme.textPrimary || '#0f172a',
+        bodyColor: theme.textSecondary || '#475569',
+        cornerRadius: 12,
+        padding: 12,
+        borderColor: (theme.accent || '#6366f1') + '30',
         borderWidth: 1,
         callbacks: {
-          label: (context) => `${context.label}: ${context.parsed}%`
+          label: (context) => ` ${context.label}: ${context.parsed}%`
         }
       }
     }
@@ -354,78 +356,97 @@ const SoftwareAdminDashboard = () => {
 
   return (
     <DashboardLayout role="softwareadmin">
-      <div className="admin-dashboard" style={{ background: theme.bgPrimary }}>
-        {/* Header - Ultra Premium */}
+      <div className="admin-dashboard-container" style={{ background: theme.bgPrimary }}>
+        
+        {/* Header Section */}
         <div className="dashboard-header">
           <div>
-            <div className="header-badge" style={{ background: theme.accent + '15', color: theme.accent }}>
-              <span className="header-badge-icon">✨</span>
-              <span>Premium Dashboard</span>
+            <div className="header-badge" style={{ background: (theme.accent || '#6366f1') + '15', color: theme.accent || '#6366f1' }}>
+              <span className="header-badge-pulse"></span>
+              <span>System Control Telemetry</span>
             </div>
-            <h1 className="dashboard-title" style={{ color: theme.textPrimary }}>
-              <span className="gradient-text" style={{ background: `linear-gradient(135deg, ${theme.accent}, ${theme.accent}CC)` }}>Software Admin</span> Dashboard
-            </h1>
-            <p className="dashboard-subtitle" style={{ color: theme.textMuted }}>Full system overview and control</p>
+            {/* <h1 className="dashboard-title" style={{ color: theme.textPrimary }}>
+              Software <span className="gradient-text" style={{ background: `linear-gradient(135deg, ${theme.accent || '#6366f1'}, #06b6d4)` }}>Admin Dashboard</span>
+            </h1> */}
+            <p className="dashboard-subtitle" style={{ color: theme.textMuted }}>Real-time overview of merchant operations, revenue, and system activity</p>
           </div>
+          
           <div className="header-right">
-            <div className="header-stats-mini" style={{ background: theme.accent + '15', color: theme.accent }}>
-              <span>📈 +23% this month</span>
+            <div className="header-stats-mini">
+              <span className="mini-trend-icon">📈</span>
+              <span>+23.4% Growth</span>
             </div>
             <span className="date-badge" style={{ 
               background: theme.bgCard,
               color: theme.textSecondary,
               borderColor: theme.border,
-              boxShadow: `0 4px 20px ${theme.textPrimary}10`
             }}>
-              📅 Today, {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              📅 {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
             </span>
           </div>
         </div>
 
-        {/* Stats Cards - Ultra Premium */}
+        {/* Stats Cards Grid */}
         <div className="stats-grid">
           {stats.map((stat, i) => (
-            <div key={i} className="stat-card" style={{ 
+            <div key={i} className="stat-card-ultra" style={{ 
               background: theme.bgCard,
               borderColor: theme.border,
-              borderTop: `4px solid ${stat.color}` 
             }}>
-              <div className="stat-card-glow" style={{ background: stat.color + '30' }}></div>
-              <div className="stat-card-icon-wrapper">
+              <div className="stat-glow-bg" style={{ background: `radial-gradient(circle, ${stat.color}25 0%, transparent 70%)` }}></div>
+              
+              <div className="stat-card-top">
                 <div className="stat-card-icon" style={{ background: stat.bgColor, color: stat.color }}>
                   {stat.icon}
                 </div>
-              </div>
-              <div className="stat-card-content">
-                <div className="stat-card-label" style={{ color: theme.textMuted }}>{stat.label}</div>
-                <div className="stat-card-value" style={{ color: stat.color }}>{stat.value}</div>
-                <div className="stat-card-change up" style={{ color: stat.color }}>
-                  <span className="change-icon">↑</span> {stat.change}
-                  <span className="stat-card-subtitle" style={{ color: theme.textMuted }}>{stat.subtitle}</span>
+                <div className="stat-badge-trend" style={{ background: stat.color + '15', color: stat.color }}>
+                  <span>↑</span> {stat.change}
                 </div>
+              </div>
+
+              <div className="stat-card-main">
+                <div className="stat-card-value" style={{ color: theme.textPrimary }}>{stat.value}</div>
+                <div className="stat-card-label" style={{ color: theme.textMuted }}>{stat.label}</div>
+              </div>
+
+              <div className="stat-card-footer" style={{ borderTopColor: (theme.border || '#e2e8f0') + '60' }}>
+                <span className="stat-card-subtitle" style={{ color: theme.textMuted }}>{stat.subtitle}</span>
               </div>
             </div>
           ))}
         </div>
 
-        {/* Charts Row 1 - Ultra Premium */}
+        {/* Charts Row 1 */}
         <div className="charts-row">
           <div className="chart-card premium-chart" style={{ 
             background: theme.bgCard,
             borderColor: theme.border,
-            boxShadow: `0 4px 24px ${theme.textPrimary}08`
           }}>
             <div className="chart-card-header">
               <div>
                 <div className="chart-card-title" style={{ color: theme.textPrimary }}>
-                  <span className="gradient-text" style={{ background: `linear-gradient(135deg, ${theme.accent}, ${theme.accent}CC)` }}>Revenue</span> Overview
+                  Revenue <span className="title-accent">Overview</span>
                 </div>
-                <div className="chart-card-subtitle" style={{ color: theme.textMuted }}>Last 7 days performance</div>
+                <div className="chart-card-subtitle" style={{ color: theme.textMuted }}>Weekly settlement volume breakdown</div>
               </div>
               <div className="chart-actions">
-                <button className="chart-btn active" style={{ background: theme.accent, borderColor: theme.accent, color: '#fff' }}>Week</button>
-                <button className="chart-btn" style={{ color: theme.textMuted, borderColor: theme.border }}>Month</button>
-                <button className="chart-btn" style={{ color: theme.textMuted, borderColor: theme.border }}>Year</button>
+                {['Week', 'Month', 'Year'].map((range) => (
+                  <button 
+                    key={range}
+                    className={`chart-btn ${activeRange === range ? 'active' : ''}`}
+                    onClick={() => setActiveRange(range)}
+                    style={activeRange === range ? { 
+                      background: theme.accent || '#6366f1', 
+                      borderColor: theme.accent || '#6366f1', 
+                      color: '#ffffff' 
+                    } : { 
+                      color: theme.textMuted, 
+                      borderColor: theme.border 
+                    }}
+                  >
+                    {range}
+                  </button>
+                ))}
               </div>
             </div>
             <div className="chart-wrapper">
@@ -436,14 +457,13 @@ const SoftwareAdminDashboard = () => {
           <div className="chart-card premium-chart" style={{ 
             background: theme.bgCard,
             borderColor: theme.border,
-            boxShadow: `0 4px 24px ${theme.textPrimary}08`
           }}>
             <div className="chart-card-header">
               <div>
                 <div className="chart-card-title" style={{ color: theme.textPrimary }}>
-                  Payment <span className="gradient-text" style={{ background: `linear-gradient(135deg, ${theme.accent}, ${theme.accent}CC)` }}>Methods</span>
+                  Payment <span className="title-accent">Methods</span>
                 </div>
-                <div className="chart-card-subtitle" style={{ color: theme.textMuted }}>Distribution breakdown</div>
+                <div className="chart-card-subtitle" style={{ color: theme.textMuted }}>Channel distribution ratio</div>
               </div>
             </div>
             <div className="chart-wrapper">
@@ -452,19 +472,18 @@ const SoftwareAdminDashboard = () => {
           </div>
         </div>
 
-        {/* Charts Row 2 - Ultra Premium */}
+        {/* Charts Row 2 */}
         <div className="charts-row">
           <div className="chart-card premium-chart" style={{ 
             background: theme.bgCard,
             borderColor: theme.border,
-            boxShadow: `0 4px 24px ${theme.textPrimary}08`
           }}>
             <div className="chart-card-header">
               <div>
                 <div className="chart-card-title" style={{ color: theme.textPrimary }}>
-                  Transaction <span className="gradient-text" style={{ background: `linear-gradient(135deg, ${theme.accent}, ${theme.accent}CC)` }}>Volume</span>
+                  Transaction <span className="title-accent">Volume</span>
                 </div>
-                <div className="chart-card-subtitle" style={{ color: theme.textMuted }}>Last 30 days trend</div>
+                <div className="chart-card-subtitle" style={{ color: theme.textMuted }}>Monthly processing volume trajectory</div>
               </div>
             </div>
             <div className="chart-wrapper">
@@ -475,14 +494,13 @@ const SoftwareAdminDashboard = () => {
           <div className="chart-card premium-chart" style={{ 
             background: theme.bgCard,
             borderColor: theme.border,
-            boxShadow: `0 4px 24px ${theme.textPrimary}08`
           }}>
             <div className="chart-card-header">
               <div>
                 <div className="chart-card-title" style={{ color: theme.textPrimary }}>
-                  Status <span className="gradient-text" style={{ background: `linear-gradient(135deg, ${theme.accent}, ${theme.accent}CC)` }}>Distribution</span>
+                  Status <span className="title-accent">Distribution</span>
                 </div>
-                <div className="chart-card-subtitle" style={{ color: theme.textMuted }}>Transaction status breakdown</div>
+                <div className="chart-card-subtitle" style={{ color: theme.textMuted }}>Success vs. failure telemetry</div>
               </div>
             </div>
             <div className="chart-wrapper">
@@ -491,24 +509,24 @@ const SoftwareAdminDashboard = () => {
           </div>
         </div>
 
-        {/* Transactions Table - Ultra Premium */}
+        {/* Recent Transactions Table */}
         <div className="table-card premium-table" style={{ 
           background: theme.bgCard,
           borderColor: theme.border,
-          boxShadow: `0 4px 24px ${theme.textPrimary}08`
         }}>
           <div className="table-header">
             <div>
               <div className="table-title" style={{ color: theme.textPrimary }}>
-                Recent <span className="gradient-text" style={{ background: `linear-gradient(135deg, ${theme.accent}, ${theme.accent}CC)` }}>Transactions</span>
+                Recent <span className="title-accent">Transactions</span>
               </div>
-              <div className="table-subtitle" style={{ color: theme.textMuted }}>Latest 5 transactions</div>
+              <div className="table-subtitle" style={{ color: theme.textMuted }}>Live settlement audit log</div>
             </div>
-            <a href="#" className="view-all" style={{ color: theme.accent }}>
-              View All 
+            <a href="#viewall" className="view-all-link" style={{ color: theme.accent || '#6366f1' }}>
+              <span>View All Log</span>
               <span className="view-all-arrow">→</span>
             </a>
           </div>
+          
           <div className="table-wrapper">
             <table>
               <thead>
@@ -517,20 +535,24 @@ const SoftwareAdminDashboard = () => {
                   <th style={{ color: theme.textMuted, borderBottomColor: theme.border }}>Merchant</th>
                   <th style={{ color: theme.textMuted, borderBottomColor: theme.border }}>Amount</th>
                   <th style={{ color: theme.textMuted, borderBottomColor: theme.border }}>Status</th>
-                  <th style={{ color: theme.textMuted, borderBottomColor: theme.border }}>Date & Time</th>
+                  <th style={{ color: theme.textMuted, borderBottomColor: theme.border }}>Timestamp</th>
                 </tr>
               </thead>
               <tbody>
                 {transactions.map((tx, i) => (
-                  <tr key={i}>
+                  <tr key={i} className="table-row-hover">
                     <td>
-                      <span className="tx-id" style={{ color: theme.textPrimary }}>{tx.id}</span>
+                      <span className="tx-id-badge" style={{ color: theme.textPrimary, background: (theme.border || '#e2e8f0') + '40' }}>
+                        {tx.id}
+                      </span>
                     </td>
-                    <td style={{ color: theme.textSecondary }}>{tx.merchant}</td>
-                    <td><span className="tx-amount" style={{ color: theme.textPrimary }}>{tx.amount}</span></td>
+                    <td style={{ color: theme.textSecondary, fontWeight: '600' }}>{tx.merchant}</td>
                     <td>
-                      <span className={`status-badge ${getStatusClass(tx.status)}`}>
-                        <span className="status-dot"></span>
+                      <span className="tx-amount" style={{ color: theme.textPrimary }}>{tx.amount}</span>
+                    </td>
+                    <td>
+                      <span className={`status-pill ${getStatusClass(tx.status)}`}>
+                        <span className="status-pulse-dot"></span>
                         {tx.status}
                       </span>
                     </td>
@@ -544,6 +566,7 @@ const SoftwareAdminDashboard = () => {
             </table>
           </div>
         </div>
+
       </div>
     </DashboardLayout>
   );
