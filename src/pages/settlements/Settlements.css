@@ -6,6 +6,8 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
+  background: #070a14 !important;
+  width: 100%;
 }
 
 .content-blurred {
@@ -47,6 +49,7 @@
   font-size: 28px;
   font-weight: 800;
   letter-spacing: -0.5px;
+  color: #ffffff !important;
   margin-bottom: 4px;
 }
 
@@ -58,7 +61,7 @@
 
 .page-subtitle {
   font-size: 14px;
-  color: #94a3b8;
+  color: #94a3b8 !important;
 }
 
 .btn-primary-gradient {
@@ -66,7 +69,7 @@
   border: none;
   border-radius: 12px;
   background: linear-gradient(135deg, #0284c7 0%, #2563eb 50%, #4f46e5 100%);
-  color: #ffffff;
+  color: #ffffff !important;
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
@@ -86,10 +89,10 @@
   gap: 16px;
 }
 
+/* FIXED: Solid Dark Navy background */
 .stat-card {
-  background: rgba(17, 24, 39, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(16px);
+  background: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
   padding: 20px;
   border-radius: 18px;
   transition: transform 0.25s ease;
@@ -97,7 +100,7 @@
 
 .stat-card:hover {
   transform: translateY(-3px);
-  border-color: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.16) !important;
 }
 
 .stat-card-content {
@@ -117,7 +120,7 @@
 .stat-value {
   font-size: 24px;
   font-weight: 800;
-  color: #ffffff;
+  color: #ffffff !important;
   margin: 4px 0;
 }
 
@@ -129,7 +132,6 @@
 .stat-change {
   font-size: 11px;
   font-weight: 700;
-
   display: inline-block;
   padding: 2px 8px;
   border-radius: 10px;
@@ -167,10 +169,10 @@
   gap: 20px;
 }
 
+/* FIXED: Solid Dark Navy background */
 .chart-card {
-  background: rgba(17, 24, 39, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(16px);
+  background: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
   border-radius: 20px;
   padding: 24px;
 }
@@ -182,6 +184,7 @@
 .chart-title {
   font-size: 18px;
   font-weight: 800;
+  color: #ffffff !important;
 }
 
 .chart-subtitle {
@@ -196,18 +199,17 @@
   width: 100%;
 }
 
-/* Filter Bar */
+/* FIXED: Solid Dark Navy Filter Bar */
 .filter-bar {
   display: flex;
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
-  background: rgba(17, 24, 39, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
   padding: 14px 18px;
   border-radius: 16px;
   margin-bottom: 16px;
-  backdrop-filter: blur(16px);
 }
 
 .search-input-box {
@@ -233,7 +235,7 @@
   border: none;
   outline: none;
   font-size: 13px;
-  color: #ffffff;
+  color: #ffffff !important;
 }
 
 .filter-select,
@@ -242,7 +244,7 @@
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  color: #ffffff !important;
   font-size: 13px;
   outline: none;
   cursor: pointer;
@@ -253,11 +255,10 @@
   color: #ffffff;
 }
 
-/* Table Card */
+/* FIXED: Solid Dark Navy Table Card */
 .table-card {
-  background: rgba(17, 24, 39, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(16px);
+  background: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
   border-radius: 20px;
   overflow: hidden;
 }
@@ -311,7 +312,7 @@ td {
 .merchant-name,
 .amount-text {
   font-weight: 700;
-  color: #ffffff;
+  color: #ffffff !important;
 }
 
 .bank-ref-text {

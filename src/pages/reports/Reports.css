@@ -1,11 +1,14 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
+/* Main Page Container */
 .reports-page {
   font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   color: #ffffff;
   display: flex;
   flex-direction: column;
   gap: 24px;
+  background: #070a14 !important;
+  width: 100%;
 }
 
 /* Page Header */
@@ -41,6 +44,7 @@
   font-size: 28px;
   font-weight: 800;
   letter-spacing: -0.5px;
+  color: #ffffff !important;
   margin-bottom: 4px;
 }
 
@@ -52,7 +56,7 @@
 
 .page-subtitle {
   font-size: 14px;
-  color: #94a3b8;
+  color: #94a3b8 !important;
 }
 
 .header-actions {
@@ -65,7 +69,7 @@
   border: none;
   border-radius: 12px;
   background: linear-gradient(135deg, #0284c7 0%, #2563eb 50%, #4f46e5 100%);
-  color: #ffffff;
+  color: #ffffff !important;
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
@@ -89,7 +93,7 @@
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.04);
-  color: #cbd5e1;
+  color: #cbd5e1 !important;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -98,14 +102,14 @@
 
 .btn-outline-action:hover {
   background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  color: #ffffff !important;
 }
 
-/* Tabs */
+/* Tabs Bar */
 .report-tabs {
   display: flex;
-  background: rgba(17, 24, 39, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
   padding: 5px;
   border-radius: 14px;
   gap: 6px;
@@ -114,10 +118,10 @@
 .tab-btn {
   flex: 1;
   padding: 10px;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
-  color: #94a3b8;
+  color: #94a3b8 !important;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -125,21 +129,20 @@
 }
 
 .tab-btn.active {
-  background: rgba(6, 182, 212, 0.15);
-  color: #06b6d4;
-  border: 1px solid rgba(6, 182, 212, 0.3);
+  background: rgba(6, 182, 212, 0.15) !important;
+  color: #06b6d4 !important;
+  border-color: rgba(6, 182, 212, 0.3) !important;
 }
 
-/* Date Filter */
+/* Date Filter Bar */
 .date-filter-bar {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: rgba(17, 24, 39, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
   padding: 14px 18px;
   border-radius: 16px;
-  backdrop-filter: blur(16px);
 }
 
 .filter-label-group {
@@ -154,9 +157,9 @@
 .date-input {
   padding: 10px 14px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
   font-size: 13px;
   outline: none;
   cursor: pointer;
@@ -175,9 +178,8 @@
 }
 
 .kpi-card {
-  background: rgba(17, 24, 39, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(16px);
+  background: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
   padding: 20px;
   border-radius: 18px;
   display: flex;
@@ -188,7 +190,7 @@
 
 .kpi-card:hover {
   transform: translateY(-3px);
-  border-color: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.16) !important;
 }
 
 .kpi-icon-box {
@@ -249,10 +251,10 @@
   gap: 20px;
 }
 
+/* SOLID DARK NAVY CHART CARD (NO TRANSPARENCY LEAK) */
 .chart-card {
-  background: rgba(17, 24, 39, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(16px);
+  background: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
   border-radius: 20px;
   padding: 24px;
 }
@@ -267,6 +269,7 @@
 .chart-title {
   font-size: 18px;
   font-weight: 800;
+  color: #ffffff !important;
 }
 
 .chart-subtitle {
@@ -292,9 +295,8 @@
 
 /* Table Card */
 .table-card {
-  background: rgba(17, 24, 39, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(16px);
+  background: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
   border-radius: 20px;
   overflow: hidden;
 }
@@ -307,6 +309,7 @@
 .table-title-text {
   font-size: 18px;
   font-weight: 800;
+  color: #ffffff !important;
 }
 
 .table-subtitle {
@@ -354,7 +357,7 @@ td {
 .month-name-badge {
   font-size: 13px;
   font-weight: 700;
-  color: #ffffff;
+  color: #ffffff !important;
 }
 
 .revenue-val {

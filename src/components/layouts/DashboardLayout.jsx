@@ -31,18 +31,21 @@ const DashboardLayout = ({ children, role = 'softwareadmin', pageTitle = 'Dashbo
     setMobileOpen(false);
   };
 
+  // Fixed Sidebar Width Calculations
   const sidebarWidth = isMobile ? 0 : (collapsed ? 76 : 260);
 
   return (
     <div 
       style={{
         display: 'flex',
-        width: '100%',
+        width: '100vw',
         minHeight: '100vh',
-        background: '#070a14', /* Fixed: Dark background matching sidebar! */
-        overflow: 'hidden',
+        background: '#070a14',
+        overflowX: 'hidden',
+        boxSizing: 'border-box',
       }}
     >
+      {/* Mobile Drawer Overlay */}
       {isMobile && mobileOpen && (
         <div 
           style={{
@@ -51,13 +54,15 @@ const DashboardLayout = ({ children, role = 'softwareadmin', pageTitle = 'Dashbo
             left: 0,
             right: 0,
             bottom: 0,
-            background: 'rgba(0,0,0,0.7)',
+            background: 'rgba(0,0,0,0.75)',
+            backdropFilter: 'blur(4px)',
             zIndex: 999,
           }}
           onClick={closeMobile}
         />
       )}
       
+      {/* Sidebar Component */}
       <Sidebar
         role={role}
         collapsed={collapsed}
@@ -67,17 +72,20 @@ const DashboardLayout = ({ children, role = 'softwareadmin', pageTitle = 'Dashbo
         isMobile={isMobile}
       />
       
+      {/* Main Content Area */}
       <div 
         style={{
           flex: 1,
           minHeight: '100vh',
           marginLeft: isMobile ? '0px' : `${sidebarWidth}px`,
-          width: isMobile ? '100%' : `calc(100% - ${sidebarWidth}px)`,
-          maxWidth: isMobile ? '100%' : `calc(100% - ${sidebarWidth}px)`,
-          background: '#070a14', /* Fixed: Dark background matching sidebar! */
+          width: isMobile ? '100%' : `calc(100vw - ${sidebarWidth}px)`,
+          maxWidth: isMobile ? '100%' : `calc(100vw - ${sidebarWidth}px)`,
+          background: '#070a14',
           overflowX: 'hidden',
-          transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1), max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          transition: 'margin-left 0.25s ease, width 0.25s ease, max-width 0.25s ease',
           boxSizing: 'border-box',
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
         <TopBar
@@ -87,11 +95,12 @@ const DashboardLayout = ({ children, role = 'softwareadmin', pageTitle = 'Dashbo
           isMobile={isMobile}
           collapsed={collapsed}
         />
+        
         <div 
           style={{
-            padding: '24px 32px',
-            minHeight: 'calc(100vh - 70px)',
-            background: '#070a14', /* Fixed: Dark background matching sidebar! */
+            flex: 1,
+            padding: isMobile ? '16px' : '24px 32px',
+            background: '#070a14',
             width: '100%',
             maxWidth: '100%',
             overflowX: 'hidden',
