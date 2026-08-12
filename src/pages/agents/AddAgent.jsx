@@ -13,6 +13,7 @@ const AddAgent = () => {
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [merchants, setMerchants] = useState([]);
+  const [showProductionUrl, setShowProductionUrl] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -27,6 +28,7 @@ const AddAgent = () => {
     state: '',
     zipCode: '',
     description: '',
+    urlTemplate:''
   });
 
   useEffect(() => {
@@ -69,12 +71,26 @@ const AddAgent = () => {
     }
   };
 
+  const loadUrlTemplate = async () => {
+    // try {
+    //   const res = await agentApi.getById(id);
+    //   setFormData(res.data);
+    // } catch (error) {
+    //   console.error('Error loading agent:', error);
+    // }
+  };
+
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+
+    if(name === "merchantId"){
+      console.log("test-data");
+    }
   };
 
   const [errors, setErrors] = useState({});
@@ -379,7 +395,7 @@ const AddAgent = () => {
           </div>
 
           <div className="form-section">
-            <h3>Additional Information</h3>
+            <h3>Additional Information & URL Templates</h3>
             <div className="form-grid">
               <div className="form-group full-width">
                 <label>Description *</label>
@@ -394,9 +410,19 @@ const AddAgent = () => {
                   <p style={{ color: "red" }}>{errors.description}</p>
                 )}
               </div>
+              <div className="form-group">
+                <label>URL Template</label>
+                    <select name="urlTemplate" value={formData.urlTemplate} onChange={handleChange}>
+                     {/* <option value="">Select Status</option>
+                      <option value="Y">Yes</option>
+                      <option value="N">No</option>*/}
+                    </select>
+                    {/* {errors.urlTemplate && (
+                      <p style={{ color: "red" }}>{errors.urlTemplate}</p>
+                    )}*/}
+              </div>
             </div>
           </div>
-
           <div className="form-actions">
             <button 
               type="submit" 
