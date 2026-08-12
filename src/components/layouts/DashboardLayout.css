@@ -1,0 +1,59 @@
+/* ==========================================================================
+   UNIFIED ENTERPRISE DASHBOARD LAYOUT (100% Cohesive Dark Theme)
+   ========================================================================== */
+
+/* Main Layout Wrapper */
+.dashboard-layout {
+  display: flex;
+  min-height: 100vh;
+  width: 100vw;
+  background-color: #070a14; /* Deep dark background matching sidebar */
+  color: #ffffff;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Content Area next to Sidebar */
+.dashboard-main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background-color: #070a14; /* Eliminates the harsh white background! */
+  margin-left: 260px; /* Width of expanded sidebar */
+  transition: margin-left 0.3s ease;
+}
+
+.sidebar-collapsed .dashboard-main-content {
+  margin-left: 76px; /* Width of collapsed sidebar */
+}
+
+/* Dashboard Body Padding */
+.dashboard-page-body {
+  padding: 32px;
+  flex: 1;
+  background-color: #070a14;
+}
+
+/* Dark Glass Cards for Metrics & Charts */
+.stat-card-ultra,
+.chart-card,
+.table-card {
+  background: rgba(17, 24, 39, 0.75) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: blur(16px);
+  border-radius: 20px !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3) !important;
+  color: #ffffff !important;
+}
+
+/* Dark Table Styles */
+.table-card table th {
+  color: #94a3b8 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.table-card table td {
+  color: #f1f5f9 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+}

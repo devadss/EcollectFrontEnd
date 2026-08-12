@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../common/Sidebar';
 import TopBar from '../common/TopBar';
-// ❌ REMOVE: import './DashboardLayout.css';
 
 const DashboardLayout = ({ children, role = 'softwareadmin', pageTitle = 'Dashboard' }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -32,7 +31,7 @@ const DashboardLayout = ({ children, role = 'softwareadmin', pageTitle = 'Dashbo
     setMobileOpen(false);
   };
 
-  const sidebarWidth = isMobile ? 0 : (collapsed ? 72 : 270);
+  const sidebarWidth = isMobile ? 0 : (collapsed ? 76 : 260);
 
   return (
     <div 
@@ -40,7 +39,7 @@ const DashboardLayout = ({ children, role = 'softwareadmin', pageTitle = 'Dashbo
         display: 'flex',
         width: '100%',
         minHeight: '100vh',
-        background: '#f5f7fa',
+        background: '#070a14', /* Fixed: Dark background matching sidebar! */
         overflow: 'hidden',
       }}
     >
@@ -52,7 +51,7 @@ const DashboardLayout = ({ children, role = 'softwareadmin', pageTitle = 'Dashbo
             left: 0,
             right: 0,
             bottom: 0,
-            background: 'rgba(0,0,0,0.5)',
+            background: 'rgba(0,0,0,0.7)',
             zIndex: 999,
           }}
           onClick={closeMobile}
@@ -75,9 +74,9 @@ const DashboardLayout = ({ children, role = 'softwareadmin', pageTitle = 'Dashbo
           marginLeft: isMobile ? '0px' : `${sidebarWidth}px`,
           width: isMobile ? '100%' : `calc(100% - ${sidebarWidth}px)`,
           maxWidth: isMobile ? '100%' : `calc(100% - ${sidebarWidth}px)`,
-          background: '#f5f7fa',
+          background: '#070a14', /* Fixed: Dark background matching sidebar! */
           overflowX: 'hidden',
-          transition: 'margin-left 0.3s ease, width 0.3s ease, max-width 0.3s ease',
+          transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1), max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           boxSizing: 'border-box',
         }}
       >
@@ -90,9 +89,9 @@ const DashboardLayout = ({ children, role = 'softwareadmin', pageTitle = 'Dashbo
         />
         <div 
           style={{
-            padding: '20px 30px',
+            padding: '24px 32px',
             minHeight: 'calc(100vh - 70px)',
-            background: '#f5f7fa',
+            background: '#070a14', /* Fixed: Dark background matching sidebar! */
             width: '100%',
             maxWidth: '100%',
             overflowX: 'hidden',

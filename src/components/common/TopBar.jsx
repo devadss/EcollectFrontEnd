@@ -36,14 +36,14 @@ const TopBar = ({
   };
 
   const themeNames = {
-    light: '☀️ Light',
-    dark: '🌙 Dark',
-    blue: '🔵 Blue',
-    purple: '🟣 Purple',
-    pink: '🌸 Pink',
-    green: '🟢 Green',
-    red: '🔴 Red',
-    gold: '🟡 Gold'
+    light: '☀️ Light Mode',
+    dark: '🌙 Dark Mode',
+    blue: '🔵 Ocean Blue',
+    purple: '🟣 Royal Purple',
+    pink: '🌸 Sunset Pink',
+    green: '🟢 Emerald Green',
+    red: '🔴 Crimson Red',
+    gold: '🟡 Luxury Gold'
   };
 
   const handleSearch = (e) => {
@@ -54,209 +54,205 @@ const TopBar = ({
   };
 
   const markAllRead = () => {
-    // Mark all as read logic
+    // Mark all read logic
   };
 
   return (
-    <header className="topbar" style={{ 
-      background: theme.bgCard || '#ffffff',
-      borderColor: theme.border || '#e5e5e5'
-    }}>
+    <header className="topbar-dark-shell">
+      
+      {/* Left Section: Sidebar Toggle & Page Title Breadcrumb */}
       <div className="topbar-left">
-        <button className="topbar-toggle" onClick={onToggle} style={{ color: theme.textSecondary || '#666666' }}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <button 
+          className="topbar-toggle-btn" 
+          onClick={onToggle}
+          title="Toggle Navigation Menu"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="3" y1="12" x2="21" y2="12"></line>
             <line x1="3" y1="6" x2="21" y2="6"></line>
             <line x1="3" y1="18" x2="21" y2="18"></line>
           </svg>
         </button>
+
         <div className="topbar-breadcrumb">
-          <span className="breadcrumb-home">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <span className="breadcrumb-home-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
             </svg>
           </span>
-          <span className="breadcrumb-separator" style={{ color: theme.textMuted || '#cccccc' }}>/</span>
-          <span className="breadcrumb-current" style={{ color: theme.textPrimary || '#1a1a2e' }}>{pageTitle}</span>
+          <span className="breadcrumb-separator">/</span>
+          <span className="breadcrumb-current-text">{pageTitle}</span>
         </div>
       </div>
 
+      {/* Right Section: Search & Quick Controls */}
       <div className="topbar-right">
-        {/* Search - ULTRA PREMIUM & BIG */}
-        <form className="topbar-search" onSubmit={handleSearch} style={{ 
-          background: theme.bgPrimary || '#f5f5f5',
-          borderColor: theme.border || '#e5e5e5'
-        }}>
-          <span className="search-icon" style={{ color: theme.textMuted || '#999999' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        
+        {/* Sleek Glass Search Bar */}
+        <form className="topbar-search-form" onSubmit={handleSearch}>
+          <span className="search-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8"></circle>
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
           </span>
           <input
             type="text"
-            placeholder="🔍 Search merchants, agents, payments, transactions..."
+            placeholder="Search merchants, payments, settlements..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="search-input"
-            style={{ color: theme.textPrimary || '#1a1a2e' }}
           />
-          <kbd className="search-shortcut">⌘K</kbd>
+          <kbd className="search-shortcut-badge">⌘K</kbd>
         </form>
 
-        {/* Theme Switcher - Premium */}
-        <div className="topbar-theme">
+        {/* Theme Selector */}
+        <div className="topbar-dropdown-wrapper">
           <button 
-            className="theme-btn"
-            onClick={() => setShowThemeMenu(!showThemeMenu)}
-            style={{ color: theme.textSecondary || '#666666' }}
+            className="icon-action-btn"
+            onClick={() => {
+              setShowThemeMenu(!showThemeMenu);
+              setShowNotifications(false);
+              setShowProfileMenu(false);
+            }}
+            title="Choose Theme"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"></path>
             </svg>
           </button>
+
           {showThemeMenu && (
-            <div className="theme-dropdown" style={{ 
-              background: theme.bgCard || '#ffffff',
-              borderColor: theme.border || '#e5e5e5',
-              boxShadow: `0 20px 60px ${theme.textPrimary || '#1a1a2e'}30`
-            }}>
-              <div className="dropdown-header" style={{ color: theme.textMuted || '#888888' }}>
-                <span>🎨 Choose Theme</span>
+            <div className="dropdown-panel theme-dropdown">
+              <div className="dropdown-header">
+                <span>🎨 Select Color Theme</span>
               </div>
-              {Object.keys(themes).map((key) => (
-                <button
-                  key={key}
-                  className={`theme-option ${currentTheme === key ? 'active' : ''}`}
-                  onClick={() => { changeTheme(key); setShowThemeMenu(false); }}
-                  style={{
-                    background: currentTheme === key ? theme.accent : 'transparent',
-                    color: currentTheme === key ? '#ffffff' : theme.textSecondary || '#666666',
-                  }}
-                >
-                  <span className="theme-dot" style={{ background: themes[key].accent }}></span>
-                  {themeNames[key]}
-                  {currentTheme === key && (
-                    <span className="theme-check">✓</span>
-                  )}
-                </button>
-              ))}
+              <div className="theme-options-grid">
+                {Object.keys(themes).map((key) => (
+                  <button
+                    key={key}
+                    className={`theme-option-btn ${currentTheme === key ? 'active' : ''}`}
+                    onClick={() => { changeTheme(key); setShowThemeMenu(false); }}
+                  >
+                    <span className="theme-color-dot" style={{ background: themes[key].accent }}></span>
+                    <span className="theme-label">{themeNames[key] || key}</span>
+                    {currentTheme === key && <span className="theme-check-icon">✓</span>}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
 
-        {/* Notifications - Premium */}
-        <div className="topbar-notifications">
+        {/* Notifications Dropdown */}
+        <div className="topbar-dropdown-wrapper">
           <button 
-            className="notification-btn" 
-            onClick={() => setShowNotifications(!showNotifications)}
-            style={{ color: theme.textSecondary || '#666666' }}
+            className="icon-action-btn notification-trigger" 
+            onClick={() => {
+              setShowNotifications(!showNotifications);
+              setShowThemeMenu(false);
+              setShowProfileMenu(false);
+            }}
+            title="Notifications"
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
               <path d="M13.73 21a2 2 0 01-3.46 0"></path>
             </svg>
-            {unreadCount > 0 && <span className="notification-badge">{unreadCount}</span>}
+            {unreadCount > 0 && (
+              <span className="notification-badge-count">{unreadCount}</span>
+            )}
           </button>
+
           {showNotifications && (
-            <div className="notification-dropdown" style={{ 
-              background: theme.bgCard || '#ffffff',
-              borderColor: theme.border || '#e5e5e5',
-              boxShadow: `0 20px 60px ${theme.textPrimary || '#1a1a2e'}30`
-            }}>
-              <div className="notification-header">
-                <span style={{ color: theme.textPrimary || '#1a1a2e' }}>
-                  🔔 Notifications
-                  <span className="notification-count" style={{ background: theme.accent + '20', color: theme.accent }}>
-                    {unreadCount} new
-                  </span>
+            <div className="dropdown-panel notification-dropdown">
+              <div className="notification-header-row">
+                <span className="notification-title">
+                  Notifications
+                  <span className="notification-unread-pill">{unreadCount} new</span>
                 </span>
-                <button className="mark-all-read" onClick={markAllRead} style={{ color: theme.accent || '#000000' }}>
+                <button className="mark-read-link" onClick={markAllRead}>
                   Mark all read
                 </button>
               </div>
-              <div className="notification-list">
+
+              <div className="notification-items-list">
                 {notifications.length === 0 ? (
-                  <div className="notification-empty" style={{ color: theme.textMuted || '#888888' }}>
-                    No notifications
-                  </div>
+                  <div className="notification-empty-state">No unread notifications</div>
                 ) : (
                   notifications.map((n) => (
-                    <div 
-                      key={n.id}
-                      className={`notification-item ${!n.read ? 'unread' : ''}`}
-                      style={{ 
-                        borderColor: theme.border || '#e5e5e5',
-                        background: !n.read ? `${theme.accent}08` : 'transparent'
-                      }}
-                    >
-                      <div className="notification-dot" style={{ background: !n.read ? theme.accent : 'transparent' }}></div>
-                      <div>
-                        <div className="notification-text" style={{ color: theme.textPrimary || '#1a1a2e' }}>
-                          {n.text}
-                        </div>
-                        <div className="notification-time" style={{ color: theme.textMuted || '#888888' }}>
-                          {n.time}
-                        </div>
+                    <div key={n.id} className={`notification-item-card ${!n.read ? 'unread' : ''}`}>
+                      <div className="notification-status-dot"></div>
+                      <div className="notification-content">
+                        <div className="notification-text">{n.text}</div>
+                        <div className="notification-time">{n.time}</div>
                       </div>
                     </div>
                   ))
                 )}
               </div>
-              <div className="notification-footer">
-                <button className="view-all-btn" onClick={() => navigate('/notifications')} style={{ color: theme.accent || '#000000' }}>
-                  View all notifications →
+
+              <div className="notification-footer-bar">
+                <button className="view-all-notif-btn" onClick={() => navigate('/notifications')}>
+                  View All Activity →
                 </button>
               </div>
             </div>
           )}
         </div>
 
-        {/* Profile - Premium */}
-        <div className="topbar-profile">
-          <button className="profile-btn" onClick={() => setShowProfileMenu(!showProfileMenu)}>
-            <div className="profile-avatar" style={{ background: `linear-gradient(135deg, ${theme.accent}, ${theme.accent}CC)` }}>
+        {/* Profile Avatar */}
+        <div className="topbar-dropdown-wrapper">
+          <button 
+            className="profile-avatar-trigger" 
+            onClick={() => {
+              setShowProfileMenu(!showProfileMenu);
+              setShowThemeMenu(false);
+              setShowNotifications(false);
+            }}
+            title="User Profile"
+          >
+            <div className="avatar-circle">
               {getRoleDisplay().charAt(0)}
             </div>
-            <div className="profile-status" style={{ background: '#22c55e' }}></div>
+            <span className="live-status-indicator"></span>
           </button>
+
           {showProfileMenu && (
-            <div className="profile-dropdown" style={{ 
-              background: theme.bgCard || '#ffffff',
-              borderColor: theme.border || '#e5e5e5',
-              boxShadow: `0 20px 60px ${theme.textPrimary || '#1a1a2e'}30`
-            }}>
-              <div className="profile-header" style={{ borderColor: theme.border || '#e5e5e5' }}>
-                <div className="profile-avatar-large" style={{ background: `linear-gradient(135deg, ${theme.accent}, ${theme.accent}CC)` }}>
+            <div className="dropdown-panel profile-dropdown">
+              <div className="profile-header-box">
+                <div className="avatar-circle-large">
                   {getRoleDisplay().charAt(0)}
                 </div>
-                <div className="profile-info">
-                  <div className="profile-name" style={{ color: theme.textPrimary || '#1a1a2e' }}>
-                    {getRoleDisplay()}
-                  </div>
-                  <div className="profile-role" style={{ color: theme.textMuted || '#888888' }}>
-                    {getRoleDisplay()}
-                  </div>
+                <div className="profile-user-details">
+                  <div className="profile-user-name">{getRoleDisplay()}</div>
+                  <div className="profile-user-role">System Admin Portal</div>
                 </div>
               </div>
-              <div className="profile-menu">
-                <NavLink to="/profile" className="profile-menu-item" style={{ color: theme.textSecondary || '#666666' }}>
-                  <span className="profile-menu-icon">👤</span> My Profile
+
+              <div className="profile-links-list">
+                <NavLink to="/profile" className="profile-link-item" onClick={() => setShowProfileMenu(false)}>
+                  <span className="link-icon">👤</span> My Profile
                 </NavLink>
-                <NavLink to="/settings" className="profile-menu-item" style={{ color: theme.textSecondary || '#666666' }}>
-                  <span className="profile-menu-icon">⚙️</span> Settings
+                
+                <NavLink to="/settings" className="profile-link-item" onClick={() => setShowProfileMenu(false)}>
+                  <span className="link-icon">⚙️</span> Account Settings
                 </NavLink>
-                <NavLink to="/reports" className="profile-menu-item" style={{ color: theme.textSecondary || '#666666' }}>
-                  <span className="profile-menu-icon">📊</span> Reports
+                
+                <NavLink to="/reports" className="profile-link-item" onClick={() => setShowProfileMenu(false)}>
+                  <span className="link-icon">📊</span> Reports Telemetry
                 </NavLink>
-                <div className="profile-divider" style={{ borderColor: theme.border || '#e5e5e5' }}></div>
-                <NavLink to="/logout" className="profile-menu-item logout" style={{ color: '#ef4444' }}>
-                  <span className="profile-menu-icon">🚪</span> Logout
+                
+                <div className="profile-divider-line"></div>
+                
+                <NavLink to="/logout" className="profile-link-item logout-link" onClick={() => setShowProfileMenu(false)}>
+                  <span className="link-icon">🚪</span> Sign Out
                 </NavLink>
               </div>
             </div>
           )}
         </div>
+
       </div>
     </header>
   );

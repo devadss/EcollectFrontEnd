@@ -26,18 +26,19 @@ const Agents = () => {
         agentApi.getAll(),
         merchantApi.getAll()
       ]);
-      setAgents(agentsRes.data.data || []);
-      //console.log(agentsRes.data);
-
-      //debugger;
-      setMerchants(merchantsRes.data.data || []);
+      
+      const agentList = agentsRes?.data?.data || agentsRes?.data || [];
+      const merchantList = merchantsRes?.data?.data || merchantsRes?.data || [];
+      
+      setAgents(Array.isArray(agentList) ? agentList : []);
+      setMerchants(Array.isArray(merchantList) ? merchantList : []);
     } catch (error) {
       console.error('Error loading data:', error);
-      setError(error.message || 'Failed to load agents');
+      setError(error?.response?.data?.message || error.message || 'Failed to load agents');
     } finally {
       setTimeout(() => {
         setLoading(false);
-      }, 500);
+      }, 450);
     }
   };
 
@@ -45,12 +46,11 @@ const Agents = () => {
     if (window.confirm('Are you sure you want to delete this agent?')) {
       try {
         const response = await agentApi.delete(id);
-        alert(response.data.message);
+        alert(response?.data?.message || 'Agent deleted successfully');
         loadData();
-        //navigate('/agents');
       } catch (error) {
         console.error('Error deleting agent:', error);
-        alert('Failed to delete agent. Please try again.');
+        alert(error?.response?.data?.message || 'Failed to delete agent. Please try again.');
       }
     }
   };
@@ -73,10 +73,10 @@ const Agents = () => {
 
   const filteredAgents = agents.filter(agent => {
     const matchesSearch = 
-      agent.name?.toLowerCase().includes(search.toLowerCase()) ||
-      agent.email?.toLowerCase().includes(search.toLowerCase()) ||
-      agent.agentCode?.toLowerCase().includes(search.toLowerCase()) ||
-      agent.phone?.includes(search);
+      (agent.name || '').toLowerCase().includes(search.toLowerCase()) ||
+      (agent.email || '').toLowerCase().includes(search.toLowerCase()) ||
+      (agent.agentCode || '').toLowerCase().includes(search.toLowerCase()) ||
+      (agent.phone || '').includes(search);
     
     const matchesMerchant = filterMerchant ? agent.merchantId === parseInt(filterMerchant) : true;
     
@@ -91,32 +91,38 @@ const Agents = () => {
 
   return (
     <>
-      {/* Loading overlay with blur - shown when loading */}
-      {loading && <LoadingAnimation message="Loading Agents" />}
+      {/* Loading overlay */}
+      {loading && <LoadingAnimation message="Loading Field Agents..." />}
       
-      {/* Main content */}
-      <DashboardLayout role="softwareadmin">
+      <DashboardLayout role="softwareadmin" pageTitle="Field Agents Directory">
         <div className={`agents-page ${loading ? 'content-blurred' : ''}`}>
+          
           {/* Header */}
           <div className="page-header">
             <div>
-              <h1 className="page-title"><span className="gradient-text">Agents</span></h1>
-              <p className="page-subtitle">Manage all agents and their assignments</p>
+              <div className="header-badge">
+                <span className="pulse-dot"></span> Field Representative Portal
+              </div>
+              <h1 className="page-title">
+                Field <span className="gradient-text">Agents</span>
+              </h1>
+              <p className="page-subtitle">Manage agent assignments, merchant links, and commission rates</p>
             </div>
-            <button className="btn-primary" onClick={() => navigate('/agents/add')}>
-              ➕ Add Agent
+            
+            <button className="btn-primary-gradient" onClick={() => navigate('/agents/add')}>
+              <span>➕ Add Field Agent</span>
             </button>
           </div>
 
-          {/* Error Message */}
+          {/* Error Banner */}
           {error && (
             <div className="error-banner">
               <span>⚠️ {error}</span>
-              <button onClick={loadData} className="retry-btn">Retry</button>
+              <button onClick={loadData} className="retry-btn">Retry Load</button>
             </div>
           )}
 
-          {/* Stats Cards */}
+          {/* Stats Summary Cards */}
           <div className="stats-cards">
             <div className="stat-card-item">
               <div className="stat-card-icon">👤</div>
@@ -126,54 +132,58 @@ const Agents = () => {
               </div>
               <div className="stat-card-trend up">↑ 8%</div>
             </div>
+
             <div className="stat-card-item">
-              <div className="stat-card-icon">✅</div>
+              <div className="stat-card-icon active-icon">✅</div>
               <div className="stat-card-info">
-                <span className="stat-card-label">Active</span>
-                <span className="stat-card-number" style={{ color: '#22c55e' }}>{activeAgents}</span>
+                <span className="stat-card-label">Active Agents</span>
+                <span className="stat-card-number active-num">{activeAgents}</span>
               </div>
               <div className="stat-card-trend up">↑ 5%</div>
             </div>
+
             <div className="stat-card-item">
-              <div className="stat-card-icon">⏸️</div>
+              <div className="stat-card-icon inactive-icon">⏸️</div>
               <div className="stat-card-info">
                 <span className="stat-card-label">Inactive</span>
-                <span className="stat-card-number" style={{ color: '#ef4444' }}>{inactiveAgents}</span>
+                <span className="stat-card-number inactive-num">{inactiveAgents}</span>
               </div>
               <div className="stat-card-trend down">↓ 3%</div>
             </div>
+
             <div className="stat-card-item">
-              <div className="stat-card-icon">💰</div>
+              <div className="stat-card-icon commission-icon">💰</div>
               <div className="stat-card-info">
-                <span className="stat-card-label">Total Commission</span>
-                <span className="stat-card-number" style={{ color: '#f59e0b' }}>{totalCommission.toFixed(1)}%</span>
+                <span className="stat-card-label">Avg Commission Rate</span>
+                <span className="stat-card-number commission-num">{totalCommission.toFixed(1)}%</span>
               </div>
               <div className="stat-card-trend up">↑ 12%</div>
             </div>
           </div>
 
-          {/* Search & Filter */}
-          <div className="filter-bar">
-            <div className="search-bar">
-              <div className="search-icon">🔍</div>
+          {/* Search & Filter Bar */}
+          <div className="filter-bar-container">
+            <div className="search-input-box">
+              <span className="search-icon">🔍</span>
               <input
                 type="text"
-                placeholder="Search by name, email, phone or code..."
+                placeholder="Search agent name, email, phone or agent code..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="search-input"
               />
               {search && (
-                <button className="search-clear" onClick={() => setSearch('')}>✕</button>
+                <button className="search-clear-btn" onClick={() => setSearch('')}>✕</button>
               )}
             </div>
+
             <div className="filter-group">
               <select 
                 value={filterMerchant} 
                 onChange={(e) => setFilterMerchant(e.target.value)}
                 className="filter-select"
               >
-                <option value="">All Merchants</option>
+                <option value="">All Merchant Assignments</option>
                 {merchants.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.merchantName}
@@ -183,74 +193,71 @@ const Agents = () => {
             </div>
           </div>
 
-          {/* Grid */}
+          {/* Agents Profile Cards Grid */}
           <div className="agents-grid">
             {filteredAgents.length === 0 ? (
-              <div className="empty-state">
+              <div className="empty-state-card">
                 <span className="empty-icon">👤</span>
                 <h3>No Agents Found</h3>
-                <p>Start by adding your first agent</p>
-                <button className="btn-primary" onClick={() => navigate('/agents/add')}>
-                  ➕ Add Agent
+                <p>No agent records match your current search filters</p>
+                <button className="btn-primary-gradient small" onClick={() => navigate('/agents/add')}>
+                  ➕ Add New Agent
                 </button>
               </div>
             ) : (
               filteredAgents.map((agent) => (
-                <div key={agent.id} className="agent-card animate-slide-up">
+                <div key={agent.id} className="agent-card">
                   <div className="agent-card-header">
                     <div className="agent-avatar">
                       {agent.name?.charAt(0) || 'A'}
                     </div>
-                    <div className="agent-info">
-                      <h3 className="agent-name">{agent.name}</h3>
-                      <span className="agent-code">{agent.agentCode || 'AG-' + agent.id}</span>
+                    <div className="agent-title-info">
+                      <h3 className="agent-name">{agent.name || 'Unnamed Agent'}</h3>
+                      <span className="agent-code-badge">{agent.agentCode || 'AG-' + agent.id}</span>
                     </div>
-                    <span className={`agent-status ${agent.isActive ? 'active' : 'inactive'}`}>
+                    <span className={`status-pill ${agent.isActive ? 'active' : 'inactive'}`}>
+                      <span className="status-pulse-dot"></span>
                       {agent.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </div>
                   
-                  <div className="agent-details">
-                    <div className="agent-detail">
+                  <div className="agent-details-list">
+                    <div className="agent-detail-item">
                       <span className="detail-icon">📧</span>
-                      <span>{agent.email}</span>
+                      <span className="detail-text">{agent.email || 'No email registered'}</span>
                     </div>
-                    <div className="agent-detail">
+                    
+                    <div className="agent-detail-item">
                       <span className="detail-icon">📱</span>
-                      <span>{agent.phone}</span>
+                      <span className="detail-text">{agent.phone || 'No phone registered'}</span>
                     </div>
-                    <div className="agent-detail">
+                    
+                    <div className="agent-detail-item">
                       <span className="detail-icon">🏪</span>
-                      <span>{getMerchantName(agent.merchantId)}</span>
+                      <span className="detail-text merchant-link">{getMerchantName(agent.merchantId)}</span>
                     </div>
-                    <div className="agent-detail">
+                    
+                    <div className="agent-detail-item">
                       <span className="detail-icon">💰</span>
-                      <span>Commission: {agent.commissionRate || '0'}%</span>
+                      <span className="detail-text commission-text">Commission: <strong>{agent.commissionRate || '0'}%</strong></span>
                     </div>
                   </div>
 
-                  <div className="agent-actions">
+                  <div className="agent-card-actions">
                     <button 
                       className="action-btn view" 
                       onClick={() => navigate(`/agents/${agent.id}`)}
-                      title="View Details"
+                      title="View Agent Profile"
                     >
-                      👁️
+                      👁️ Details
                     </button>
                     <button 
                       className="action-btn edit" 
                       onClick={() => navigate(`/agents/edit/${agent.id}`)}
-                      title="Edit Agent"
+                      title="Edit Agent Profile"
                     >
-                      ✏️
+                      ✏️ Edit
                     </button>
-                    {/*<button 
-                      className="action-btn toggle" 
-                      onClick={() => handleToggleStatus(agent.id)}
-                      title={agent.isActive ? 'Deactivate' : 'Activate'}
-                    >
-                      {agent.isActive ? '⏸️' : '▶️'}
-                    </button>*/}
                     <button 
                       className="action-btn delete" 
                       onClick={() => handleDelete(agent.id)}
@@ -264,10 +271,10 @@ const Agents = () => {
             )}
           </div>
 
-          {/* Footer */}
+          {/* Footer Bar */}
           {filteredAgents.length > 0 && (
             <div className="table-footer">
-              <span>Showing {filteredAgents.length} of {totalAgents} agents</span>
+              <span>Showing {filteredAgents.length} of {totalAgents} active agents</span>
               <div className="table-pagination">
                 <button className="pagination-btn" disabled>←</button>
                 <span className="pagination-current">1</span>
@@ -275,6 +282,7 @@ const Agents = () => {
               </div>
             </div>
           )}
+
         </div>
       </DashboardLayout>
     </>

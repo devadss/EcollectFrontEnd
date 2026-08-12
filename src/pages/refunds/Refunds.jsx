@@ -1,4 +1,3 @@
-// Refunds.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import DashboardLayout from '../../components/layouts/DashboardLayout';
@@ -27,14 +26,15 @@ const Refunds = () => {
       setLoading(true);
       setError(null);
       const res = await refundApi.getAll();
-      setRefunds(res.data || []);
+      const data = res?.data?.data || res?.data || [];
+      setRefunds(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error loading refunds:', error);
-      setError(error.message || 'Failed to load refunds');
+      setError(error?.response?.data?.message || error.message || 'Failed to load refunds');
     } finally {
       setTimeout(() => {
         setLoading(false);
-      }, 500);
+      }, 450);
     }
   };
 
@@ -51,58 +51,62 @@ const Refunds = () => {
   // Filter refunds
   const filteredRefunds = refunds.filter(r => {
     const matchesSearch = 
-      r.id?.toLowerCase().includes(filter.search.toLowerCase()) ||
-      r.transactionId?.toLowerCase().includes(filter.search.toLowerCase());
+      (r.id || '').toLowerCase().includes(filter.search.toLowerCase()) ||
+      (r.transactionId || '').toLowerCase().includes(filter.search.toLowerCase());
     const matchesStatus = filter.status ? r.status === filter.status : true;
     return matchesSearch && matchesStatus;
   });
 
   const getStatusClass = (status) => {
-    const map = { 
-      'Completed': 'completed', 
-      'Pending': 'pending', 
-      'Failed': 'failed',
-      'Processing': 'processing'
-    };
-    return map[status] || '';
+    const s = (status || '').toLowerCase();
+    if (s === 'completed' || s === 'success') return 'completed';
+    if (s === 'pending') return 'pending';
+    if (s === 'processing') return 'processing';
+    if (s === 'failed') return 'failed';
+    return '';
   };
 
   // Stats
   const stats = {
     total: refunds.length,
-    completed: refunds.filter(r => r.status === 'Completed').length,
+    completed: refunds.filter(r => r.status === 'Completed' || r.status === 'Success').length,
     pending: refunds.filter(r => r.status === 'Pending').length,
     totalAmount: refunds.reduce((sum, r) => sum + (r.amount || 0), 0)
   };
 
   return (
     <>
-      {/* Loading overlay with blur - shown when loading */}
-      {loading && <LoadingAnimation message="Loading Refunds" />}
+      {/* Loading overlay */}
+      {loading && <LoadingAnimation message="Loading Refund Disbursal Log..." />}
       
-      {/* Main content */}
-      <DashboardLayout role="softwareadmin">
+      <DashboardLayout role="softwareadmin" pageTitle="Refunds Telemetry">
         <div className={`refunds-page ${loading ? 'content-blurred' : ''}`}>
+          
           {/* Page Header */}
           <div className="page-header">
             <div>
+              <div className="header-badge">
+                <span className="pulse-dot"></span> Reversal & Disbursal Engine
+              </div>
               <h1 className="page-title">
-                <span className="gradient-text">Refunds</span>
+                Merchant <span className="gradient-text">Refunds</span>
               </h1>
-              <p className="page-subtitle">Manage and track all refund requests</p>
+              <p className="page-subtitle">Manage, process, and track customer transaction reversals</p>
             </div>
+            
             <div className="header-actions">
               <button 
-                className="btn-outline" 
+                className="btn-outline-action" 
                 onClick={() => handleNavigation('/refunds/export')}
               >
-                📥 Export
+                📥 Export CSV
               </button>
+              
               <button 
-                className="btn-primary" 
+                className="btn-primary-gradient" 
                 onClick={() => handleNavigation('/refunds/create')}
               >
-                ↩️ New Refund
+                ↩️ Initiate Refund
               </button>
             </div>
           </div>
@@ -111,72 +115,88 @@ const Refunds = () => {
           {error && (
             <div className="error-banner">
               <span>⚠️ {error}</span>
-              <button onClick={loadRefunds} className="retry-btn">Retry</button>
+              <button onClick={loadRefunds} className="retry-btn">Retry Load</button>
             </div>
           )}
 
           {/* Stats Summary */}
           <div className="stats-summary">
-            <div className="stat-item">
-              <span className="stat-label">Total Refunds</span>
-              <span className="stat-value">{stats.total}</span>
+            <div className="stat-item-card">
+              <div className="stat-icon-box">↩️</div>
+              <div>
+                <span className="stat-label">Total Refunds</span>
+                <span className="stat-value">{stats.total}</span>
+              </div>
             </div>
-            <div className="stat-item">
-              <span className="stat-label">Completed</span>
-              <span className="stat-value" style={{ color: '#000000' }}>
-                {stats.completed}
-              </span>
+
+            <div className="stat-item-card">
+              <div className="stat-icon-box green">✅</div>
+              <div>
+                <span className="stat-label">Completed</span>
+                <span className="stat-value text-green">{stats.completed}</span>
+              </div>
             </div>
-            <div className="stat-item">
-              <span className="stat-label">Pending</span>
-              <span className="stat-value" style={{ color: '#f59e0b' }}>
-                {stats.pending}
-              </span>
+
+            <div className="stat-item-card">
+              <div className="stat-icon-box amber">⏳</div>
+              <div>
+                <span className="stat-label">Pending Approval</span>
+                <span className="stat-value text-amber">{stats.pending}</span>
+              </div>
             </div>
-            <div className="stat-item">
-              <span className="stat-label">Total Amount</span>
-              <span className="stat-value">
-                ₹{stats.totalAmount.toLocaleString()}
-              </span>
+
+            <div className="stat-item-card">
+              <div className="stat-icon-box cyan">💰</div>
+              <div>
+                <span className="stat-label">Reversed Volume</span>
+                <span className="stat-value text-cyan">₹{stats.totalAmount.toLocaleString()}</span>
+              </div>
             </div>
           </div>
 
           {/* Filter Bar */}
           <div className="filter-bar">
-            <div className="search-bar">
+            <div className="search-input-box">
+              <span className="search-icon">🔍</span>
               <input
                 type="text"
-                placeholder="Search refunds by ID or Transaction..."
+                placeholder="Search by Refund ID or Transaction ID..."
                 value={filter.search}
                 onChange={(e) => setFilter({ ...filter, search: e.target.value })}
                 className="search-input"
               />
             </div>
+
             <select
               value={filter.status}
               onChange={(e) => setFilter({ ...filter, status: e.target.value })}
               className="filter-select"
             >
-              <option value="">All Status</option>
+              <option value="">All Statuses</option>
               <option value="Completed">Completed</option>
               <option value="Pending">Pending</option>
               <option value="Processing">Processing</option>
               <option value="Failed">Failed</option>
             </select>
+
             <input
               type="date"
               value={filter.dateFrom}
               onChange={(e) => setFilter({ ...filter, dateFrom: e.target.value })}
               className="date-input"
+              title="From Date"
             />
+            
             <input
               type="date"
               value={filter.dateTo}
               onChange={(e) => setFilter({ ...filter, dateTo: e.target.value })}
               className="date-input"
+              title="To Date"
             />
+
             <button 
-              className="btn-clear"
+              className="btn-clear-filters"
               onClick={() => setFilter({ search: '', status: '', dateFrom: '', dateTo: '' })}
             >
               Clear Filters
@@ -190,45 +210,56 @@ const Refunds = () => {
                 <thead>
                   <tr>
                     <th>Refund ID</th>
-                    <th>Transaction ID</th>
-                    <th>Amount</th>
+                    <th>Txn Reference</th>
+                    <th>Refund Amount</th>
                     <th>Reason</th>
                     <th>Status</th>
-                    <th>Date</th>
+                    <th>Timestamp</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredRefunds.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="empty-row">No refunds found</td>
+                      <td colSpan="7" className="empty-row">
+                        <span className="empty-icon">↩️</span>
+                        <p>{error ? 'No refund logs available' : 'No refund records match your filters'}</p>
+                      </td>
                     </tr>
                   ) : (
                     filteredRefunds.slice(0, 20).map((r) => (
-                      <tr key={r.id}>
-                        <td>#{r.id}</td>
+                      <tr key={r.id} className="table-row-hover">
+                        <td>
+                          <span className="refund-id-badge">#{r.id}</span>
+                        </td>
                         <td>
                           <Link to={`/transactions/${r.transactionId}`} className="transaction-link">
                             #{r.transactionId}
                           </Link>
                         </td>
-                        <td>₹{r.amount?.toLocaleString()}</td>
-                        <td>{r.reason || 'N/A'}</td>
                         <td>
-                          <span className={`status-badge ${getStatusClass(r.status)}`}>
+                          <span className="amount-text">₹{r.amount?.toLocaleString()}</span>
+                        </td>
+                        <td className="reason-text">{r.reason || 'Customer Request'}</td>
+                        <td>
+                          <span className={`status-pill ${getStatusClass(r.status)}`}>
+                            <span className="status-pulse-dot"></span>
                             {r.status}
                           </span>
                         </td>
-                        <td>{new Date(r.date).toLocaleDateString()}</td>
+                        <td className="date-text">
+                          {r.date ? new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                        </td>
                         <td>
                           <div className="action-buttons">
-                            <Link to={`/refunds/${r.id}`} className="action-btn view">
+                            <Link to={`/refunds/${r.id}`} className="action-btn view" title="View Audit Details">
                               👁️
                             </Link>
                             {r.status === 'Pending' && (
                               <button 
                                 className="action-btn process"
                                 onClick={() => handleNavigation(`/refunds/${r.id}/process`)}
+                                title="Instant Disburse"
                               >
                                 ⚡
                               </button>
@@ -242,6 +273,7 @@ const Refunds = () => {
               </table>
             </div>
           </div>
+
         </div>
       </DashboardLayout>
     </>
