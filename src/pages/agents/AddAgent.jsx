@@ -13,6 +13,7 @@ const AddAgent = () => {
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [merchants, setMerchants] = useState([]);
+  const [showProductionUrl, setShowProductionUrl] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -27,6 +28,8 @@ const AddAgent = () => {
     state: '',
     zipCode: '',
     description: '',
+    IntegrationStatus:'',
+    urlTemplate:''
   });
 
   useEffect(() => {
@@ -70,12 +73,35 @@ const AddAgent = () => {
   };
 
   const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
+    const { name, value, type, checked,IntegrationStatus } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+
+     if(name === "IntegrationStatus" && value === "Y") {
+        //console.log("Integration Status changed to Y");
+        setShowProductionUrl(true);
+      } else if (name === "IntegrationStatus" && value === "N") {
+        setShowProductionUrl(false);
+        setFormData(prev => ({
+          ...prev,
+          urlTemplate: ""
+        }));
+      } else if (name === "IntegrationStatus" && value === ""){
+        setShowProductionUrl(false);
+        setFormData(prev => ({
+          ...prev,
+          urlTemplate: ""
+        }));
+      }
   };
+
+  // const handleIntegrationStatusChange = (e) => {
+  //   const value = e.target.value;
+
+  //   console.log("Integration Status:", value);
+  // };
 
   const [errors, setErrors] = useState({});
       const validate = () => {
@@ -127,6 +153,10 @@ const AddAgent = () => {
 
       if(!formData.description) {
         tempErrors.description = "Description is required";
+      }
+
+      if(!formData.IntegrationStatus) {
+        tempErrors.IntegrationStatus = "Integaration status is required";
       }
 
       setErrors(tempErrors);
@@ -377,9 +407,8 @@ const AddAgent = () => {
               </div>
             </div>
           </div>
-
           <div className="form-section">
-            <h3>Additional Information</h3>
+            <h3>Additional Information & Status</h3>
             <div className="form-grid">
               <div className="form-group full-width">
                 <label>Description *</label>
@@ -394,9 +423,41 @@ const AddAgent = () => {
                   <p style={{ color: "red" }}>{errors.description}</p>
                 )}
               </div>
+              <div className="form-group">
+                <label>Integration Status *</label>
+                <select name="IntegrationStatus" value={formData.IntegrationStatus} onChange={handleChange}>
+                  <option value="">Select Status</option>
+                  <option value="Y">Yes</option>
+                  <option value="N">No</option>
+                </select>
+                {errors.IntegrationStatus && (
+                  <p style={{ color: "red" }}>{errors.IntegrationStatus}</p>
+                )}
+              </div>
+              {showProductionUrl  && (<div className="form-group">
+                <label>URL Template</label>
+                <select name="urlTemplate" value={formData.urlTemplate} onChange={handleChange}>
+                 {/* <option value="">Select Status</option>
+                  <option value="Y">Yes</option>
+                  <option value="N">No</option>*/}
+                </select>
+               {/* {errors.IntegrationStatus && (
+                  <p style={{ color: "red" }}>{errors.IntegrationStatus}</p>
+                )}*/}
+              </div>
+              )}
             </div>
           </div>
-
+          {/*<div className="form-grid">
+            <label>Agent Integration Status</label>
+            <div className="form-grid">
+              <select>
+                <option value="">Select Status</option>
+                <option value="integrated">Yes</option>
+                <option value="pending">No</option>
+              </select>
+            </div>  
+          </div>*/}  
           <div className="form-actions">
             <button 
               type="submit" 

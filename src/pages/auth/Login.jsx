@@ -11,43 +11,92 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  });
+
+  const [error, setError] = useState("");
+
+  const dummyUser = {
+    email: "admin@gmail.com",
+    password: "admin123",
+    role: "bankadmin",
+  };
+
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      navigate('/dashboard');
-    }, 1500);
+
+    //setError("");
+
+    //alert("test-hai");
+
+    // setTimeout(() => {
+    //   setIsLoading(false);
+    //   navigate('/dashboard');
+    // }, 1500);
+
+    // console.log("Submit clicked");
+    // console.log("Form Data:", formData);
+
+    // if (formData.email===dummyUser.email&& formData.password===dummyUser.password) {
+    //   // Store logged-in user
+    //   localStorage.setItem("user", JSON.stringify(dummyUser));
+
+    //   console.log(formData.email);
+    //   console.log(dummyUser.email);
+
+
+    //   // Redirect based on role
+    //   if (dummyUser.role === "bankadmin") {
+    //     navigate("/dashboard");
+    //   }
+    // } else {
+    //   setError("Invalid email or password");
+    // }
+
+
   };
 
   const accentColor = theme.accent || '#6C63FF';
 
-  // const handleLogin = async (e) => {
-  //   e.preventDefault();
+  const handleLogin = async (e) => {
+    e.preventDefault();
 
-  //   try {
-  //     const response = await authApi.login(formData);
+    
 
-  //     const { token, user } = response.data;
 
-  //     localStorage.setItem("token", token);
-  //     localStorage.setItem("user", JSON.stringify(user));
+    // try {
+    //   const response = await authApi.login(formData);
 
-  //     if (user.role === "bankadmin") {
-  //       navigate("/bankadmin/dashboard");
-  //     } else if (user.role === "merchant") {
-  //       navigate("/merchant/dashboard");
-  //     } else if (user.role === "agent") {
-  //       navigate("/agent/dashboard");
-  //     }
+    //   const { token, user } = response.data;
 
-  //   } catch (error) {
-  //     alert(
-  //       error.response?.data?.message ||
-  //       "Login failed"
-  //     );
-  //   }
-  // };
+    //   localStorage.setItem("token", token);
+    //   localStorage.setItem("user", JSON.stringify(user));
+
+    //   if (user.role === "bankadmin") {
+    //     navigate("/bankadmin/dashboard");
+    //   } else if (user.role === "merchant") {
+    //     navigate("/merchant/dashboard");
+    //   } else if (user.role === "agent") {
+    //     navigate("/agent/dashboard");
+    //   }
+
+    // } catch (error) {
+    //   alert(
+    //     error.response?.data?.message ||
+    //     "Login failed"
+    //   );
+    // }
+  };
 
   return (
     <div className="login-container">
