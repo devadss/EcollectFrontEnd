@@ -57,15 +57,13 @@
 .page-title {
   font-size: 32px;
   font-weight: 800;
-  color: #1a1a2e;
+  color: #818cf8;
   margin: 0;
   letter-spacing: -0.5px;
 }
 
 .gradient-text {
-  background: linear-gradient(135deg, var(--accent), var(--accent-light));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  background: #818cf8;
   background-clip: text;
 }
 

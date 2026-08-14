@@ -248,6 +248,14 @@ const Agents = () => {
                       className="action-btn view" 
                       onClick={() => navigate(`/agents/${agent.id}`)}
                       title="View Agent Profile"
+                      style={{
+                              backgroundColor: "#007bff",
+                              color: "white",
+                              border: "none",
+                              padding: "8px 12px",
+                              borderRadius: "5px",
+                              cursor: "pointer"
+                            }}
                     >
                       👁️ Details
                     </button>

@@ -244,6 +244,14 @@ const Branches = () => {
                       className="action-btn view" 
                       onClick={() => navigate(`/branches/${branch.id}`)}
                       title="View Branch Details"
+                      style={{
+                              backgroundColor: "#007bff",
+                              color: "white",
+                              border: "none",
+                              padding: "8px 12px",
+                              borderRadius: "5px",
+                              cursor: "pointer"
+                            }}
                     >
                       👁️ Details
                     </button>

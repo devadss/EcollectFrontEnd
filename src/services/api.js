@@ -54,7 +54,7 @@ export const agentApi = {
   delete: (id) => api.delete(`/Agent/${id}`),
   toggleStatus: (id) => api.patch(`/agent/${id}/toggle-status`),
   getByMerchant: (merchantId) => api.get(`/agent/merchant/${merchantId}`),
-  getConfigByMerchant: (merchantId)=>api.get(`api/Config/config-by-merchant/${merchantId}`)
+  getConfigByMerchant: (merchantId)=>api.get(`Config/config-by-merchant/${merchantId}`)
 };
 
 // ============================================================

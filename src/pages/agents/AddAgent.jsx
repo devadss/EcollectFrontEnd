@@ -13,6 +13,7 @@ const AddAgent = () => {
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [merchants, setMerchants] = useState([]);
+  const [urlTemplate, setUrlTemplate] = useState([]);
   const [showProductionUrl, setShowProductionUrl] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -39,6 +40,8 @@ const AddAgent = () => {
     try {
       setPageLoading(true);
       await loadMerchants();
+      //await loadUrlTemplate();
+
       if (isEdit) {
         await loadAgent();
       }
@@ -71,13 +74,14 @@ const AddAgent = () => {
     }
   };
 
-  const loadUrlTemplate = async () => {
-    // try {
-    //   const res = await agentApi.getById(id);
-    //   setFormData(res.data);
-    // } catch (error) {
-    //   console.error('Error loading agent:', error);
-    // }
+  const loadUrlTemplate = async (merchantId) => {
+    try {
+      const res = await agentApi.getConfigByMerchant(merchantId);
+      console.log(res.data.data);
+      setUrlTemplate(res.data.data);
+    } catch (error) {
+      console.error('Error loading agent:', error);
+    }
   };
 
 
@@ -88,8 +92,9 @@ const AddAgent = () => {
       [name]: type === 'checkbox' ? checked : value
     }));
 
-    if(name === "merchantId"){
-      console.log("test-data");
+    if(name === "merchantId" && value){
+      console.log("test-data:",value);
+      loadUrlTemplate(value);
     }
   };
 
@@ -416,10 +421,18 @@ const AddAgent = () => {
                      {/* <option value="">Select Status</option>
                       <option value="Y">Yes</option>
                       <option value="N">No</option>*/}
-                    </select>
+                    
                     {/* {errors.urlTemplate && (
                       <p style={{ color: "red" }}>{errors.urlTemplate}</p>
                     )}*/}
+
+                      {Array.isArray(urlTemplate) &&
+                        urlTemplate.map((urlTemplate) => (
+                                          <option key={urlTemplate.id} value={urlTemplate.id}>
+                                            {urlTemplate.urlTemplate}
+                                          </option>
+                      ))}
+                      </select>
               </div>
             </div>
           </div>

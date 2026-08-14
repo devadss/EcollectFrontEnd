@@ -136,7 +136,7 @@ const MerchantsConfig = () => {
           </div>
 
           {/* Search Bar */}
-          <div className="search-bar">
+          <div className="search-bar" style={{ backgroundColor: "#111827BF" }}>
             <div className="search-icon">🔍</div>
             <input
               type="text"
