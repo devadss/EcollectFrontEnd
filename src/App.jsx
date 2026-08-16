@@ -4,97 +4,85 @@ import { ThemeProvider } from './context/ThemeContext';
 import './App.css';
 import LoadingAnimation from './components/common/LoadingAnimation';
 
-// ============================================================
 // DASHBOARDS
-// ============================================================
 import SoftwareAdminDashboard from './pages/dashboards/SoftwareAdminDashboard';
 import MerchantDashboard from './pages/dashboards/MerchantDashboard';
 import BranchDashboard from './pages/dashboards/BranchDashboard';
 import AgentDashboard from './pages/dashboards/AgentDashboard';
 import CustomerDashboard from './pages/dashboards/CustomerDashboard';
 
-// ============================================================
+// AUTH
+import Login from './pages/auth/Login';
+import Logout from './pages/auth/Logout';
+
 // MERCHANT PAGES
-// ============================================================
 import Merchants from './pages/merchants/Merchants';
 import AddMerchant from './pages/merchants/AddMerchant';
 import MerchantDetails from './pages/merchants/MerchantDetails';
-import MerchantsConfig from './pages/merchants/MerchantsConfig'; 
+import MerchantsConfig from './pages/merchants/MerchantsConfig';
 import AddMerchantConfig from './pages/merchants/AddMerchantConfig';
 import MerchantConfigDetails from './pages/merchants/MerchantConfigDetails';
 
-// ============================================================
 // AGENT PAGES
-// ============================================================
 import Agents from './pages/agents/Agents';
 import AddAgent from './pages/agents/AddAgent';
 import AgentDetails from './pages/agents/AgentDetails';
 
-// ============================================================
 // BRANCH PAGES
-// ============================================================
 import Branches from './pages/branches/Branches';
 import AddBranch from './pages/branches/AddBranch';
 import BranchDetails from './pages/branches/BranchDetails';
 
-// ============================================================
-// PAYMENT PAGES
-// ============================================================
+// TRANSACTION PAGES
 import TransactionHistory from './pages/transactions/TransactionHistory';
-// import CreatePayment from './pages/payments/CreatePayment'; // COMMENTED - File doesn't exist
-// import PaymentDetails from './pages/payments/PaymentDetails'; // COMMENTED - File doesn't exist
 
-// ============================================================
 // SETTLEMENT PAGES
-// ============================================================
 import Settlements from './pages/settlements/Settlements';
 import SettlementDetails from './pages/settlements/SettlementDetails';
 
-// ============================================================
 // REFUND PAGES
-// ============================================================
 import Refunds from './pages/refunds/Refunds';
-// import CreateRefund from './pages/refunds/CreateRefund'; // COMMENTED - File doesn't exist
 
-// ============================================================
 // REPORTS & COMMISSION
-// ============================================================
 import Reports from './pages/reports/Reports';
 import Commission from './pages/commissions/Commission';
 
-// ============================================================
-// AUTH PAGES
-// ============================================================
-import Login from './pages/auth/Login';
-import Logout from './pages/auth/Logout';
-
-// ============================================================
-// NOTIFICATIONS
-// ============================================================
-// import Notifications from './pages/notifications/Notifications'; // COMMENTED - File doesn't exist
-
-// ============================================================
 // SETTINGS
-// ============================================================
-// import Settings from './pages/settings/Settings'; // COMMENTED - File doesn't exist
+import Settings from './pages/settings/Settings';
 
 // ============================================================
-// PROFILE
+// PROTECTED ROUTE
 // ============================================================
-// import Profile from './pages/profile/Profile'; // COMMENTED - File doesn't exist
+const ProtectedRoute = ({ children }) => {
+  const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+  
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  return children;
+};
 
 // ============================================================
-// CUSTOMER PAGES
+// GET ROLE
 // ============================================================
-// import Customers from './pages/customers/Customers'; // COMMENTED - File doesn't exist
-// import AddCustomer from './pages/customers/AddCustomer'; // COMMENTED - File doesn't exist
-
-// ============================================================
-// ROLE HELPER
-// ============================================================
-const getRole = () => {
-  const params = new URLSearchParams(window.location.search);
-  return params.get('role') || 'softwareadmin';
+const getRoleFromStorage = () => {
+  try {
+    const userDataStr = localStorage.getItem('auth_user') || localStorage.getItem('user');
+    if (userDataStr) {
+      const userData = JSON.parse(userDataStr);
+      if (userData?.role) {
+        return userData.role.toLowerCase();
+      }
+    }
+    const userRole = localStorage.getItem('userRole');
+    if (userRole) {
+      return userRole.toLowerCase();
+    }
+  } catch (error) {
+    console.error('Error getting role:', error);
+  }
+  return 'softwareadmin';
 };
 
 // ============================================================
@@ -102,29 +90,29 @@ const getRole = () => {
 // ============================================================
 function App() {
   const [loading, setLoading] = useState(true);
-  const role = getRole();
+  const [role, setRole] = useState('softwareadmin');
 
-  console.log(role);
-  
+  useEffect(() => {
+    const currentRole = getRoleFromStorage();
+    setRole(currentRole);
+    console.log('👤 App detected role:', currentRole);
+    
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 1000);
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   const dashboardMap = {
     softwareadmin: <SoftwareAdminDashboard />,
     merchant: <MerchantDashboard />,
+    bankadmin: <BranchDashboard />,
     branchadmin: <BranchDashboard />,
     agent: <AgentDashboard />,
     customer: <CustomerDashboard />,
   };
 
-  useEffect(() => {
-    // Simulate initial loading - replace with actual initialization
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 2000);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Show loading animation while app is initializing
   if (loading) {
     return <LoadingAnimation message="Loading EcollectPG" />;
   }
@@ -142,82 +130,239 @@ function App() {
           {/* ============================================================
               DASHBOARD ROUTES
               ============================================================ */}
-          <Route path="/dashboard" element={dashboardMap[role] || <SoftwareAdminDashboard />} />
+          <Route 
+            path="/dashboard" 
+            element={
+              <ProtectedRoute>
+                {dashboardMap[role] || <SoftwareAdminDashboard />}
+              </ProtectedRoute>
+            } 
+          />
           <Route path="/" element={<Navigate to="/dashboard" />} />
 
           {/* ============================================================
               MERCHANT ROUTES
               ============================================================ */}
-          <Route path="/merchants" element={<Merchants />} />
-          <Route path="/merchants/add" element={<AddMerchant />} />
-          <Route path="/merchants/edit/:id" element={<AddMerchant />} />
-          <Route path="/merchants/merchantconfig" element={<MerchantsConfig />} />
-          <Route path="/merchants/merchantconfig/add" element={<AddMerchantConfig />} />
+          <Route 
+            path="/merchants" 
+            element={
+              <ProtectedRoute>
+                <Merchants />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/merchants/add" 
+            element={
+              <ProtectedRoute>
+                <AddMerchant />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/merchants/edit/:id" 
+            element={
+              <ProtectedRoute>
+                <AddMerchant />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/merchants/:id" 
+            element={
+              <ProtectedRoute>
+                <MerchantDetails />
+              </ProtectedRoute>
+            } 
+          />
 
-          <Route path="/merchants" element={<Merchants />} />
-          <Route path="/merchants/:id" element={<MerchantDetails />} />
-          <Route path="/merchants/merchantconfigdetails/:id" element={<MerchantConfigDetails />} />
-          <Route path="/merchants/merchantconfig/edit/:id" element={<AddMerchantConfig />} />
+          {/* ============================================================
+              MERCHANT CONFIG ROUTES
+              ============================================================ */}
+          <Route 
+            path="/merchants/merchantconfig" 
+            element={
+              <ProtectedRoute>
+                <MerchantsConfig />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/merchants/merchantconfig/add" 
+            element={
+              <ProtectedRoute>
+                <AddMerchantConfig />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/merchants/merchantconfig/edit/:id" 
+            element={
+              <ProtectedRoute>
+                <AddMerchantConfig />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/merchants/merchantconfig/:id" 
+            element={
+              <ProtectedRoute>
+                <MerchantConfigDetails />
+              </ProtectedRoute>
+            } 
+          />
 
           {/* ============================================================
               AGENT ROUTES
               ============================================================ */}
-          <Route path="/agents" element={<Agents />} />
-          <Route path="/agents/add" element={<AddAgent />} />
-          <Route path="/agents/edit/:id" element={<AddAgent />} />
-          <Route path="/agents/:id" element={<AgentDetails />} />
+          <Route 
+            path="/agents" 
+            element={
+              <ProtectedRoute>
+                <Agents />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/agents/add" 
+            element={
+              <ProtectedRoute>
+                <AddAgent />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/agents/edit/:id" 
+            element={
+              <ProtectedRoute>
+                <AddAgent />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/agents/:id" 
+            element={
+              <ProtectedRoute>
+                <AgentDetails />
+              </ProtectedRoute>
+            } 
+          />
 
           {/* ============================================================
               BRANCH ROUTES
               ============================================================ */}
-          <Route path="/branches" element={<Branches />} />
-          <Route path="/branches/add" element={<AddBranch />} />
-          <Route path="/branches/edit/:id" element={<AddBranch />} />
-          <Route path="/branches/:id" element={<BranchDetails />} />
+          <Route 
+            path="/branches" 
+            element={
+              <ProtectedRoute>
+                <Branches />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/branches/add" 
+            element={
+              <ProtectedRoute>
+                <AddBranch />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/branches/edit/:id" 
+            element={
+              <ProtectedRoute>
+                <AddBranch />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/branches/:id" 
+            element={
+              <ProtectedRoute>
+                <BranchDetails />
+              </ProtectedRoute>
+            } 
+          />
 
           {/* ============================================================
-              PAYMENT ROUTES
+              TRANSACTIONS ROUTES
               ============================================================ */}
-          <Route path="/payments" element={<TransactionHistory />} />
-          {/* <Route path="/payments/create" element={<CreatePayment />} /> */} {/* COMMENTED - Component not available */}
-          {/* <Route path="/payments/:id" element={<PaymentDetails />} /> */} {/* COMMENTED - Component not available */}
-          <Route path="/transactions" element={<TransactionHistory />} />
-          {/* <Route path="/transactions/:id" element={<PaymentDetails />} /> */} {/* COMMENTED - Component not available */}
+          <Route 
+            path="/transactions" 
+            element={
+              <ProtectedRoute>
+                <TransactionHistory />
+              </ProtectedRoute>
+            } 
+          />
 
           {/* ============================================================
               SETTLEMENT ROUTES
               ============================================================ */}
-          <Route path="/settlements" element={<Settlements />} />
-          <Route path="/settlements/:id" element={<SettlementDetails />} />
+          <Route 
+            path="/settlements" 
+            element={
+              <ProtectedRoute>
+                <Settlements />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/settlements/:id" 
+            element={
+              <ProtectedRoute>
+                <SettlementDetails />
+              </ProtectedRoute>
+            } 
+          />
 
           {/* ============================================================
               REFUND ROUTES
               ============================================================ */}
-          <Route path="/refunds" element={<Refunds />} />
-          {/* <Route path="/refunds/create" element={<CreateRefund />} /> */} {/* COMMENTED - Component not available */}
-          {/* <Route path="/refunds/create/:transactionId" element={<CreateRefund />} /> */} {/* COMMENTED - Component not available */}
+          <Route 
+            path="/refunds" 
+            element={
+              <ProtectedRoute>
+                <Refunds />
+              </ProtectedRoute>
+            } 
+          />
 
           {/* ============================================================
-              REPORTS & COMMISSION ROUTES
+              REPORTS ROUTES
               ============================================================ */}
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/reports/:type" element={<Reports />} />
-          <Route path="/commission" element={<Commission />} />
+          <Route 
+            path="/reports" 
+            element={
+              <ProtectedRoute>
+                <Reports />
+              </ProtectedRoute>
+            } 
+          />
 
           {/* ============================================================
-              CUSTOMER ROUTES - COMMENTED OUT
+              COMMISSION ROUTES
               ============================================================ */}
-          {/* <Route path="/customers" element={<Customers />} /> */}
-          {/* <Route path="/customers/add" element={<AddCustomer />} /> */}
-          {/* <Route path="/customers/edit/:id" element={<AddCustomer />} /> */}
-          {/* <Route path="/customers/due" element={<Customers />} /> */}
+          <Route 
+            path="/commission" 
+            element={
+              <ProtectedRoute>
+                <Commission />
+              </ProtectedRoute>
+            } 
+          />
 
           {/* ============================================================
-              OTHER ROUTES - COMMENTED OUT
+              SETTINGS ROUTE
               ============================================================ */}
-          {/* <Route path="/notifications" element={<Notifications />} /> */}
-          {/* <Route path="/settings" element={<Settings />} /> */}
-          {/* <Route path="/profile" element={<Profile />} /> */}
+          <Route 
+            path="/settings" 
+            element={
+              <ProtectedRoute>
+                <Settings />
+              </ProtectedRoute>
+            } 
+          />
 
           {/* ============================================================
               FALLBACK - 404

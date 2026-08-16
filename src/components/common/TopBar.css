@@ -443,3 +443,16 @@
     display: none;
   }
 }
+/* --- ADD THIS TO THE VERY BOTTOM OF YOUR CSS FILE --- */
+
+/* Force remove the margin on the main content div */
+div[style*="margin-top: 70px"] {
+  margin-top: 0px !important;
+}
+
+/* Ensure the main wrapper fits correctly */
+.main-wrapper-fix {
+  margin-top: 0px !important;
+  padding: 24px 32px;
+  min-height: calc(100vh - 70px);
+}

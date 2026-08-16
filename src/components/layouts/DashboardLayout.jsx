@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from '../common/Sidebar';
 import TopBar from '../common/TopBar';
 
-const DashboardLayout = ({ children, role = 'softwareadmin', pageTitle = 'Dashboard' }) => {
+const DashboardLayout = ({ children, pageTitle = 'Dashboard' }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -17,6 +17,14 @@ const DashboardLayout = ({ children, role = 'softwareadmin', pageTitle = 'Dashbo
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Also handle tablet view (auto-collapse on tablet)
+  useEffect(() => {
+    const width = window.innerWidth;
+    if (width > 768 && width <= 1024) {
+      setCollapsed(true);
+    }
   }, []);
 
   const toggleSidebar = () => {
@@ -59,12 +67,19 @@ const DashboardLayout = ({ children, role = 'softwareadmin', pageTitle = 'Dashbo
             zIndex: 999,
           }}
           onClick={closeMobile}
+          role="button"
+          aria-label="Close sidebar"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              closeMobile();
+            }
+          }}
         />
       )}
       
       {/* Sidebar Component */}
       <Sidebar
-        role={role}
         collapsed={collapsed}
         mobileOpen={mobileOpen}
         onToggle={toggleSidebar}
@@ -78,11 +93,11 @@ const DashboardLayout = ({ children, role = 'softwareadmin', pageTitle = 'Dashbo
           flex: 1,
           minHeight: '100vh',
           marginLeft: isMobile ? '0px' : `${sidebarWidth}px`,
-          width: isMobile ? '100%' : `calc(100vw - ${sidebarWidth}px)`,
-          maxWidth: isMobile ? '100%' : `calc(100vw - ${sidebarWidth}px)`,
+          width: isMobile ? '100%' : `calc(100% - ${sidebarWidth}px)`,
+          maxWidth: isMobile ? '100%' : `calc(100% - ${sidebarWidth}px)`,
           background: '#070a14',
           overflowX: 'hidden',
-          transition: 'margin-left 0.25s ease, width 0.25s ease, max-width 0.25s ease',
+          transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           boxSizing: 'border-box',
           display: 'flex',
           flexDirection: 'column',
@@ -91,19 +106,30 @@ const DashboardLayout = ({ children, role = 'softwareadmin', pageTitle = 'Dashbo
         <TopBar
           onToggle={toggleSidebar}
           pageTitle={pageTitle}
-          role={role}
           isMobile={isMobile}
           collapsed={collapsed}
+          mobileOpen={mobileOpen}
         />
         
+        {/* Main Body Container (FIXED) */}
         <div 
           style={{
             flex: 1,
-            padding: isMobile ? '16px' : '24px 32px',
+            /* 
+               FIXED: Removed the 70px offset from padding. 
+               The TopBar is a separate absolute/sticky element, 
+               we only need standard spacing here.
+            */
+            paddingTop: isMobile ? '24px' : '32px',
+            paddingRight: isMobile ? '16px' : '32px',
+            paddingBottom: isMobile ? '16px' : '32px',
+            paddingLeft: isMobile ? '16px' : '32px',
             background: '#070a14',
             width: '100%',
             maxWidth: '100%',
             overflowX: 'hidden',
+            overflowY: 'auto',
+               height: 'calc(100vh - 70px)', 
             boxSizing: 'border-box',
           }}
         >

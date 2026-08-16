@@ -32,29 +32,48 @@ const Icons = {
     </svg>
   ),
   Lock: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
     </svg>
   ),
   Clock: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <circle cx="12" cy="12" r="10" />
       <polyline points="12 6 12 12 16 14" />
     </svg>
-  )
+  ),
+  SadEmoji: () => (
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+      <line x1="9" y1="9" x2="9.01" y2="9" />
+      <line x1="15" y1="9" x2="15.01" y2="9" />
+    </svg>
+  ),
+  HappyEmoji: () => (
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+      <line x1="9" y1="9" x2="9.01" y2="9" />
+      <line x1="15" y1="9" x2="15.01" y2="9" />
+    </svg>
+  ),
+  Heart: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+    </svg>
+  ),
 };
 
 const Logout = () => {
   const navigate = useNavigate();
   const { theme } = useTheme?.() || {};
 
-  // Status: 'confirm' | 'logging_out' | 'logged_out'
   const [status, setStatus] = useState('confirm');
   const [countdown, setCountdown] = useState(5);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
-  // Mouse tracking glow effect
   useEffect(() => {
     const handleMouseMove = (e) => {
       setMousePosition({ x: e.clientX, y: e.clientY });
@@ -63,12 +82,10 @@ const Logout = () => {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
-  // Execute sign-out and clear storage
   const handleConfirmLogout = () => {
     setStatus('logging_out');
 
     setTimeout(() => {
-      // Clear security tokens and local storage data
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       sessionStorage.clear();
@@ -77,7 +94,6 @@ const Logout = () => {
     }, 1500);
   };
 
-  // Auto redirect timer after logout
   useEffect(() => {
     let timer;
     if (status === 'logged_out' && countdown > 0) {
@@ -91,32 +107,40 @@ const Logout = () => {
   }, [status, countdown, navigate]);
 
   const handleCancel = () => {
-    navigate(-1); // Return to previous page/dashboard
+    navigate(-1);
   };
 
   return (
     <div className="logout-container">
-      {/* Interactive Mouse Glow Ambient Layer */}
+      {/* Interactive Mouse Glow */}
       <div 
         className="logout-mouse-glow"
         style={{
-          background: `radial-gradient(circle 550px at ${mousePosition.x}px ${mousePosition.y}px, rgba(99, 102, 241, 0.15), transparent 70%)`,
+          background: `radial-gradient(circle 400px at ${mousePosition.x}px ${mousePosition.y}px, rgba(99, 102, 241, 0.12), transparent 70%)`,
         }}
       />
 
-      {/* Aurora Ambient Background Orbs */}
+      {/* Cute Floating Background Orbs - Blue Theme */}
       <div className="logout-aurora">
         <div className="logout-aurora-1"></div>
         <div className="logout-aurora-2"></div>
         <div className="logout-aurora-3"></div>
+        <div className="logout-aurora-4"></div>
       </div>
+
+      {/* Floating Emojis */}
+      <div className="float-emoji e1">🌸</div>
+      <div className="float-emoji e2">✨</div>
+      <div className="float-emoji e3">⭐</div>
+      <div className="float-emoji e4">💫</div>
+      <div className="float-emoji e5">🌈</div>
 
       {/* Brand Header */}
       <div className="logout-brand">
         <div className="logout-brand-icon">
           <Icons.Logo />
         </div>
-        <span className="logout-brand-text">Tech<span className="logout-brand-highlight">Pay</span></span>
+        <span className="logout-brand-text">E<span className="logout-brand-highlight">Collect</span></span>
       </div>
 
       {/* Logout Main Card */}
@@ -126,11 +150,11 @@ const Logout = () => {
         {status === 'confirm' && (
           <div className="logout-card">
             <div className="logout-card-icon-wrap warning">
-              <Icons.LogOut />
+              <Icons.SadEmoji />
             </div>
             
-            <h2>Sign Out of Account?</h2>
-            <p className="logout-subtitle">You are about to securely end your active session on TechPay.</p>
+            <h2>Leaving so soon? 🥺</h2>
+            <p className="logout-subtitle">You're about to sign out of E-Collect. We'll miss you!</p>
 
             {/* Session Insights Summary */}
             <div className="session-summary-box">
@@ -144,8 +168,8 @@ const Logout = () => {
               <div className="summary-item">
                 <Icons.Lock />
                 <div>
-                  <span className="summary-label">Encrypted IP</span>
-                  <span className="summary-val">192.168.1.***</span>
+                  <span className="summary-label">Secure Connection</span>
+                  <span className="summary-val">🔒 Active</span>
                 </div>
               </div>
             </div>
@@ -153,11 +177,11 @@ const Logout = () => {
             {/* Actions */}
             <div className="logout-actions">
               <button type="button" className="btn-confirm-logout" onClick={handleConfirmLogout}>
-                Confirm Sign Out
+                Yes, Sign Me Out 🚀
               </button>
               <button type="button" className="btn-cancel-logout" onClick={handleCancel}>
                 <Icons.ArrowLeft />
-                Return to Dashboard
+                Stay Here ❤️
               </button>
             </div>
           </div>
@@ -170,12 +194,14 @@ const Logout = () => {
               <span className="logout-spinner"></span>
             </div>
 
-            <h2>Ending Active Session...</h2>
-            <p className="logout-subtitle">Clearing security credentials and encrypting local logs.</p>
+            <h2>See You Later! 👋</h2>
+            <p className="logout-subtitle">Clearing your session safely...</p>
 
             <div className="logout-progress-bar">
               <div className="logout-progress-fill"></div>
             </div>
+            
+            <p className="logout-loading-text">✨ Keeping your data safe ✨</p>
           </div>
         )}
 
@@ -183,18 +209,19 @@ const Logout = () => {
         {status === 'logged_out' && (
           <div className="logout-card">
             <div className="logout-card-icon-wrap success">
-              <Icons.ShieldCheck />
+              <Icons.HappyEmoji />
             </div>
 
-            <h2>You Have Been Logged Out</h2>
-            <p className="logout-subtitle">Your session ended safely. All temporary authorization keys have been cleared.</p>
+            <h2>All Done! 🎉</h2>
+            <p className="logout-subtitle">You've been safely signed out. Your session is fully cleared.</p>
 
             <div className="logout-timer-badge">
-              Redirecting to Sign In page in <strong>{countdown}s</strong>
+              ⏳ Redirecting in <strong>{countdown}s</strong>
             </div>
 
             <div className="logout-actions">
               <button type="button" className="btn-confirm-logout" onClick={() => navigate('/login')}>
+                <Icons.ArrowLeft />
                 Sign In Again
               </button>
             </div>
@@ -205,7 +232,10 @@ const Logout = () => {
 
       {/* Security Footer Badge */}
       <div className="logout-footer-badge">
-        <Icons.ShieldCheck /> 256-bit SSL Session Protection Active
+        <Icons.ShieldCheck /> 
+        <span>🔒 256-bit SSL Protected</span>
+        <Icons.Heart />
+        <span>Made with ❤️ by E-Collect</span>
       </div>
     </div>
   );

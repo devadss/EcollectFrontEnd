@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, NavLink } from 'react-router-dom';
 import { useTheme, themes } from '../../context/ThemeContext';
 import './TopBar.css';
@@ -7,14 +7,50 @@ const TopBar = ({
   collapsed, 
   onToggle, 
   pageTitle = 'Dashboard',
-  role = 'softwareadmin'
+  isMobile = false,
+  mobileOpen = false
 }) => {
   const navigate = useNavigate();
-  const { theme, currentTheme, changeTheme } = useTheme();
+  
+  // ✅ Safe theme usage
+  let theme = 'dark';
+  let currentTheme = 'dark';
+  let changeTheme = () => {};
+  
+  try {
+    const themeContext = useTheme();
+    theme = themeContext.theme || 'dark';
+    currentTheme = themeContext.currentTheme || 'dark';
+    changeTheme = themeContext.changeTheme || (() => {});
+  } catch (error) {
+    console.warn('Theme context not available, using default dark theme');
+  }
+  
   const [showThemeMenu, setShowThemeMenu] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
+
+  // ✅ Refs for click outside detection
+  const themeMenuRef = useRef(null);
+  const profileMenuRef = useRef(null);
+  const notificationMenuRef = useRef(null);
+
+  // ✅ Get user role from localStorage
+  const getUserRole = () => {
+    try {
+      const userDataStr = localStorage.getItem('auth_user');
+      if (userDataStr) {
+        const user = JSON.parse(userDataStr);
+        return user?.role?.toLowerCase() || 'softwareadmin';
+      }
+    } catch (error) {
+      console.error('Error getting user role:', error);
+    }
+    return 'softwareadmin';
+  };
+
+  const role = getUserRole();
 
   const notifications = [
     { id: 1, text: 'New merchant registered', time: '5 min ago', read: false },
@@ -35,6 +71,17 @@ const TopBar = ({
     return roleMap[role] || 'User';
   };
 
+  const getRoleIcon = () => {
+    const iconMap = {
+      softwareadmin: '👑',
+      merchant: '🏪',
+      branchadmin: '🏢',
+      agent: '👤',
+      customer: '👤'
+    };
+    return iconMap[role] || '👤';
+  };
+
   const themeNames = {
     light: '☀️ Light Mode',
     dark: '🌙 Dark Mode',
@@ -46,6 +93,39 @@ const TopBar = ({
     gold: '🟡 Luxury Gold'
   };
 
+  // ✅ Click outside handler - close all dropdowns
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // Close profile menu if clicked outside
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+        setShowProfileMenu(false);
+      }
+      // Close theme menu if clicked outside
+      if (themeMenuRef.current && !themeMenuRef.current.contains(event.target)) {
+        setShowThemeMenu(false);
+      }
+      // Close notifications if clicked outside
+      if (notificationMenuRef.current && !notificationMenuRef.current.contains(event.target)) {
+        setShowNotifications(false);
+      }
+    };
+
+    // Add event listener
+    document.addEventListener('mousedown', handleClickOutside);
+    
+    // Cleanup
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // ✅ Close all dropdowns (utility function)
+  const closeAllDropdowns = () => {
+    setShowProfileMenu(false);
+    setShowThemeMenu(false);
+    setShowNotifications(false);
+  };
+
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
@@ -54,7 +134,39 @@ const TopBar = ({
   };
 
   const markAllRead = () => {
-    // Mark all read logic
+    console.log('Mark all read');
+  };
+
+  const getUserName = () => {
+    try {
+      const userDataStr = localStorage.getItem('auth_user');
+      if (userDataStr) {
+        const user = JSON.parse(userDataStr);
+        return user?.firstName || user?.username || 'User';
+      }
+    } catch (error) {
+      console.error('Error getting user name:', error);
+    }
+    return 'User';
+  };
+
+  // ✅ Toggle functions with close others
+  const toggleProfileMenu = () => {
+    setShowProfileMenu(!showProfileMenu);
+    setShowThemeMenu(false);
+    setShowNotifications(false);
+  };
+
+  const toggleThemeMenu = () => {
+    setShowThemeMenu(!showThemeMenu);
+    setShowNotifications(false);
+    setShowProfileMenu(false);
+  };
+
+  const toggleNotifications = () => {
+    setShowNotifications(!showNotifications);
+    setShowThemeMenu(false);
+    setShowProfileMenu(false);
   };
 
   return (
@@ -67,11 +179,13 @@ const TopBar = ({
           onClick={onToggle}
           title="Toggle Navigation Menu"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="3" y1="12" x2="21" y2="12"></line>
-            <line x1="3" y1="6" x2="21" y2="6"></line>
-            <line x1="3" y1="18" x2="21" y2="18"></line>
-          </svg>
+          {isMobile ? (mobileOpen ? '✕' : '☰') : (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          )}
         </button>
 
         <div className="topbar-breadcrumb">
@@ -107,14 +221,10 @@ const TopBar = ({
         </form>
 
         {/* Theme Selector */}
-        <div className="topbar-dropdown-wrapper">
+        <div className="topbar-dropdown-wrapper" ref={themeMenuRef}>
           <button 
             className="icon-action-btn"
-            onClick={() => {
-              setShowThemeMenu(!showThemeMenu);
-              setShowNotifications(false);
-              setShowProfileMenu(false);
-            }}
+            onClick={toggleThemeMenu}
             title="Choose Theme"
           >
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -134,7 +244,7 @@ const TopBar = ({
                     className={`theme-option-btn ${currentTheme === key ? 'active' : ''}`}
                     onClick={() => { changeTheme(key); setShowThemeMenu(false); }}
                   >
-                    <span className="theme-color-dot" style={{ background: themes[key].accent }}></span>
+                    <span className="theme-color-dot" style={{ background: themes[key]?.accent || '#666' }}></span>
                     <span className="theme-label">{themeNames[key] || key}</span>
                     {currentTheme === key && <span className="theme-check-icon">✓</span>}
                   </button>
@@ -145,14 +255,10 @@ const TopBar = ({
         </div>
 
         {/* Notifications Dropdown */}
-        <div className="topbar-dropdown-wrapper">
+        <div className="topbar-dropdown-wrapper" ref={notificationMenuRef}>
           <button 
             className="icon-action-btn notification-trigger" 
-            onClick={() => {
-              setShowNotifications(!showNotifications);
-              setShowThemeMenu(false);
-              setShowProfileMenu(false);
-            }}
+            onClick={toggleNotifications}
             title="Notifications"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -202,18 +308,14 @@ const TopBar = ({
         </div>
 
         {/* Profile Avatar */}
-        <div className="topbar-dropdown-wrapper">
+        <div className="topbar-dropdown-wrapper" ref={profileMenuRef}>
           <button 
             className="profile-avatar-trigger" 
-            onClick={() => {
-              setShowProfileMenu(!showProfileMenu);
-              setShowThemeMenu(false);
-              setShowNotifications(false);
-            }}
+            onClick={toggleProfileMenu}
             title="User Profile"
           >
             <div className="avatar-circle">
-              {getRoleDisplay().charAt(0)}
+              {getRoleIcon()}
             </div>
             <span className="live-status-indicator"></span>
           </button>
@@ -222,11 +324,11 @@ const TopBar = ({
             <div className="dropdown-panel profile-dropdown">
               <div className="profile-header-box">
                 <div className="avatar-circle-large">
-                  {getRoleDisplay().charAt(0)}
+                  {getRoleIcon()}
                 </div>
                 <div className="profile-user-details">
-                  <div className="profile-user-name">{getRoleDisplay()}</div>
-                  <div className="profile-user-role">System Admin Portal</div>
+                  <div className="profile-user-name">{getUserName()}</div>
+                  <div className="profile-user-role">{getRoleDisplay()}</div>
                 </div>
               </div>
 

@@ -136,3 +136,83 @@
   .form-actions { flex-direction: column-reverse; }
   .form-actions button { width: 100%; justify-content: center; }
 }
+/* Add to AddAgent.css */
+
+/* Integration Banner */
+.integration-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.integration-banner.active {
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.integration-banner.inactive {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.banner-icon {
+  font-size: 20px;
+}
+
+.banner-text {
+  flex: 1;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.banner-status {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 14px;
+  border-radius: 20px;
+}
+
+.integration-banner.active .banner-status {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.integration-banner.inactive .banner-status {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+/* External Agent Section */
+.external-agent-section {
+  background: rgba(34, 197, 94, 0.05);
+  border: 1px solid rgba(34, 197, 94, 0.15);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.external-agent-section h3 {
+  color: #22c55e;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+}
+
+.helper-text {
+  display: block;
+  margin-top: 6px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 12px;
+}
+
+.error-text {
+  color: #ef4444;
+  font-size: 12px;
+  margin-top: 4px;
+}

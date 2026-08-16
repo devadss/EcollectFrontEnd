@@ -1,0 +1,193 @@
+/* ==========================================================================
+   DASHBOARD LAYOUT CONTAINER
+   ========================================================================== */
+.dashboard-layout {
+  display: flex;
+  width: 100vw;
+  min-height: 100vh;
+  background: #070a14;
+  overflow: hidden;
+  box-sizing: border-box;
+  position: relative;
+}
+
+/* Sidebar Overlay (Mobile) */
+.sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 999;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ==========================================================================
+   MAIN CONTENT WRAPPER
+   ========================================================================== */
+.dashboard-main {
+  flex: 1;
+  min-height: 100vh;
+  background: #070a14;
+  overflow-x: hidden;
+  transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              width 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              max-width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.dashboard-main.mobile {
+  margin-left: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* ==========================================================================
+   DASHBOARD CONTENT AREA (GAP FIX HERE)
+   ========================================================================== */
+.dashboard-content {
+  flex: 1;
+  /* 
+    FIX: Replaced margin-top with padding-top (70px header offset + 24px spacing) 
+    This prevents the background gap above the main dashboard body.
+  */
+
+  margin-top: 0 !important;
+  background: #070a14;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  animation: contentFadeIn 0.3s ease;
+}
+
+@keyframes contentFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ==========================================================================
+   DASHBOARD FOOTER
+   ========================================================================== */
+.dashboard-footer {
+  padding: 16px 32px;
+  background: rgba(255, 255, 255, 0.02);
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  margin-top: auto;
+}
+
+.footer-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.footer-version {
+  color: #475569;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+}
+
+/* ==========================================================================
+   RESPONSIVE BREAKPOINTS
+   ========================================================================== */
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .dashboard-content {
+    /* 70px header offset + 16px padding */
+    padding: 86px 16px 16px 16px !important;
+  }
+  
+  .dashboard-footer {
+    padding: 12px 16px;
+  }
+  
+  .footer-content {
+    flex-direction: column;
+    gap: 4px;
+    text-align: center;
+    font-size: 11px;
+  }
+}
+
+/* Tablet Responsive */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .dashboard-content {
+    /* 70px header offset + 20px padding */
+    padding: 90px 20px 20px 20px !important;
+  }
+}
+
+/* ==========================================================================
+   SCROLLBAR & UTILITIES
+   ========================================================================== */
+.dashboard-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dashboard-content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.dashboard-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.dashboard-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Loading State */
+.dashboard-layout.loading .dashboard-content {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Print Styles */
+@media print {
+  .dashboard-layout {
+    background: white;
+  }
+  
+  .sidebar-overlay {
+    display: none !important;
+  }
+  
+  .dashboard-main {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  .dashboard-footer {
+    display: none !important;
+  }
+}

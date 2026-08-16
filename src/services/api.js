@@ -1,188 +1,8 @@
-// import axios from 'axios';
-
-// const API_BASE = 'https://dev.collect.org.in/api';
-
-// //const API_BASE = 'https://jsonplaceholder.typicode.com';
-
-// const api = axios.create({
-//   baseURL: API_BASE,
-//   headers: {
-//     'Content-Type': 'application/json',
-//   },
-// });
-
-// // Add token interceptor if needed
-// api.interceptors.request.use(
-//   (config) => {
-//     const token = localStorage.getItem('token');
-//     if (token) {
-//       config.headers.Authorization = `Bearer ${token}`;
-//     }
-//     return config;
-//   },
-//   (error) => Promise.reject(error)
-// );
-
-// // ============================================================
-// // MERCHANT API
-// // ============================================================
-// export const merchantApi = {
-//   //getAllUser: () =>api.get('/users'),
-//   getAll: () => api.get('https://dev.collect.org.in/api/Merchant/get-all'),
-//   getById: (id) => api.get(`https://dev.collect.org.in/api/Merchant/${id}`),
-//   create: (data) => api.post(`https://dev.collect.org.in/api/Merchant/register`, data),
-//   update: (id, data) => api.put(`https://dev.collect.org.in/api/Merchant/update/${id}`, data),
-//   delete: (id) => api.delete(`https://dev.collect.org.in/api/Merchant/delete/${id}`),
-//   approve: (id) => api.patch(`/merchant/${id}/approve`),
-//   toggleStatus: (id) => api.patch(`/merchant/${id}/toggle-status`),
-//   configMerchant:(data)=> api.post('/Config/config-merchant', data),
-//   updateMerchantConfig:(id,data)=> api.put(`Config/Update/${id}`, data),
-//   getAllMerchant: () => api.get('/Merchant/by-status?status=pending'),
-//   getAllMerchantConfig: ()=>api.get('/Config/get-all'),
-//   getAllMerchantConfigById: (id)=>api.get(`/Config/${id}`),
-//   configMerchantDelete: (id)=>api.delete(`Config/delete/${id}`)
-// };
-
-// // ============================================================
-// // AGENT API
-// // ============================================================
-// export const agentApi = {
-//   getAll: () => api.get('/Agent/get-all'),
-//   getById: (id) => api.get(`/agent/${id}`),
-//   create: (data) => api.post('Agent/create', data),
-//   update: (id, data) => api.put(`/Agent/${id}`, data),
-//   delete: (id) => api.delete(`/Agent/${id}`),
-//   toggleStatus: (id) => api.patch(`/agent/${id}/toggle-status`),
-//   getByMerchant: (merchantId) => api.get(`/agent/merchant/${merchantId}`),
-// };
-
-// // ============================================================
-// // BRANCH API
-// // ============================================================
-// export const branchApi = {
-//   getAll: () => api.get('/Branch/get-all'),
-//   getById: (id) => api.get(`/Branch/${id}`),
-//   create: (data) => api.post('/Branch/create', data),
-//   update: (id, data) => api.put(`/Branch/${id}`, data),
-//   delete: (id) => api.delete(`/Branch/${id}`),
-//   toggleStatus: (id) => api.patch(`/branch/${id}/toggle-status`),
-// };
-
-// // ============================================================
-// // PAYMENT API
-// // ============================================================
-// export const paymentApi = {
-//   create: (data) => api.post('/payment/process', data),
-//   getHistory: () => api.get('/payment/history'),
-//   getById: (id) => api.get(`/payment/${id}`),
-//   getStatus: (orderId) => api.get(`/payment/status?orderId=${orderId}`),
-//   generateLink: (data) => api.post('/payment/generate-link', data),
-//   getRecent: () => api.get('/payment/recent'),
-//   getStats: () => api.get('/payment/stats'),
-// };
-
-// // ============================================================
-// // CUSTOMER API
-// // ============================================================
-// export const customerApi = {
-//   getAll: () => api.get('/customer'),
-//   getById: (id) => api.get(`/customer/${id}`),
-//   create: (data) => api.post('/customer/create', data),
-//   update: (id, data) => api.put(`/customer/${id}`, data),
-//   delete: (id) => api.delete(`/customer/${id}`),
-//   getDue: () => api.get('/customer/due'),
-//   toggleStatus: (id) => api.patch(`/customer/${id}/toggle-status`),
-// };
-
-// // ============================================================
-// // SETTLEMENT API
-// // ============================================================
-// export const settlementApi = {
-//   getAll: () => api.get('/settlement'),
-//   getById: (id) => api.get(`/settlement/${id}`),
-//   export: () => api.get('/settlement/export', { responseType: 'blob' }),
-//   getStats: () => api.get('/settlement/stats'),
-// };
-
-// // ============================================================
-// // REFUND API
-// // ============================================================
-// export const refundApi = {
-//   create: (data) => api.post('/refund/process', data),
-//   getHistory: () => api.get('/refund/history'),
-//   getStatus: (id) => api.get(`/refund/status/${id}`),
-//   getAll: () => api.get('/refund'),
-//   getById: (id) => api.get(`/refund/${id}`),
-// };
-
-// // ============================================================
-// // REPORTS API
-// // ============================================================
-// export const reportsApi = {
-//   getOverview: (params) => api.get('/reports/overview', { params }),
-//   getRevenue: (params) => api.get('/reports/revenue', { params }),
-//   getMerchants: (params) => api.get('/reports/merchants', { params }),
-//   getPayments: (params) => api.get('/reports/payments', { params }),
-//   getTransactions: (params) => api.get('/reports/transactions', { params }),
-//   export: (type, params) => api.get(`/reports/export/${type}`, { 
-//     params, 
-//     responseType: 'blob' 
-//   }),
-// };
-
-// // ============================================================
-// // COMMISSION API
-// // ============================================================
-// export const commissionApi = {
-//   getAll: () => api.get('/commission'),
-//   getById: (id) => api.get(`/commission/${id}`),
-//   create: (data) => api.post('/commission/create', data),
-//   update: (id, data) => api.put(`/commission/${id}`, data),
-//   delete: (id) => api.delete(`/commission/${id}`),
-//   pay: (id) => api.patch(`/commission/${id}/pay`),
-//   getByAgent: (agentId) => api.get(`/commission/agent/${agentId}`),
-//   getStats: () => api.get('/commission/stats'),
-//   export: () => api.get('/commission/export', { responseType: 'blob' }),
-// };
-
-// // ============================================================
-// // DASHBOARD API
-// // ============================================================
-// export const dashboardApi = {
-//   getStats: () => api.get('/dashboard/stats'),
-//   getCharts: () => api.get('/dashboard/charts'),
-//   getRecent: () => api.get('/dashboard/recent'),
-// };
-
-// // ============================================================
-// // AUTH API (if needed)
-// // ============================================================
-// export const authApi = {
-//   login: (data) => api.post('/auth/login', data),
-//   logout: () => api.post('/auth/logout'),
-//   register: (data) => api.post('/auth/register', data),
-//   getProfile: () => api.get('/auth/profile'),
-//   updateProfile: (data) => api.put('/auth/profile', data),
-//   changePassword: (data) => api.put('/auth/change-password', data),
-// };
-
-// // ============================================================
-// // NOTIFICATION API
-// // ============================================================
-// export const notificationApi = {
-//   getAll: () => api.get('/notifications'),
-//   getById: (id) => api.get(`/notifications/${id}`),
-//   markAsRead: (id) => api.patch(`/notifications/${id}/read`),
-//   markAllRead: () => api.patch('/notifications/read-all'),
-//   delete: (id) => api.delete(`/notifications/${id}`),
-// };
-
-// export default api;
-
 import axios from 'axios';
 
-// API Base URL (Change to your Localhost port if running locally e.g. 'https://localhost:7000/api' or 'http://localhost:5000/api')
-const API_BASE = process.env.REACT_APP_API_URL || 'https://dev.collect.org.in/api';
+const API_BASE = process.env.REACT_APP_API_URL || 'https://localhost:7256/api';
+
+console.log('🔗 API Base URL:', API_BASE);
 
 const api = axios.create({
   baseURL: API_BASE,
@@ -191,155 +11,584 @@ const api = axios.create({
   },
 });
 
-// Interceptor to attach Bearer token to every request
+// ============================================================
+// REQUEST INTERCEPTOR - Add Token to Headers
+// ============================================================
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+    
+    console.log('🔑 Request Interceptor:', {
+      url: config.url,
+      method: config.method,
+      hasToken: !!token,
+      tokenPreview: token ? token.substring(0, 20) + '...' : 'null'
+    });
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log('✅ Token added to request headers');
+    } else {
+      console.warn('⚠️ No token found for request');
     }
+    
     return config;
   },
-  (error) => Promise.reject(error)
-);
-
-// Response Interceptor: Handles 401 Unauthorized globally
-api.interceptors.response.use(
-  (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      localStorage.removeItem('userRole');
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
-    }
+    console.error('❌ Request Interceptor Error:', error);
     return Promise.reject(error);
   }
 );
 
 // ============================================================
-// AUTH API (Matches AuthController.cs DTOs)
+// RESPONSE INTERCEPTOR - Handle 401 Errors
 // ============================================================
-export const authApi = {
-  // Login accepts { UsernameOrEmail, Password } matching LoginRequestDto
-  login: (data) => api.post('/Auth/login', {
-    UsernameOrEmail: data.UsernameOrEmail || data.email || data.username,
-    Password: data.Password || data.password
-  }),
+api.interceptors.response.use(
+  (response) => {
+    console.log('📡 Response Interceptor:', {
+      url: response.config.url,
+      status: response.status,
+      hasData: !!response.data
+    });
+    return response;
+  },
+  (error) => {
+    console.error('❌ Response Interceptor Error:', {
+      url: error.config?.url,
+      status: error.response?.status,
+      message: error.message,
+      data: error.response?.data
+    });
+    
+    if (error.response && error.response.status === 401) {
+      console.warn('⚠️ 401 Unauthorized - Clearing localStorage and redirecting to login');
+      
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('token');
+      localStorage.removeItem('auth_user');
+      localStorage.removeItem('user');
+      localStorage.removeItem('userRole');
+      localStorage.removeItem('auth_permissions');
+      localStorage.removeItem('permissions');
+      localStorage.removeItem('auth_menus');
+      localStorage.removeItem('menus');
+      
+      if (window.location.pathname !== '/login') {
+        console.log('🔄 Redirecting to login...');
+        window.location.href = '/login';
+      }
+    }
+    
+    return Promise.reject(error);
+  }
+);
+
+// ============================================================
+// DASHBOARD API
+// ============================================================
+export const dashboardApi = {
+  getStats: () => {
+    console.log('📡 dashboardApi.getStats called');
+    return api.get('/Dashboard/stats');
+  },
+  getRevenueChart: (range = 'Week') => {
+    console.log('📡 dashboardApi.getRevenueChart called with range:', range);
+    return api.get(`/Dashboard/revenue-chart?range=${range}`);
+  },
+  getPaymentMethods: () => {
+    console.log('📡 dashboardApi.getPaymentMethods called');
+    return api.get('/Dashboard/payment-methods');
+  },
+  getTransactionVolume: () => {
+    console.log('📡 dashboardApi.getTransactionVolume called');
+    return api.get('/Dashboard/transaction-volume');
+  },
+  getStatusDistribution: () => {
+    console.log('📡 dashboardApi.getStatusDistribution called');
+    return api.get('/Dashboard/status-distribution');
+  },
+  getRecentTransactions: (count = 5) => {
+    console.log('📡 dashboardApi.getRecentTransactions called with count:', count);
+    return api.get(`/Dashboard/recent-transactions?count=${count}`);
+  },
+};
+
+// ============================================================
+// TRANSACTION API
+// ============================================================
+export const transactionApi = {
+  // Get all transactions with filters
+  getTransactions: (params) => {
+    console.log('📡 transactionApi.getTransactions called with params:', params);
+    return api.get('/Transaction', { params });
+  },
   
-  // OTP Verification
-  requestOtp: (mobileNumber) => api.post('/Auth/request-otp', { MobileNumber: mobileNumber }),
-  verifyOtp: (data) => api.post('/Auth/verify-otp', data),
-  resendOtp: (userId) => api.post('/Auth/resend-otp', { UserId: userId }),
+  // Get transaction history (alias for getTransactions)
+  getHistory: (params) => {
+    console.log('📡 transactionApi.getHistory called');
+    return api.get('/Transaction/history', { params });
+  },
   
-  // Account actions
-  register: (data) => api.post('/Auth/register', data),
-  forgotPassword: (emailOrPhone) => api.post('/Auth/forgot-password', { EmailOrPhone: emailOrPhone }),
-  resetPassword: (data) => api.post('/Auth/reset-password', data),
-  changePassword: (data) => api.post('/Auth/change-password', data),
-  logout: () => api.post('/Auth/logout'),
+  // Get single transaction by ID
+  getById: (id) => {
+    console.log('📡 transactionApi.getById called for id:', id);
+    return api.get(`/Transaction/${id}`);
+  },
   
-  // Telemetry & Permissions
-  getProfile: () => api.get('/Auth/profile'),
-  updateProfile: (data) => api.put('/Auth/profile', data),
-  getPermissions: () => api.get('/Auth/permissions'),
-  getMenus: () => api.get('/Auth/menus'),
-  validateToken: (token) => api.post('/Auth/validate-token', { Token: token }),
+  // Get transaction summary
+  getSummary: (params) => {
+    console.log('📡 transactionApi.getSummary called');
+    return api.get('/Transaction/summary', { params });
+  },
+  
+  // Get chart data
+  getChartData: (params) => {
+    console.log('📡 transactionApi.getChartData called');
+    return api.get('/Transaction/chart', { params });
+  },
+  
+  // Update transaction status (Admin only)
+  updateStatus: (id, data) => {
+    console.log('📡 transactionApi.updateStatus called for id:', id);
+    return api.patch(`/Transaction/${id}/status`, data);
+  },
+  
+  // Get transactions by merchant
+  getByMerchant: (merchantId) => {
+    console.log('📡 transactionApi.getByMerchant called for merchantId:', merchantId);
+    return api.get(`/Transaction/merchant/${merchantId}`);
+  },
+  
+  // Get transactions by branch
+  getByBranch: (branchId) => {
+    console.log('📡 transactionApi.getByBranch called for branchId:', branchId);
+    return api.get(`/Transaction/branch/${branchId}`);
+  },
+  
+  // Get transactions by agent
+  getByAgent: (agentId) => {
+    console.log('📡 transactionApi.getByAgent called for agentId:', agentId);
+    return api.get(`/Transaction/agent/${agentId}`);
+  },
 };
 
 // ============================================================
 // MERCHANT API
 // ============================================================
 export const merchantApi = {
-  getAll: () => api.get('/Merchant/get-all'),
-  getById: (id) => api.get(`/Merchant/${id}`),
-  create: (data) => api.post(`/Merchant/register`, data),
-  update: (id, data) => api.put(`/Merchant/update/${id}`, data),
-  delete: (id) => api.delete(`/Merchant/delete/${id}`),
-  approve: (id) => api.patch(`/Merchant/${id}/approve`),
-  toggleStatus: (id) => api.patch(`/Merchant/${id}/toggle-status`),
-  configMerchant: (data) => api.post('/Config/config-merchant', data),
-  updateMerchantConfig: (id, data) => api.put(`/Config/Update/${id}`, data),
-  getAllMerchant: () => api.get('/Merchant/by-status?status=pending'),
-  getAllMerchantConfig: () => api.get('/Config/get-all'),
-  getAllMerchantConfigById: (id) => api.get(`/Config/${id}`),
-  configMerchantDelete: (id) => api.delete(`/Config/delete/${id}`)
+  getAll: () => {
+    console.log('📡 merchantApi.getAll called');
+    return api.get('/Merchant/get-all');
+  },
+  getById: (id) => {
+    console.log('📡 merchantApi.getById called for id:', id);
+    return api.get(`/Merchant/${id}`);
+  },
+  create: (data) => {
+    console.log('📡 merchantApi.create called with data:', data);
+    return api.post('/Merchant/register', data);
+  },
+  update: (id, data) => {
+    console.log('📡 merchantApi.update called for id:', id);
+    return api.put(`/Merchant/update/${id}`, data);
+  },
+  delete: (id) => {
+    console.log('📡 merchantApi.delete called for id:', id);
+    return api.delete(`/Merchant/delete/${id}`);
+  },
+  approve: (id) => {
+    console.log('📡 merchantApi.approve called for id:', id);
+    return api.patch(`/merchant/${id}/approve`);
+  },
+  toggleStatus: (id) => {
+    console.log('📡 merchantApi.toggleStatus called for id:', id);
+    return api.patch(`/merchant/${id}/toggle-status`);
+  },
+  configMerchant: (data) => {
+    console.log('📡 merchantApi.configMerchant called with data:', data);
+    return api.post('/Config/config-merchant', data);
+  },
+  updateMerchantConfig: (id, data) => {
+    console.log('📡 merchantApi.updateMerchantConfig called for id:', id);
+    return api.put(`/Config/Update/${id}`, data);
+  },
+  getAllMerchant: () => {
+    console.log('📡 merchantApi.getAllMerchant called');
+    return api.get('/Merchant/by-status?status=pending');
+  },
+  getAllMerchantConfig: () => {
+    console.log('📡 merchantApi.getAllMerchantConfig called');
+    return api.get('/Config/get-all');
+  },
+  getAllMerchantConfigById: (id) => {
+    console.log('📡 merchantApi.getAllMerchantConfigById called for id:', id);
+    return api.get(`/Config/${id}`);
+  },
+  configMerchantDelete: (id) => {
+    console.log('📡 merchantApi.configMerchantDelete called for id:', id);
+    return api.delete(`/Config/delete/${id}`);
+  }
 };
 
 // ============================================================
 // AGENT API
 // ============================================================
 export const agentApi = {
-  getAll: () => api.get('/Agent/get-all'),
-  getById: (id) => api.get(`/Agent/${id}`),
-  create: (data) => api.post('/Agent/create', data),
-  update: (id, data) => api.put(`/Agent/${id}`, data),
-  delete: (id) => api.delete(`/Agent/${id}`),
-  toggleStatus: (id) => api.patch(`/Agent/${id}/toggle-status`),
-  getByMerchant: (merchantId) => api.get(`/Agent/merchant/${merchantId}`),
+  getAll: () => {
+    console.log('📡 agentApi.getAll called');
+    return api.get('/Agent/get-all');
+  },
+  getById: (id) => {
+    console.log('📡 agentApi.getById called for id:', id);
+    return api.get(`/Agent/${id}`);
+  },
+  create: (data) => {
+    console.log('📡 agentApi.create called with data:', data);
+    return api.post('/Agent/create', data);
+  },
+  update: (id, data) => {
+    console.log('📡 agentApi.update called for id:', id);
+    return api.put(`/Agent/${id}`, data);
+  },
+  delete: (id) => {
+    console.log('📡 agentApi.delete called for id:', id);
+    return api.delete(`/Agent/${id}`);
+  },
+  toggleStatus: (id) => {
+    console.log('📡 agentApi.toggleStatus called for id:', id);
+    return api.patch(`/agent/${id}/toggle-status`);
+  },
+  getByMerchant: (merchantId) => {
+    console.log('📡 agentApi.getByMerchant called for merchantId:', merchantId);
+    return api.get(`/agent/merchant/${merchantId}`);
+  },
+  fetchAgentList: () => {
+    console.log('📡 agentApi.fetchAgentList called');
+    return api.get('/Agent/fetch-agent-list');
+  },
 };
 
 // ============================================================
 // BRANCH API
 // ============================================================
 export const branchApi = {
-  getAll: () => api.get('/Branch/get-all'),
-  getById: (id) => api.get(`/Branch/${id}`),
-  create: (data) => api.post('/Branch/create', data),
-  update: (id, data) => api.put(`/Branch/${id}`, data),
-  delete: (id) => api.delete(`/Branch/${id}`),
-  toggleStatus: (id) => api.patch(`/Branch/${id}/toggle-status`),
+  getAll: () => {
+    console.log('📡 branchApi.getAll called');
+    return api.get('/Branch/get-all');
+  },
+  getById: (id) => {
+    console.log('📡 branchApi.getById called for id:', id);
+    return api.get(`/Branch/${id}`);
+  },
+  create: (data) => {
+    console.log('📡 branchApi.create called with data:', data);
+    return api.post('/Branch/create', data);
+  },
+  update: (id, data) => {
+    console.log('📡 branchApi.update called for id:', id);
+    return api.put(`/Branch/${id}`, data);
+  },
+  delete: (id) => {
+    console.log('📡 branchApi.delete called for id:', id);
+    return api.delete(`/Branch/${id}`);
+  },
+  toggleStatus: (id) => {
+    console.log('📡 branchApi.toggleStatus called for id:', id);
+    return api.patch(`/branch/${id}/toggle-status`);
+  },
+  fetchBranchList: () => {
+    console.log('📡 branchApi.fetchBranchList called');
+    return api.get('/Branch/fetch-branch-list');
+  },
 };
 
 // ============================================================
 // PAYMENT API
 // ============================================================
 export const paymentApi = {
-  create: (data) => api.post('/Payment/process', data),
-  getHistory: () => api.get('/Payment/history'),
-  getById: (id) => api.get(`/Payment/${id}`),
-  getStatus: (orderId) => api.get(`/Payment/status?orderId=${orderId}`),
-  generateLink: (data) => api.post('/Payment/generate-link', data),
-  getRecent: () => api.get('/Payment/recent'),
-  getStats: () => api.get('/Payment/stats'),
+  create: (data) => {
+    console.log('📡 paymentApi.create called with data:', data);
+    return api.post('/payment/process', data);
+  },
+  getHistory: (params) => {
+    console.log('📡 paymentApi.getHistory called');
+    return api.get('/Transaction/history', { params });
+  },
+  getById: (id) => {
+    console.log('📡 paymentApi.getById called for id:', id);
+    return api.get(`/Transaction/${id}`);
+  },
+  getStatus: (orderId) => {
+    console.log('📡 paymentApi.getStatus called for orderId:', orderId);
+    return api.get(`/payment/status?orderId=${orderId}`);
+  },
+  generateLink: (data) => {
+    console.log('📡 paymentApi.generateLink called with data:', data);
+    return api.post('/payment/generate-link', data);
+  },
+  getRecent: () => {
+    console.log('📡 paymentApi.getRecent called');
+    return api.get('/payment/recent');
+  },
+  getStats: () => {
+    console.log('📡 paymentApi.getStats called');
+    return api.get('/payment/stats');
+  },
+};
+
+// ============================================================
+// CUSTOMER API
+// ============================================================
+export const customerApi = {
+  getAll: () => {
+    console.log('📡 customerApi.getAll called');
+    return api.get('/customer');
+  },
+  getById: (id) => {
+    console.log('📡 customerApi.getById called for id:', id);
+    return api.get(`/customer/${id}`);
+  },
+  create: (data) => {
+    console.log('📡 customerApi.create called with data:', data);
+    return api.post('/customer/create', data);
+  },
+  update: (id, data) => {
+    console.log('📡 customerApi.update called for id:', id);
+    return api.put(`/customer/${id}`, data);
+  },
+  delete: (id) => {
+    console.log('📡 customerApi.delete called for id:', id);
+    return api.delete(`/customer/${id}`);
+  },
+  getDue: () => {
+    console.log('📡 customerApi.getDue called');
+    return api.get('/customer/due');
+  },
+  toggleStatus: (id) => {
+    console.log('📡 customerApi.toggleStatus called for id:', id);
+    return api.patch(`/customer/${id}/toggle-status`);
+  },
 };
 
 // ============================================================
 // SETTLEMENT API
 // ============================================================
 export const settlementApi = {
-  getAll: () => api.get('/Settlement'),
-  getById: (id) => api.get(`/Settlement/${id}`),
-  export: () => api.get('/Settlement/export', { responseType: 'blob' }),
-  getStats: () => api.get('/Settlement/stats'),
+  getAll: () => {
+    console.log('📡 settlementApi.getAll called');
+    return api.get('/settlement');
+  },
+  getById: (id) => {
+    console.log('📡 settlementApi.getById called for id:', id);
+    return api.get(`/settlement/${id}`);
+  },
+  export: () => {
+    console.log('📡 settlementApi.export called');
+    return api.get('/settlement/export', { responseType: 'blob' });
+  },
+  getStats: () => {
+    console.log('📡 settlementApi.getStats called');
+    return api.get('/settlement/stats');
+  },
 };
 
 // ============================================================
 // REFUND API
 // ============================================================
 export const refundApi = {
-  create: (data) => api.post('/Refund/process', data),
-  getHistory: () => api.get('/Refund/history'),
-  getStatus: (id) => api.get(`/Refund/status/${id}`),
-  getAll: () => api.get('/Refund'),
-  getById: (id) => api.get(`/Refund/${id}`),
+  create: (data) => {
+    console.log('📡 refundApi.create called with data:', data);
+    return api.post('/refund/process', data);
+  },
+  getHistory: () => {
+    console.log('📡 refundApi.getHistory called');
+    return api.get('/refund/history');
+  },
+  getStatus: (id) => {
+    console.log('📡 refundApi.getStatus called for id:', id);
+    return api.get(`/refund/status/${id}`);
+  },
+  getAll: () => {
+    console.log('📡 refundApi.getAll called');
+    return api.get('/refund');
+  },
+  getById: (id) => {
+    console.log('📡 refundApi.getById called for id:', id);
+    return api.get(`/refund/${id}`);
+  },
 };
 
 // ============================================================
 // REPORTS API
 // ============================================================
 export const reportsApi = {
-  getOverview: (params) => api.get('/Reports/overview', { params }),
-  getRevenue: (params) => api.get('/Reports/revenue', { params }),
-  getMerchants: (params) => api.get('/Reports/merchants', { params }),
-  getPayments: (params) => api.get('/Reports/payments', { params }),
-  getTransactions: (params) => api.get('/Reports/transactions', { params }),
-  export: (type, params) => api.get(`/Reports/export/${type}`, { 
-    params, 
-    responseType: 'blob' 
-  }),
+  getOverview: (params) => {
+    console.log('📡 reportsApi.getOverview called with params:', params);
+    return api.get('/reports/overview', { params });
+  },
+  getRevenue: (params) => {
+    console.log('📡 reportsApi.getRevenue called with params:', params);
+    return api.get('/reports/revenue', { params });
+  },
+  getMerchants: (params) => {
+    console.log('📡 reportsApi.getMerchants called with params:', params);
+    return api.get('/reports/merchants', { params });
+  },
+  getPayments: (params) => {
+    console.log('📡 reportsApi.getPayments called with params:', params);
+    return api.get('/reports/payments', { params });
+  },
+  getTransactions: (params) => {
+    console.log('📡 reportsApi.getTransactions called with params:', params);
+    return api.get('/reports/transactions', { params });
+  },
+  export: (type, params) => {
+    console.log('📡 reportsApi.export called for type:', type);
+    return api.get(`/reports/export/${type}`, { 
+      params, 
+      responseType: 'blob' 
+    });
+  },
+};
+
+// ============================================================
+// COMMISSION API
+// ============================================================
+export const commissionApi = {
+  getAll: () => {
+    console.log('📡 commissionApi.getAll called');
+    return api.get('/commission');
+  },
+  getById: (id) => {
+    console.log('📡 commissionApi.getById called for id:', id);
+    return api.get(`/commission/${id}`);
+  },
+  create: (data) => {
+    console.log('📡 commissionApi.create called with data:', data);
+    return api.post('/commission/create', data);
+  },
+  update: (id, data) => {
+    console.log('📡 commissionApi.update called for id:', id);
+    return api.put(`/commission/${id}`, data);
+  },
+  delete: (id) => {
+    console.log('📡 commissionApi.delete called for id:', id);
+    return api.delete(`/commission/${id}`);
+  },
+  pay: (id) => {
+    console.log('📡 commissionApi.pay called for id:', id);
+    return api.patch(`/commission/${id}/pay`);
+  },
+  getByAgent: (agentId) => {
+    console.log('📡 commissionApi.getByAgent called for agentId:', agentId);
+    return api.get(`/commission/agent/${agentId}`);
+  },
+  getStats: () => {
+    console.log('📡 commissionApi.getStats called');
+    return api.get('/commission/stats');
+  },
+  export: () => {
+    console.log('📡 commissionApi.export called');
+    return api.get('/commission/export', { responseType: 'blob' });
+  },
+};
+
+// ============================================================
+// AUTH API (Connected to C# AuthController.cs)
+// ============================================================
+export const authApi = {
+  login: (data) => {
+    console.log('🔐 authApi.login called with:', {
+      UsernameOrEmail: data.UsernameOrEmail || data.email || data.username,
+      Password: data.Password ? '******' : 'empty'
+    });
+    return api.post('/Auth/login', {
+      UsernameOrEmail: data.UsernameOrEmail || data.email || data.username,
+      Password: data.Password || data.password
+    });
+  },
+  requestOtp: (mobileNumber) => {
+    console.log('📱 authApi.requestOtp called for:', mobileNumber);
+    return api.post('/Auth/request-otp', { MobileNumber: mobileNumber });
+  },
+  verifyOtp: (data) => {
+    console.log('📱 authApi.verifyOtp called');
+    return api.post('/Auth/verify-otp', data);
+  },
+  resendOtp: (userId) => {
+    console.log('📱 authApi.resendOtp called for userId:', userId);
+    return api.post('/Auth/resend-otp', { UserId: userId });
+  },
+  register: (data) => {
+    console.log('📝 authApi.register called');
+    return api.post('/Auth/register', data);
+  },
+  forgotPassword: (emailOrPhone) => {
+    console.log('🔑 authApi.forgotPassword called for:', emailOrPhone);
+    return api.post('/Auth/forgot-password', { EmailOrPhone: emailOrPhone });
+  },
+  resetPassword: (data) => {
+    console.log('🔑 authApi.resetPassword called');
+    return api.post('/Auth/reset-password', data);
+  },
+  changePassword: (data) => {
+    console.log('🔑 authApi.changePassword called');
+    return api.post('/Auth/change-password', data);
+  },
+  logout: () => {
+    console.log('🚪 authApi.logout called');
+    return api.post('/Auth/logout');
+  },
+  getProfile: () => {
+    console.log('👤 authApi.getProfile called');
+    return api.get('/Auth/profile');
+  },
+  updateProfile: (data) => {
+    console.log('👤 authApi.updateProfile called');
+    return api.put('/Auth/profile', data);
+  },
+  getPermissions: () => {
+    console.log('🔐 authApi.getPermissions called');
+    return api.get('/Auth/permissions');
+  },
+  getMenus: () => {
+    console.log('📋 authApi.getMenus called');
+    return api.get('/Auth/menus');
+  },
+  validateToken: (token) => {
+    console.log('✅ authApi.validateToken called');
+    return api.post('/Auth/validate-token', { Token: token });
+  },
+  generateToken: (data) => {
+    console.log('🔄 authApi.generateToken called');
+    return api.post('/Auth/generate-token', data);
+  },
+};
+
+// ============================================================
+// NOTIFICATION API
+// ============================================================
+export const notificationApi = {
+  getAll: () => {
+    console.log('🔔 notificationApi.getAll called');
+    return api.get('/notifications');
+  },
+  getById: (id) => {
+    console.log('🔔 notificationApi.getById called for id:', id);
+    return api.get(`/notifications/${id}`);
+  },
+  markAsRead: (id) => {
+    console.log('🔔 notificationApi.markAsRead called for id:', id);
+    return api.patch(`/notifications/${id}/read`);
+  },
+  markAllRead: () => {
+    console.log('🔔 notificationApi.markAllRead called');
+    return api.patch('/notifications/read-all');
+  },
+  delete: (id) => {
+    console.log('🔔 notificationApi.delete called for id:', id);
+    return api.delete(`/notifications/${id}`);
+  },
 };
 
 export default api;

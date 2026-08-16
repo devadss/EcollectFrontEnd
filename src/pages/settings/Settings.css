@@ -1,0 +1,768 @@
+/* ============================================
+   ULTRA PREMIUM SETTINGS PAGE - BLUE THEME
+   ============================================ */
+
+.settings-page {
+  padding: 24px 28px 32px;
+  min-height: 100vh;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* ============================================
+   HEADER
+   ============================================ */
+.settings-header {
+  margin-bottom: 28px;
+}
+
+.header-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 16px 5px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  margin-bottom: 12px;
+}
+
+.header-badge svg {
+  width: 14px;
+  height: 14px;
+}
+
+.settings-title {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  margin-bottom: 4px;
+  color: #ffffff;
+}
+
+.settings-subtitle {
+  font-size: 14px;
+  font-weight: 400;
+  color: rgba(255,255,255,0.4);
+}
+
+/* ============================================
+   MAIN LAYOUT
+   ============================================ */
+.settings-main {
+  display: flex;
+  gap: 24px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 4px;
+  overflow: hidden;
+  min-height: 600px;
+}
+
+/* ============================================
+   SIDEBAR
+   ============================================ */
+.settings-sidebar {
+  width: 260px;
+  padding: 24px 16px;
+  border-right: 1px solid rgba(255,255,255,0.04);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255,255,255,0.3);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 100%;
+  font-family: 'Inter', sans-serif;
+  text-align: left;
+}
+
+.settings-nav-btn:hover {
+  background: rgba(255,255,255,0.03);
+  color: rgba(255,255,255,0.6);
+}
+
+.settings-nav-btn.active {
+  background: rgba(139, 92, 246, 0.08);
+  color: #8b5cf6;
+}
+
+.settings-nav-btn .nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.settings-nav-btn .nav-icon svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+}
+
+.settings-nav-btn .nav-label {
+  flex: 1;
+}
+
+.settings-nav-btn .nav-chevron {
+  opacity: 0;
+  transition: all 0.3s ease;
+  stroke: currentColor;
+}
+
+.settings-nav-btn:hover .nav-chevron {
+  opacity: 0.3;
+}
+
+.settings-nav-btn.active .nav-chevron {
+  opacity: 0.5;
+}
+
+/* Sidebar Footer */
+.settings-sidebar-footer {
+  padding-top: 16px;
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+
+.user-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  background: rgba(139, 92, 246, 0.12);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8b5cf6;
+}
+
+.user-avatar svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+}
+
+.user-name {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.user-role {
+  display: block;
+  font-size: 11px;
+  color: rgba(255,255,255,0.3);
+  font-weight: 500;
+}
+
+/* ============================================
+   CONTENT
+   ============================================ */
+.settings-content {
+  flex: 1;
+  padding: 32px 36px;
+  overflow-y: auto;
+  max-height: 700px;
+}
+
+.settings-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.settings-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.settings-content::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.2);
+  border-radius: 4px;
+}
+
+.settings-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 92, 246, 0.3);
+}
+
+/* ============================================
+   TAB CONTENT
+   ============================================ */
+.settings-tab-content {
+  animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.settings-section {
+  margin-bottom: 32px;
+}
+
+.settings-section:last-child {
+  margin-bottom: 0;
+}
+
+.settings-section h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+
+.section-desc {
+  font-size: 13px;
+  color: rgba(255,255,255,0.3);
+  margin-bottom: 20px;
+}
+
+/* ============================================
+   FORM
+   ============================================ */
+.settings-form {
+  max-width: 580px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group.full-width {
+  grid-column: span 2;
+}
+
+.form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.5);
+  letter-spacing: 0.3px;
+}
+
+.settings-input {
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 4px;
+  color: #ffffff;
+  font-size: 14px;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.settings-input:focus {
+  border-color: rgba(139, 92, 246, 0.3);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.05);
+  background: rgba(255,255,255,0.05);
+}
+
+.settings-input::placeholder {
+  color: rgba(255,255,255,0.15);
+}
+
+.settings-select {
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 4px;
+  color: #ffffff;
+  font-size: 14px;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.3s ease;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.2)' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.settings-select:focus {
+  border-color: rgba(139, 92, 246, 0.3);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.05);
+}
+
+.settings-select option {
+  background: #1a1a2e;
+  color: #ffffff;
+}
+
+/* ============================================
+   BUTTONS - BLUE GRADIENT
+   ============================================ */
+.settings-save-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 28px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border: none;
+  border-radius: 4px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: 'Inter', sans-serif;
+  margin-top: 8px;
+}
+
+.settings-save-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.25);
+}
+
+.settings-save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.settings-save-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+}
+
+.spinner-small {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.2);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.settings-success {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.12);
+  border-radius: 4px;
+  color: #34d399;
+  font-size: 14px;
+  font-weight: 500;
+  margin-top: 12px;
+  animation: fadeIn 0.4s ease;
+}
+
+.settings-success svg {
+  width: 18px;
+  height: 18px;
+  stroke: #34d399;
+}
+
+/* ============================================
+   SECURITY TIPS
+   ============================================ */
+.security-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 0;
+  margin-bottom: 8px;
+}
+
+.tip-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.4);
+}
+
+.tip-item svg {
+  width: 14px;
+  height: 14px;
+  stroke: #10b981;
+}
+
+/* ============================================
+   TWO FACTOR AUTH
+   ============================================ */
+.two-factor-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 4px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.tf-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tf-badge {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.tf-badge.disabled {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
+.tf-badge.enabled {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+}
+
+.tf-label {
+  font-size: 13px;
+  color: rgba(255,255,255,0.3);
+}
+
+.tf-enable-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  border-radius: 4px;
+  color: #818cf8;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: 'Inter', sans-serif;
+}
+
+.tf-enable-btn:hover {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: rgba(99, 102, 241, 0.25);
+}
+
+.tf-enable-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+}
+
+/* ============================================
+   NOTIFICATIONS
+   ============================================ */
+.notification-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.notification-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.03);
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.notification-item:hover {
+  background: rgba(255,255,255,0.04);
+}
+
+.notification-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.notification-info svg {
+  width: 18px;
+  height: 18px;
+  stroke: rgba(255,255,255,0.2);
+}
+
+.notif-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+}
+
+.notif-desc {
+  display: block;
+  font-size: 12px;
+  color: rgba(255,255,255,0.2);
+}
+
+/* ============================================
+   TOGGLE SWITCH - BLUE THEME
+   ============================================ */
+.toggle-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0.08);
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background: #ffffff;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(20px);
+}
+
+/* ============================================
+   THEME SELECTOR
+   ============================================ */
+.theme-selector {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.theme-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 24px 14px;
+  background: rgba(255,255,255,0.02);
+  border: 2px solid rgba(255,255,255,0.04);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  min-width: 100px;
+}
+
+.theme-option:hover {
+  background: rgba(255,255,255,0.04);
+}
+
+.theme-option.active {
+  border-color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.06);
+}
+
+.theme-preview {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.theme-preview.light {
+  background: #f1f5f9;
+  color: #1a1a2e;
+}
+
+.theme-preview.dark {
+  background: #1a1a2e;
+  color: #f1f5f9;
+}
+
+.theme-preview.system {
+  background: linear-gradient(135deg, #f1f5f9 50%, #1a1a2e 50%);
+  color: #8b5cf6;
+}
+
+.theme-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.5);
+}
+
+.theme-check {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  background: #8b5cf6;
+  border-radius: 50%;
+  padding: 3px;
+  stroke: #ffffff;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 1024px) {
+  .settings-main {
+    flex-direction: column;
+  }
+  
+  .settings-sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    padding: 16px;
+  }
+  
+  .settings-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 4px;
+  }
+  
+  .settings-nav-btn {
+    padding: 10px 16px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  
+  .settings-nav-btn .nav-chevron {
+    display: none;
+  }
+  
+  .settings-sidebar-footer {
+    display: none;
+  }
+  
+  .settings-content {
+    padding: 24px 20px;
+    max-height: none;
+  }
+  
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-group.full-width {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .settings-page {
+    padding: 16px 14px 20px;
+  }
+  
+  .settings-title {
+    font-size: 24px;
+  }
+  
+  .settings-content {
+    padding: 16px;
+  }
+  
+  .notification-item {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  
+  .two-factor-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .tf-status {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  
+  .theme-selector {
+    gap: 12px;
+  }
+  
+  .theme-option {
+    padding: 12px 16px;
+    min-width: 80px;
+  }
+}
+
+@media (max-width: 480px) {
+  .settings-nav-btn {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+  
+  .settings-nav-btn .nav-label {
+    font-size: 12px;
+  }
+  
+  .settings-section h3 {
+    font-size: 16px;
+  }
+  
+  .settings-save-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
