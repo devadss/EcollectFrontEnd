@@ -1,40 +1,179 @@
-/* index.css - Let ThemeProvider handle ALL colors */
+/* ==========================================================================
+   EcollectPG - Global Core Styles & Ultra-Premium Design Tokens
+   ========================================================================== */
 
-* {
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+*, *::before, *::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+:root {
+  /* Default Design System Tokens (dynamically overridden by ThemeProvider) */
+  --font-main: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  --bgPrimary: #090d16;
+  --bgSecondary: #111726;
+  --bgCard: rgba(17, 23, 38, 0.75);
+  --bgHover: #1a2236;
+  
+  --textPrimary: #f8fafc;
+  --textSecondary: #94a3b8;
+  --textMuted: #64748b;
+  
+  --borderColor: rgba(255, 255, 255, 0.08);
+  --borderLight: rgba(255, 255, 255, 0.04);
+  --borderGlow: rgba(99, 102, 241, 0.35);
+
+  --accent: #6366f1;
+  --accentLight: rgba(99, 102, 241, 0.12);
+  --accentGlow: rgba(99, 102, 241, 0.4);
+  --accentGradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
+  --accentGradientHover: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #c026d3 100%);
+  
+  --success: #10b981;
+  --successLight: rgba(16, 185, 129, 0.12);
+  --warning: #f59e0b;
+  --warningLight: rgba(245, 158, 11, 0.12);
+  --danger: #ef4444;
+  --dangerLight: rgba(239, 68, 68, 0.12);
+  --info: #3b82f6;
+  --infoLight: rgba(59, 130, 246, 0.12);
+
+  --cardShadow: 0 4px 24px -1px rgba(0, 0, 0, 0.3), 0 2px 8px -1px rgba(0, 0, 0, 0.2);
+  --cardShadowHover: 0 12px 36px -2px rgba(0, 0, 0, 0.45), 0 0 20px -2px var(--accentGlow);
+  --glassBackdrop: blur(16px) saturate(180%);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-full: 9999px;
+  
+  --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 html, body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-main);
+  background-color: var(--bgPrimary);
+  color: var(--textPrimary);
   min-height: 100vh;
   width: 100%;
   overflow-x: hidden;
+  line-height: 1.5;
 }
-
-/* ThemeProvider sets backgrounds and colors */
-/* Don't override them here! */
 
 #root {
   width: 100%;
   min-height: 100vh;
+  background-color: var(--bgPrimary);
 }
 
-/* Scrollbar - Let theme handle it */
+/* ==========================================================================
+   SCROLLBAR STYLES
+   ========================================================================== */
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(0,0,0,0.05);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0,0,0,0.2);
-  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-full);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0,0,0,0.3);
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* ==========================================================================
+   GLOBAL UTILITY CLASSES
+   ========================================================================== */
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+.gradient-text {
+  background: var(--accentGradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  display: inline-block;
+}
+
+.glass-panel {
+  background: var(--bgCard);
+  backdrop-filter: var(--glassBackdrop);
+  -webkit-backdrop-filter: var(--glassBackdrop);
+  border: 1px solid var(--borderColor);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--cardShadow);
+  transition: all var(--transition-normal);
+}
+
+.glass-panel:hover {
+  border-color: var(--borderGlow);
+  box-shadow: var(--cardShadowHover);
+}
+
+/* Pulse indicator dot */
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: inline-block;
+  position: relative;
+}
+
+.pulse-dot::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.75;
+  animation: pulseAnimation 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulseAnimation {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.8); opacity: 0; }
+  100% { transform: scale(0.95); opacity: 0; }
+}
+
+/* Base button resets and glow */
+button {
+  font-family: var(--font-main);
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+
+input, select, textarea {
+  font-family: var(--font-main);
+  outline: none;
+}
+
+/* Ambient glow orb for background */
+.ambient-glow {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(120px);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.15;
 }

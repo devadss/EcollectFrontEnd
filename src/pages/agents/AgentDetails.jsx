@@ -68,8 +68,12 @@ const AgentDetails = () => {
     );
   }
 
+  const rawRole = localStorage.getItem('user_role') || localStorage.getItem('role') || 'softwareadmin';
+  const normRole = rawRole.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const isSoftwareAdmin = normRole.includes('softwareadmin') || normRole.includes('admin') || normRole.includes('superadmin');
+
   return (
-    <DashboardLayout role="softwareadmin">
+    <DashboardLayout role={rawRole}>
       <div className="agent-details-page">
         <div className="page-header">
           <div>
@@ -78,7 +82,9 @@ const AgentDetails = () => {
           </div>
           <div className="header-actions">
             <button className="btn-outline" onClick={() => navigate('/agents')}>← Back</button>
-            <button className="btn-primary" onClick={() => navigate(`/agents/edit/${id}`)}>✏️ Edit</button>
+            {isSoftwareAdmin && (
+              <button className="btn-primary" onClick={() => navigate(`/agents/edit/${id}`)}>✏️ Edit Agent</button>
+            )}
           </div>
         </div>
 

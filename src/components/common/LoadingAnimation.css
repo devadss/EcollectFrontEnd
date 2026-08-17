@@ -1,616 +1,336 @@
-/* ============================================
-   CUTE LOADING ANIMATION - PREMIUM & ADORABLE
-   ============================================ */
+/* ==========================================================================
+   EcollectPG - Ultra-Premium 3D Gold Coin Loader Animation
+   ========================================================================== */
 
-.loading-overlay {
+.fintech-loading-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  z-index: 99999;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  user-select: none;
 }
 
-.loading-backdrop {
+.fintech-loading-backdrop {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(7, 10, 20, 0.85);
-  backdrop-filter: blur(12px);
-  animation: fadeIn 0.4s ease;
+  inset: 0;
+  background: rgba(9, 13, 22, 0.82);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  animation: fadeInBackdrop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.loading-box {
+@keyframes fadeInBackdrop {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.fintech-loading-box {
   position: relative;
   z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 20px;
-  padding: 40px 48px 32px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 32px;
-  backdrop-filter: blur(20px);
-  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.5);
-  animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  gap: 22px;
+  width: 100%;
+  max-width: 420px;
+  margin: 20px;
+  padding: 36px 32px 28px;
+  background: #101624;
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  border-radius: var(--radius-lg, 22px);
+  box-shadow: 
+    0 24px 64px rgba(0, 0, 0, 0.7),
+    0 0 50px rgba(234, 179, 8, 0.18);
+  animation: popInModal 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes popIn {
-  from { opacity: 0; transform: scale(0.8) translateY(30px); }
+@keyframes popInModal {
+  from { opacity: 0; transform: scale(0.92) translateY(16px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-/* ============================================
-   COIN LOADER (Default)
-   ============================================ */
-.cute-coin-container {
+/* Ambient Warm Gold Radiance */
+.loading-gold-halo {
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 220px;
+  height: 220px;
+  background: radial-gradient(circle, rgba(234, 179, 8, 0.35) 0%, rgba(245, 158, 11, 0.1) 50%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(30px);
+}
+
+/* ==========================================================================
+   3D GOLD COIN STAGE & SPINNER
+   ========================================================================== */
+.gold-coin-stage {
   position: relative;
-  width: 80px;
-  height: 80px;
-}
-
-.cute-coin-container.small {
-  width: 50px;
-  height: 50px;
-}
-
-.cute-coin-container.large {
   width: 110px;
   height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1000px;
 }
 
-.cute-coin {
+.gold-coin-stage.small {
+  width: 75px;
+  height: 75px;
+}
+
+.gold-coin-stage.large {
+  width: 135px;
+  height: 135px;
+}
+
+/* Orbital Rings */
+.gold-orbit-ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  pointer-events: none;
+}
+
+.gold-orbit-ring.ring-1 {
+  border-top-color: #eab308;
+  border-right-color: #f59e0b;
+  animation: spinClockwise 2.2s linear infinite;
+  box-shadow: 0 0 16px rgba(234, 179, 8, 0.4);
+}
+
+.gold-orbit-ring.ring-2 {
+  inset: -14px;
+  border-bottom-color: rgba(234, 179, 8, 0.5);
+  border-left-color: rgba(251, 191, 36, 0.3);
+  animation: spinCounterClockwise 3s linear infinite;
+}
+
+@keyframes spinClockwise {
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes spinCounterClockwise {
+  100% { transform: rotate(-360deg); }
+}
+
+/* 3D Coin Image Wrapper - FULL 360 ROTATION */
+.gold-coin-3d-wrapper {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  transform-style: preserve-3d;
+  animation: coinFloat3D 2.5s ease-in-out infinite, coinFullRotate360 2.2s linear infinite;
+  box-shadow: 
+    0 0 35px rgba(234, 179, 8, 0.65),
+    0 12px 28px rgba(0, 0, 0, 0.5);
+}
+
+.gold-coin-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 2px solid rgba(253, 224, 71, 0.85);
+  box-shadow: inset 0 0 14px rgba(234, 179, 8, 0.9);
+}
+
+.gold-coin-front {
+  transform: rotateY(0deg);
+}
+
+.gold-coin-back {
+  transform: rotateY(180deg);
+}
+
+.gold-coin-img {
   width: 100%;
   height: 100%;
-  background: linear-gradient(145deg, #fbbf24, #f59e0b);
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 
-    0 8px 32px rgba(251, 191, 36, 0.25),
-    inset 0 -4px 12px rgba(0, 0, 0, 0.15),
-    inset 0 4px 12px rgba(255, 255, 255, 0.3);
-  animation: coinFlip 2.5s ease-in-out infinite;
-  position: relative;
-  z-index: 2;
+  object-fit: cover;
 }
 
-@keyframes coinFlip {
-  0%, 100% { transform: rotateY(0deg) scale(1); }
-  25% { transform: rotateY(180deg) scale(1.05); }
-  50% { transform: rotateY(360deg) scale(1); }
-  75% { transform: rotateY(540deg) scale(1.05); }
-}
-
-.coin-inner {
-  width: 70%;
-  height: 70%;
-  background: radial-gradient(circle at 35% 35%, #fde68a, #fbbf24);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-}
-
-.cute-symbol {
-  font-size: 28px;
-  font-weight: 800;
-  color: #1a1a2e;
-  text-shadow: 0 2px 8px rgba(255, 255, 255, 0.3);
-}
-
-.cute-coin-container.large .cute-symbol {
-  font-size: 38px;
-}
-
-.cute-coin-container.small .cute-symbol {
-  font-size: 18px;
-}
-
-/* Glow Rings */
-.cute-glow-ring {
+.gold-coin-shine-sweep {
   position: absolute;
+  inset: 0;
   border-radius: 50%;
-  border: 2px solid rgba(251, 191, 36, 0.15);
-  animation: ringPulse 2.5s ease-in-out infinite;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.45) 0%, transparent 45%, rgba(234, 179, 8, 0.3) 100%);
+  pointer-events: none;
 }
 
-.ring-1 {
-  top: -12px;
-  left: -12px;
-  right: -12px;
-  bottom: -12px;
-  animation-delay: 0s;
+@keyframes coinFloat3D {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
 }
 
-.ring-2 {
-  top: -24px;
-  left: -24px;
-  right: -24px;
-  bottom: -24px;
-  animation-delay: 0.5s;
+@keyframes coinFullRotate360 {
+  0% {
+    transform: rotateY(0deg);
+  }
+  100% {
+    transform: rotateY(360deg);
+  }
 }
 
-.ring-3 {
-  top: -36px;
-  left: -36px;
-  right: -36px;
-  bottom: -36px;
-  animation-delay: 1s;
-}
-
-@keyframes ringPulse {
-  0%, 100% { transform: scale(1); opacity: 0.6; }
-  50% { transform: scale(1.15); opacity: 0; }
-}
-
-/* Cute Sparkles */
-.cute-sparkle {
+/* Sparkles */
+.coin-sparkle {
   position: absolute;
+  color: #fde047;
   font-size: 14px;
-  animation: sparkleFloat 3s ease-in-out infinite;
+  font-weight: 800;
+  pointer-events: none;
+  animation: sparkleTwinkle 2s ease-in-out infinite;
+  text-shadow: 0 0 8px #eab308;
 }
 
-.s1 { top: -20px; left: -20px; animation-delay: 0s; }
-.s2 { top: -25px; right: -15px; animation-delay: 0.8s; }
-.s3 { bottom: -20px; left: -10px; animation-delay: 1.6s; }
-.s4 { bottom: -25px; right: -20px; animation-delay: 2.4s; }
-.s5 { top: 50%; right: -35px; animation-delay: 0.4s; }
+.coin-sparkle.sp-1 { top: -2px; right: 6px; animation-delay: 0s; font-size: 16px; }
+.coin-sparkle.sp-2 { bottom: 6px; left: -4px; animation-delay: 0.7s; font-size: 13px; }
+.coin-sparkle.sp-3 { top: 40%; left: -10px; animation-delay: 1.3s; font-size: 12px; }
 
-@keyframes sparkleFloat {
-  0%, 100% { transform: translate(0, 0) scale(1) rotate(0deg); opacity: 0.3; }
-  25% { transform: translate(8px, -10px) scale(1.2) rotate(45deg); opacity: 1; }
-  50% { transform: translate(-5px, -15px) scale(0.8) rotate(90deg); opacity: 0.7; }
-  75% { transform: translate(10px, -5px) scale(1.1) rotate(135deg); opacity: 1; }
+@keyframes sparkleTwinkle {
+  0%, 100% { opacity: 0.2; transform: scale(0.7) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1.3) rotate(45deg); filter: drop-shadow(0 0 6px #fde047); }
 }
 
-/* ============================================
-   BOUNCE LOADER (NEW - CUTE)
-   ============================================ */
-.cute-bounce-container {
+/* ==========================================================================
+   TEXT & SECURITY BADGE
+   ========================================================================== */
+.loading-text-stack {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-}
-
-.bounce-emoji {
-  font-size: 48px;
-  animation: bounceEmoji 1.2s ease-in-out infinite;
-}
-
-@keyframes bounceEmoji {
-  0%, 100% { transform: translateY(0) scale(1); }
-  50% { transform: translateY(-20px) scale(1.1); }
-}
-
-.bounce-dots {
-  display: flex;
   gap: 8px;
+  text-align: center;
 }
 
-.bounce-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #fbbf24, #f59e0b);
-  animation: bounceDot 1.4s ease-in-out infinite;
-}
-
-.bounce-dot:nth-child(1) { animation-delay: 0s; }
-.bounce-dot:nth-child(2) { animation-delay: 0.2s; }
-.bounce-dot:nth-child(3) { animation-delay: 0.4s; }
-.bounce-dot:nth-child(4) { animation-delay: 0.6s; }
-.bounce-dot:nth-child(5) { animation-delay: 0.8s; }
-
-@keyframes bounceDot {
-  0%, 80%, 100% { transform: translateY(0) scale(1); opacity: 0.3; }
-  40% { transform: translateY(-12px) scale(1.2); opacity: 1; }
-}
-
-/* ============================================
-   FLOAT LOADER (NEW - MAGICAL)
-   ============================================ */
-.cute-float-container {
-  position: relative;
-  width: 100px;
-  height: 100px;
-}
-
-.float-emoji {
-  position: absolute;
-  font-size: 20px;
-  animation: floatAround 4s ease-in-out infinite;
-}
-
-.float-2 { animation-delay: 0.8s; }
-.float-3 { animation-delay: 1.6s; }
-.float-4 { animation-delay: 2.4s; }
-.float-5 { animation-delay: 3.2s; }
-
-.float-emoji:nth-child(1) { top: 0; left: 50%; transform: translateX(-50%); }
-.float-emoji:nth-child(2) { top: 50%; right: 0; transform: translateY(-50%); }
-.float-emoji:nth-child(3) { bottom: 0; left: 50%; transform: translateX(-50%); }
-.float-emoji:nth-child(4) { top: 50%; left: 0; transform: translateY(-50%); }
-.float-emoji:nth-child(5) { top: 20%; right: 20%; }
-
-@keyframes floatAround {
-  0%, 100% { transform: translate(0, 0) scale(1) rotate(0deg); }
-  25% { transform: translate(15px, -15px) scale(1.1) rotate(30deg); }
-  50% { transform: translate(-10px, -20px) scale(0.9) rotate(60deg); }
-  75% { transform: translate(20px, 10px) scale(1.05) rotate(30deg); }
-}
-
-.float-center {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 32px;
-  font-weight: 800;
-  color: #fbbf24;
-  animation: pulseCenter 2s ease-in-out infinite;
-}
-
-@keyframes pulseCenter {
-  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-  50% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.7; }
-}
-
-/* ============================================
-   RING LOADER
-   ============================================ */
-.cute-ring-container {
-  position: relative;
-  width: 80px;
-  height: 80px;
-}
-
-.cute-ring {
-  width: 100%;
-  height: 100%;
-  position: relative;
-  animation: ringSpin 2s linear infinite;
-}
-
-@keyframes ringSpin {
-  to { transform: rotate(360deg); }
-}
-
-.ring-segment {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  border: 3px solid transparent;
-  border-radius: 50%;
-}
-
-.ring-segment:nth-child(1) {
-  border-top-color: #fbbf24;
-  animation: segmentSpin 1.5s ease-in-out infinite;
-}
-.ring-segment:nth-child(2) {
-  border-right-color: #f59e0b;
-  animation: segmentSpin 1.8s ease-in-out infinite 0.2s;
-}
-.ring-segment:nth-child(3) {
-  border-bottom-color: #fcd34d;
-  animation: segmentSpin 2.1s ease-in-out infinite 0.4s;
-}
-.ring-segment:nth-child(4) {
-  border-left-color: #fde68a;
-  animation: segmentSpin 2.4s ease-in-out infinite 0.6s;
-}
-.ring-segment:nth-child(5) {
-  border-top-color: #fbbf24;
-  animation: segmentSpin 1.6s ease-in-out infinite 0.8s;
-}
-.ring-segment:nth-child(6) {
-  border-right-color: #f59e0b;
-  animation: segmentSpin 1.9s ease-in-out infinite 1s;
-}
-.ring-segment:nth-child(7) {
-  border-bottom-color: #fcd34d;
-  animation: segmentSpin 2.2s ease-in-out infinite 1.2s;
-}
-.ring-segment:nth-child(8) {
-  border-left-color: #fde68a;
-  animation: segmentSpin 2.5s ease-in-out infinite 1.4s;
-}
-
-@keyframes segmentSpin {
-  0%, 100% { transform: rotate(0deg) scale(1); opacity: 0.3; }
-  50% { transform: rotate(180deg) scale(1.1); opacity: 1; }
-}
-
-.ring-center {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 40px;
-  height: 40px;
-  background: rgba(251, 191, 36, 0.1);
-  border-radius: 50%;
+.loading-main-message {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid rgba(251, 191, 36, 0.15);
-}
-
-.ring-center .cute-symbol {
-  font-size: 20px;
-  color: #fbbf24;
-}
-
-/* ============================================
-   PULSE LOADER
-   ============================================ */
-.cute-pulse-container {
-  position: relative;
-  width: 80px;
-  height: 80px;
-}
-
-.pulse-ring {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  border: 2px solid rgba(251, 191, 36, 0.15);
-  animation: pulseExpand 2s ease-out infinite;
-}
-
-.pulse-1 { width: 80px; height: 80px; animation-delay: 0s; }
-.pulse-2 { width: 100px; height: 100px; animation-delay: 0.5s; }
-.pulse-3 { width: 120px; height: 120px; animation-delay: 1s; }
-.pulse-4 { width: 140px; height: 140px; animation-delay: 1.5s; }
-
-@keyframes pulseExpand {
-  0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
-  100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
-}
-
-.pulse-center {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 32px;
-  animation: pulseHeart 1.5s ease-in-out infinite;
-}
-
-@keyframes pulseHeart {
-  0%, 100% { transform: translate(-50%, -50%) scale(1); }
-  50% { transform: translate(-50%, -50%) scale(1.15); }
-}
-
-/* ============================================
-   GLOW LOADER
-   ============================================ */
-.cute-glow-container {
-  position: relative;
-  width: 90px;
-  height: 90px;
-}
-
-.glow-core {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 36px;
-  animation: glowCore 2s ease-in-out infinite;
-  z-index: 2;
-}
-
-@keyframes glowCore {
-  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-  50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.8; }
-}
-
-.glow-orb {
-  position: absolute;
-  font-size: 16px;
-  animation: glowOrb 3s ease-in-out infinite;
-}
-
-.glow-orb:nth-child(2) { top: -10px; left: 50%; transform: translateX(-50%); animation-delay: 0s; }
-.glow-orb:nth-child(3) { top: 50%; right: -10px; transform: translateY(-50%); animation-delay: 0.5s; }
-.glow-orb:nth-child(4) { bottom: -10px; left: 50%; transform: translateX(-50%); animation-delay: 1s; }
-.glow-orb:nth-child(5) { top: 50%; left: -10px; transform: translateY(-50%); animation-delay: 1.5s; }
-.glow-orb:nth-child(6) { top: 15%; right: 15%; animation-delay: 0.75s; }
-.glow-orb:nth-child(7) { bottom: 15%; right: 15%; animation-delay: 1.25s; }
-
-@keyframes glowOrb {
-  0%, 100% { transform: translate(0, 0) scale(1) rotate(0deg); opacity: 0.3; }
-  50% { transform: translate(10px, -15px) scale(1.3) rotate(30deg); opacity: 1; }
-}
-
-/* ============================================
-   PROGRESS BAR - CUTE
-   ============================================ */
-.cute-progress-container {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  max-width: 240px;
-}
-
-.cute-progress-bar {
-  flex: 1;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
-  overflow: hidden;
-  position: relative;
-}
-
-.cute-progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #fbbf24, #f59e0b, #fbbf24);
-  background-size: 200% 100%;
-  border-radius: 10px;
-  transition: width 0.3s ease;
-  animation: shimmerProgress 2s linear infinite;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-right: 2px;
-}
-
-@keyframes shimmerProgress {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
-.progress-emoji {
-  font-size: 10px;
-  animation: emojiSlide 1s ease-in-out infinite;
-}
-
-@keyframes emojiSlide {
-  0%, 100% { transform: translateX(0); }
-  50% { transform: translateX(4px); }
-}
-
-.cute-progress-text {
-  font-size: 13px;
-  font-weight: 700;
-  color: #fbbf24;
-  min-width: 42px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-/* ============================================
-   LOADING MESSAGE
-   ============================================ */
-.loading-message {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 4px;
-}
-
-.message-text {
   font-size: 15px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.5);
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.2px;
+}
+
+.live-dots.gold-dots span {
+  display: inline-block;
+  color: #eab308;
+  font-size: 18px;
+  font-weight: 900;
+  animation: dotBlink 1.4s infinite;
+}
+
+.live-dots.gold-dots span:nth-child(2) { animation-delay: 0.2s; }
+.live-dots.gold-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes dotBlink {
+  0%, 20% { opacity: 0.2; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-2px); }
+  100% { opacity: 0.2; transform: translateY(0); }
+}
+
+.loading-security-badge.gold-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: rgba(234, 179, 8, 0.1);
+  border: 1px solid rgba(234, 179, 8, 0.25);
+  font-size: 11px;
+  font-weight: 700;
+  color: #facc15;
   letter-spacing: 0.3px;
 }
 
-.cute-dots {
+.security-dot.gold-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #eab308;
+  box-shadow: 0 0 8px #eab308;
+  animation: pulseSecurityDot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulseSecurityDot {
+  0%, 100% { opacity: 0.5; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+/* ==========================================================================
+   PROGRESS BAR
+   ========================================================================== */
+.fintech-progress-container {
+  width: 100%;
   display: flex;
-  gap: 2px;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.cute-dots span {
-  font-size: 20px;
-  font-weight: 700;
-  color: #fbbf24;
-  animation: dotBounce 1.4s ease-in-out infinite;
+.fintech-progress-track.gold-track {
+  position: relative;
+  width: 100%;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  overflow: hidden;
 }
 
-.cute-dots span:nth-child(1) { animation-delay: 0s; }
-.cute-dots span:nth-child(2) { animation-delay: 0.2s; }
-.cute-dots span:nth-child(3) { animation-delay: 0.4s; }
-
-@keyframes dotBounce {
-  0%, 80%, 100% { transform: translateY(0); opacity: 0.3; }
-  40% { transform: translateY(-6px); opacity: 1; }
+.fintech-progress-bar.gold-bar {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #ca8a04 0%, #eab308 50%, #fde047 100%);
+  box-shadow: 0 0 14px rgba(234, 179, 8, 0.6);
+  position: relative;
+  transition: width 0.15s ease-out;
 }
 
-/* ============================================
-   CUTE TIPS
-   ============================================ */
-.cute-tips {
+.progress-light-sweep.gold-sweep {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.8) 50%, transparent 100%);
+  animation: progressSweep 1.8s infinite linear;
+}
+
+@keyframes progressSweep {
+  100% { left: 100%; }
+}
+
+.progress-status-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 16px;
-  background: rgba(251, 191, 36, 0.06);
-  border: 1px solid rgba(251, 191, 36, 0.08);
-  border-radius: 100px;
-  margin-top: 4px;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
 }
 
-.tip-emoji {
-  font-size: 14px;
-  animation: tipWiggle 2s ease-in-out infinite;
+.progress-state.gold-text {
+  color: #a1a1aa;
 }
 
-@keyframes tipWiggle {
-  0%, 100% { transform: rotate(0deg); }
-  25% { transform: rotate(-10deg); }
-  75% { transform: rotate(10deg); }
-}
-
-.tip-text {
-  font-size: 12px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.3);
-}
-
-/* ============================================
-   RESPONSIVE
-   ============================================ */
-@media (max-width: 640px) {
-  .loading-box {
-    padding: 30px 24px 24px;
-    border-radius: 24px;
-    margin: 16px;
-  }
-  
-  .cute-coin-container {
-    width: 60px;
-    height: 60px;
-  }
-  
-  .cute-symbol {
-    font-size: 22px;
-  }
-  
-  .cute-coin-container.large {
-    width: 80px;
-    height: 80px;
-  }
-  
-  .cute-coin-container.large .cute-symbol {
-    font-size: 30px;
-  }
-  
-  .message-text {
-    font-size: 13px;
-  }
-  
-  .cute-progress-container {
-    max-width: 180px;
-  }
-  
-  .cute-tips {
-    padding: 4px 12px;
-  }
-  
-  .tip-text {
-    font-size: 11px;
-  }
+.progress-number.gold-text {
+  color: #facc15;
 }

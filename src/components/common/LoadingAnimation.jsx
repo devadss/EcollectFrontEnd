@@ -3,160 +3,100 @@ import React, { useEffect, useState } from 'react';
 import './LoadingAnimation.css';
 
 const LoadingAnimation = ({ 
-  message = 'Loading...',
-  type = 'coin', // 'coin', 'ring', 'pulse', 'glow', 'bounce', 'float'
+  message = 'Synchronizing Gateway Telemetry...',
   size = 'medium' // 'small', 'medium', 'large'
 }) => {
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = useState(15);
 
   useEffect(() => {
     const interval = setInterval(() => {
       setProgress(prev => {
-        if (prev >= 100) {
+        if (prev >= 98) {
           clearInterval(interval);
-          return 100;
+          return 98;
         }
-        return prev + 1;
+        const jump = Math.floor(Math.random() * 8) + 4;
+        return Math.min(prev + jump, 98);
       });
-    }, 30);
+    }, 120);
 
     return () => clearInterval(interval);
   }, []);
 
-  const renderLoader = () => {
-    switch(type) {
-      case 'bounce':
-        return (
-          <div className="cute-bounce-container">
-            <div className="bounce-emoji">🪙</div>
-            <div className="bounce-dots">
-              <span className="bounce-dot"></span>
-              <span className="bounce-dot"></span>
-              <span className="bounce-dot"></span>
-              <span className="bounce-dot"></span>
-              <span className="bounce-dot"></span>
-            </div>
-          </div>
-        );
-
-      case 'float':
-        return (
-          <div className="cute-float-container">
-            <div className="float-emoji">✨</div>
-            <div className="float-emoji float-2">⭐</div>
-            <div className="float-emoji float-3">💫</div>
-            <div className="float-emoji float-4">🌟</div>
-            <div className="float-emoji float-5">🌈</div>
-            <div className="float-center">₹</div>
-          </div>
-        );
-
-      case 'ring':
-        return (
-          <div className="cute-ring-container">
-            <div className="cute-ring">
-              <div className="ring-segment"></div>
-              <div className="ring-segment"></div>
-              <div className="ring-segment"></div>
-              <div className="ring-segment"></div>
-              <div className="ring-segment"></div>
-              <div className="ring-segment"></div>
-              <div className="ring-segment"></div>
-              <div className="ring-segment"></div>
-            </div>
-            <div className="ring-center">
-              <span className="cute-symbol">₹</span>
-            </div>
-          </div>
-        );
-      
-      case 'pulse':
-        return (
-          <div className="cute-pulse-container">
-            <div className="pulse-ring pulse-1"></div>
-            <div className="pulse-ring pulse-2"></div>
-            <div className="pulse-ring pulse-3"></div>
-            <div className="pulse-ring pulse-4"></div>
-            <div className="pulse-center">
-              <span className="cute-symbol">💰</span>
-            </div>
-          </div>
-        );
-      
-      case 'glow':
-        return (
-          <div className="cute-glow-container">
-            <div className="glow-core">
-              <span className="cute-symbol">🪙</span>
-            </div>
-            <div className="glow-orb glow-1">✨</div>
-            <div className="glow-orb glow-2">⭐</div>
-            <div className="glow-orb glow-3">💫</div>
-            <div className="glow-orb glow-4">🌟</div>
-            <div className="glow-orb glow-5">🌈</div>
-            <div className="glow-orb glow-6">🎀</div>
-          </div>
-        );
-      
-      case 'coin':
-      default:
-        return (
-          <div className={`cute-coin-container ${size}`}>
-            <div className="cute-coin">
-              <div className="coin-inner">
-                <span className="cute-symbol">₹</span>
-              </div>
-            </div>
-            <div className="cute-glow-ring ring-1"></div>
-            <div className="cute-glow-ring ring-2"></div>
-            <div className="cute-glow-ring ring-3"></div>
-            
-            {/* Cute sparkles around coin */}
-            <span className="cute-sparkle s1">✨</span>
-            <span className="cute-sparkle s2">⭐</span>
-            <span className="cute-sparkle s3">💫</span>
-            <span className="cute-sparkle s4">🌟</span>
-            <span className="cute-sparkle s5">🌈</span>
-          </div>
-        );
-    }
-  };
-
   return (
-    <div className="loading-overlay">
-      <div className="loading-backdrop"></div>
-      <div className="loading-box">
-        {renderLoader()}
+    <div className="fintech-loading-overlay">
+      <div className="fintech-loading-backdrop"></div>
+      
+      <div className="fintech-loading-box gold-theme">
         
-        {/* Cute Progress Bar */}
-        <div className="cute-progress-container">
-          <div className="cute-progress-bar">
-            <div 
-              className="cute-progress-fill" 
-              style={{ width: `${progress}%` }}
-            >
-              <span className="progress-emoji">🌟</span>
+        {/* Ambient Warm Gold Radiance */}
+        <div className="loading-gold-halo"></div>
+
+        {/* 3D Spinning Gold Coin Stage */}
+        <div className={`gold-coin-stage ${size}`}>
+          {/* Orbital golden rings */}
+          <div className="gold-orbit-ring ring-1"></div>
+          <div className="gold-orbit-ring ring-2"></div>
+          
+          {/* 3D Full-Rotating Gold Coin */}
+          <div className="gold-coin-3d-wrapper">
+            <div className="gold-coin-face gold-coin-front">
+              <img 
+                src="/gold-coin.jpg" 
+                alt="Gold Coin Front" 
+                className="gold-coin-img"
+              />
+              <div className="gold-coin-shine-sweep"></div>
+            </div>
+            <div className="gold-coin-face gold-coin-back">
+              <img 
+                src="/gold-coin.jpg" 
+                alt="Gold Coin Back" 
+                className="gold-coin-img"
+              />
+              <div className="gold-coin-shine-sweep"></div>
             </div>
           </div>
-          <span className="cute-progress-text">{progress}%</span>
+
+          {/* Golden Sparkle Particles */}
+          <div className="coin-sparkle sp-1">✦</div>
+          <div className="coin-sparkle sp-2">★</div>
+          <div className="coin-sparkle sp-3">✦</div>
         </div>
-        
-        {message && (
-          <div className="loading-message">
-            <span className="message-text">{message}</span>
-            <span className="cute-dots">
+
+        {/* Status Messaging */}
+        <div className="loading-text-stack">
+          <div className="loading-main-message">
+            <span className="message-title">{message}</span>
+            <span className="live-dots gold-dots">
               <span>.</span>
               <span>.</span>
               <span>.</span>
             </span>
           </div>
-        )}
-        
-        {/* Cute loading tips */}
-        <div className="cute-tips">
-          <span className="tip-emoji">💡</span>
-          <span className="tip-text">Almost there!</span>
+
+          <div className="loading-security-badge gold-badge">
+            <span className="security-dot gold-dot"></span>
+            <span>256-Bit Encrypted Secure Banking Vault</span>
+          </div>
         </div>
+
+        {/* Golden Progress Bar */}
+        <div className="fintech-progress-container">
+          <div className="fintech-progress-track gold-track">
+            <div 
+              className="fintech-progress-bar gold-bar" 
+              style={{ width: `${progress}%` }}
+            >
+              <div className="progress-light-sweep gold-sweep"></div>
+            </div>
+          </div>
+          <div className="progress-status-row font-mono">
+            <span className="progress-state gold-text">PROCESSING TRANSACTION</span>
+            <span className="progress-number gold-text">{progress}%</span>
+          </div>
+        </div>
+
       </div>
     </div>
   );

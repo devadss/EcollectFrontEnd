@@ -55,18 +55,8 @@ export const MENU_CONFIG = {
       { section: 'Main Menu', items: [
         { icon: '📊', label: 'Dashboard', path: '/dashboard' },
       ]},
-      { section: 'Branch Management', items: [
-        { icon: '🏪', label: 'Branch Merchants', path: '/merchants' },
-        { icon: '👤', label: 'Branch Agents', path: '/agents' },
-        { icon: '➕', label: 'Register Merchant', path: '/merchants/register' },
-      ]},
-      { section: 'Transactions', items: [
-        { icon: '💳', label: 'Payments', path: '/payments' },
-        { icon: '🏦', label: 'Settlements', path: '/settlements' },
-        { icon: '↩️', label: 'Refunds', path: '/refunds' },
-      ]},
-      { section: 'Reports', items: [
-        { icon: '📈', label: 'Branch Reports', path: '/reports' },
+      { section: 'Accounts', items: [
+        { icon: '🏦', label: 'Accounts', path: '/accounts' },
       ]},
     ]
   },

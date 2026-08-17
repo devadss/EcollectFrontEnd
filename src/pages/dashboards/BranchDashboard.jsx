@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bar, Line, Doughnut } from 'react-chartjs-2';
 import {
@@ -16,6 +16,7 @@ import {
 } from 'chart.js';
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
+import { dashboardApi } from '../../services/api';
 import './BranchDashboard.css';
 
 ChartJS.register(
@@ -31,36 +32,10 @@ ChartJS.register(
   Filler
 );
 
-// SVG Icons
-const Icons = {
-  Merchants: () => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  ),
-  Agents: () => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-      <path d="M17 10l2 2 4-4" />
-    </svg>
-  ),
-  Revenue: () => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="12" y1="1" x2="12" y2="23" />
-      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-    </svg>
-  ),
-  Transactions: () => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-    </svg>
-  ),
+// High-Precision SVG Icons
+const BranchIcons = {
   Building: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="4" y="2" width="16" height="20" rx="2" />
       <line x1="9" y1="6" x2="15" y2="6" />
       <line x1="9" y1="10" x2="15" y2="10" />
@@ -68,16 +43,32 @@ const Icons = {
       <line x1="9" y1="18" x2="12" y2="18" />
     </svg>
   ),
-  Location: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-      <circle cx="12" cy="10" r="3" />
+  Merchants: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </svg>
   ),
-  User: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  Agents: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
       <circle cx="12" cy="7" r="4" />
+      <path d="M17 10l2 2 4-4" />
+    </svg>
+  ),
+  Revenue: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8" cy="8" r="6" />
+      <path d="M18.09 10.37A6 6 0 1 1 10.34 18" />
+      <path d="M7 6h1v4" />
+      <path d="m16.71 13.88.7.71-2.82 2.82" />
+    </svg>
+  ),
+  Transactions: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
     </svg>
   ),
   Sparkles: () => (
@@ -85,82 +76,189 @@ const Icons = {
       <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3z" />
     </svg>
   ),
-  Calendar: () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-      <line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" />
-      <line x1="3" y1="10" x2="21" y2="10" />
+  ArrowUp: () => (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="18 15 12 9 6 15" />
     </svg>
   ),
-  TrendingUp: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
-      <polyline points="17 6 23 6 23 12" />
+  Download: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
     </svg>
   ),
+  UserCheck: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <polyline points="16 11 18 13 22 9" />
+    </svg>
+  ),
+  Location: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>
+  ),
+  Shield: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  ),
+  Refresh: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 4 23 10 17 10" />
+      <polyline points="1 20 1 14 7 14" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+    </svg>
+  )
 };
 
 const BranchDashboard = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [activeRange, setActiveRange] = useState('Week');
+  const [chartMode, setChartMode] = useState('bar');
+
+  const user = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
+    } catch {
+      return {};
+    }
+  })();
+
+  const rawRole = localStorage.getItem('user_role') || localStorage.getItem('role') || 'branchadmin';
+  const branchId = user?.branchId || localStorage.getItem('branchId') || user?.id || 1;
+
+  const [profile, setProfile] = useState({
+    name: user?.branchName || user?.branch || 'Branch Operations Hub',
+    code: 'BR-01',
+    city: '',
+    state: '',
+  });
+
+  const [stats, setStats] = useState({
+    totalRevenue: 0,
+    todayVolume: 0,
+    totalMerchants: 0,
+    totalAgents: 0,
+    totalTransactions: 0,
+    revenueChange: '0%',
+    merchantChange: '0%',
+    agentChange: '0%'
+  });
+
+  const [topAgents, setTopAgents] = useState([]);
+  const [recentTxns, setRecentTxns] = useState([]);
+  const [revenueDataLabels, setRevenueDataLabels] = useState([]);
+  const [revenueDataValues, setRevenueDataValues] = useState([]);
+  const [paymentBreakdown, setPaymentBreakdown] = useState([]);
+
+  const fetchBranchTelemetry = useCallback(async () => {
+    if (!branchId) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res = await dashboardApi.getBranchDashboard(branchId);
+      const data = res?.data || {};
+
+      if (data.profile) {
+        setProfile({
+          name: data.profile.name || user?.branchName || 'Branch Operations Hub',
+          code: data.profile.code || `BR-${branchId}`,
+          city: data.profile.city || '',
+          state: data.profile.state || '',
+        });
+      }
+
+      if (data.stats) {
+        setStats({
+          totalRevenue: Number(data.stats.totalRevenue) || 0,
+          todayVolume: Number(data.stats.todayVolume) || 0,
+          totalMerchants: Number(data.stats.totalMerchants) || 0,
+          totalAgents: Number(data.stats.totalAgents) || 0,
+          totalTransactions: Number(data.stats.totalTransactions) || 0,
+          revenueChange: data.stats.revenueChange || '0%',
+          merchantChange: data.stats.merchantChange || '0%',
+          agentChange: data.stats.agentChange || '0%'
+        });
+      }
+
+      if (Array.isArray(data.agents)) {
+        setTopAgents(data.agents.map(ag => ({
+          name: ag.name || 'Field Representative',
+          code: ag.code || `AG-${ag.id}`,
+          collections: Number(ag.collections) >= 100000 
+            ? `₹${(Number(ag.collections) / 100000).toFixed(2)}L` 
+            : `₹${Number(ag.collections || 0).toLocaleString('en-IN')}`,
+          yieldRate: '100%',
+          txns: ag.txns || 0,
+          status: ag.isActive ? 'Active' : 'Inactive'
+        })));
+      } else {
+        setTopAgents([]);
+      }
+
+      if (Array.isArray(data.recentTransactions)) {
+        setRecentTxns(data.recentTransactions.map(tx => ({
+          id: tx.id,
+          merchant: tx.merchant || 'Merchant',
+          customer: tx.customer || 'Customer',
+          amount: Number(tx.amount) || 0,
+          mode: tx.mode || 'UPI',
+          status: tx.status || 'Pending',
+          time: tx.time || tx.timeAgo || 'Recently'
+        })));
+      } else {
+        setRecentTxns([]);
+      }
+
+      if (data.volumeChart && Array.isArray(data.volumeChart.labels)) {
+        setRevenueDataLabels(data.volumeChart.labels);
+        setRevenueDataValues(data.volumeChart.data || []);
+      }
+
+      if (Array.isArray(data.paymentMethods)) {
+        setPaymentBreakdown(data.paymentMethods.map(m => ({
+          label: m.method || m.label || 'Unknown',
+          value: Number(m.value) || Number(m.count) || 0
+        })));
+      } else {
+        setPaymentBreakdown([]);
+      }
+
+    } catch (err) {
+      console.warn('⚠️ Telemetry error from backend table query for branch:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [branchId, user?.branchName]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 800);
-    return () => clearTimeout(timer);
-  }, []);
+    fetchBranchTelemetry();
+  }, [fetchBranchTelemetry]);
 
-  const stats = [
-    { 
-      label: 'Branch Merchants', 
-      value: '89', 
-      icon: <Icons.Merchants />,
-      change: '+12.5%',
-      color: '#8b5cf6',
-      bgColor: 'rgba(139, 92, 246, 0.12)',
-    },
-    { 
-      label: 'Branch Agents', 
-      value: '34', 
-      icon: <Icons.Agents />,
-      change: '+8.3%',
-      color: '#06b6d4',
-      bgColor: 'rgba(6, 182, 212, 0.12)',
-    },
-    { 
-      label: 'Branch Revenue', 
-      value: '₹18.2L', 
-      icon: <Icons.Revenue />,
-      change: '+18.7%',
-      color: '#10b981',
-      bgColor: 'rgba(16, 185, 129, 0.12)',
-    },
-    { 
-      label: 'Transactions', 
-      value: '567', 
-      icon: <Icons.Transactions />,
-      change: '+5.2%',
-      color: '#f59e0b',
-      bgColor: 'rgba(245, 158, 11, 0.12)',
-    },
-  ];
-
-  // Revenue Bar Chart Data
+  // Revenue Chart Data
   const revenueData = {
-    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    labels: revenueDataLabels.length > 0 ? revenueDataLabels : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     datasets: [{
-      label: 'Revenue (₹)',
-      data: [32000, 45000, 28000, 56000, 41000, 68000, 49000],
-      backgroundColor: ['#8b5cf6', '#8b5cf6', '#8b5cf6', '#8b5cf6', '#8b5cf6', '#8b5cf6', '#8b5cf6'].map((c, i) => 
-        i % 2 === 0 ? c + 'CC' : c + '88'
-      ),
-      borderColor: '#8b5cf6',
-      borderWidth: 2,
+      label: 'Settlement (₹)',
+      data: revenueDataValues.length > 0 ? revenueDataValues : [0, 0, 0, 0, 0, 0, 0],
+      backgroundColor: 'rgba(99, 102, 241, 0.85)',
+      hoverBackgroundColor: 'var(--accent, #6366f1)',
       borderRadius: 6,
       barPercentage: 0.55,
+      borderColor: '#6366f1',
+      fill: chartMode === 'line',
+      tension: 0.4,
+      pointBackgroundColor: '#6366f1',
+      pointBorderColor: 'var(--bgCard, #111827)',
+      pointBorderWidth: 2,
+      pointRadius: chartMode === 'line' ? 5 : 0,
     }]
   };
 
@@ -170,15 +268,13 @@ const BranchDashboard = () => {
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: 'rgba(26, 26, 46, 0.95)',
+        backgroundColor: 'rgba(9, 13, 22, 0.95)',
         titleColor: '#ffffff',
         bodyColor: 'rgba(255,255,255,0.7)',
         cornerRadius: 10,
         padding: 12,
-        borderColor: 'rgba(139, 92, 246, 0.2)',
-        borderWidth: 1,
         callbacks: {
-          label: (context) => ` Revenue: ₹ ${context.parsed.y.toLocaleString()}`
+          label: (context) => ` Volume: ₹ ${(context.parsed.y || 0).toLocaleString('en-IN')}`
         }
       }
     },
@@ -186,276 +282,320 @@ const BranchDashboard = () => {
       y: {
         beginAtZero: true,
         ticks: {
-          color: 'rgba(255,255,255,0.25)',
-          font: { size: 10, weight: '500' },
-          callback: (value) => value >= 1000 ? `₹${value/1000}k` : `₹${value}`
+          color: '#64748b',
+          font: { size: 11, weight: '600' },
+          callback: (v) => v >= 100000 ? `₹${(v / 100000).toFixed(1)}L` : (v >= 1000 ? `₹${(v / 1000).toFixed(0)}k` : `₹${v}`)
         },
         grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false }
       },
       x: {
-        ticks: { color: 'rgba(255,255,255,0.25)', font: { size: 10, weight: '500' } },
+        ticks: { color: '#64748b', font: { size: 11, weight: '600' } },
         grid: { display: false }
       }
     }
   };
 
-  // Transaction Volume Line Chart
-  const volumeData = {
-    labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
-    datasets: [{
-      label: 'Transactions',
-      data: [120, 145, 98, 167],
-      borderColor: '#06b6d4',
-      backgroundColor: (context) => {
-        const chart = context.chart;
-        const { ctx, chartArea } = chart;
-        if (!chartArea) return 'rgba(0, 0, 0, 0)';
-        const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-        gradient.addColorStop(0, 'rgba(6, 182, 212, 0.30)');
-        gradient.addColorStop(0.6, 'rgba(6, 182, 212, 0.08)');
-        gradient.addColorStop(1, 'rgba(6, 182, 212, 0.0)');
-        return gradient;
-      },
-      tension: 0.4,
-      fill: true,
-      pointBackgroundColor: '#06b6d4',
-      pointBorderColor: '#0a0a14',
-      pointBorderWidth: 2,
-      pointRadius: 5,
-      pointHoverRadius: 8,
-      borderWidth: 2.5,
-    }]
-  };
-
-  const volumeOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        labels: { 
-          color: 'rgba(255,255,255,0.4)',
-          font: { size: 11, weight: '500' },
-          usePointStyle: true,
-          pointStyle: 'circle',
-        }
-      },
-      tooltip: {
-        backgroundColor: 'rgba(26, 26, 46, 0.95)',
-        titleColor: '#ffffff',
-        bodyColor: 'rgba(255,255,255,0.7)',
-        cornerRadius: 10,
-        padding: 12,
-        borderColor: 'rgba(6, 182, 212, 0.2)',
-        borderWidth: 1,
-      }
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        ticks: { color: 'rgba(255,255,255,0.25)', font: { size: 10, weight: '500' } },
-        grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false }
-      },
-      x: {
-        ticks: { color: 'rgba(255,255,255,0.25)', font: { size: 10, weight: '500' } },
-        grid: { display: false }
-      }
-    }
-  };
-
-  // Payment Methods Doughnut
-  const paymentData = {
-    labels: ['UPI', 'Credit Card', 'Net Banking', 'Wallet', 'Debit Card'],
-    datasets: [{
-      data: [35, 25, 20, 12, 8],
-      backgroundColor: ['#8b5cf6', '#06b6d4', '#6366f1', '#10b981', '#f59e0b'],
-      borderColor: '#0a0a14',
-      borderWidth: 3,
-      hoverOffset: 10,
-    }]
-  };
-
-  const paymentOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    cutout: '70%',
-    plugins: {
-      legend: {
-        position: 'bottom',
-        labels: {
-          color: 'rgba(255,255,255,0.4)',
-          padding: 14,
-          usePointStyle: true,
-          pointStyle: 'circle',
-          font: { size: 11, weight: '500' },
-          boxWidth: 8,
-          boxHeight: 8,
-        }
-      },
-      tooltip: {
-        backgroundColor: 'rgba(26, 26, 46, 0.95)',
-        titleColor: '#ffffff',
-        bodyColor: 'rgba(255,255,255,0.7)',
-        cornerRadius: 10,
-        padding: 12,
-        borderColor: 'rgba(139, 92, 246, 0.2)',
-        borderWidth: 1,
-        callbacks: {
-          label: (context) => ` ${context.label}: ${context.parsed}%`
-        }
-      }
-    }
-  };
-
-  if (loading) {
-    return (
-      <DashboardLayout pageTitle="Branch Dashboard">
-        <LoadingAnimation message="Loading branch dashboard" type="coin" size="medium" />
-      </DashboardLayout>
-    );
-  }
+  const branchName = profile.name || 'Branch Operations Hub';
 
   return (
-    <DashboardLayout pageTitle="Branch Dashboard">
-      <div className="branch-dashboard-container">
+    <DashboardLayout pageTitle={`Branch • ${branchName}`} role={rawRole}>
+      {loading && <LoadingAnimation message="Compiling Branch Telemetry Matrix..." />}
+      
+      <div className="branch-dash-container">
         
-        {/* Header */}
-        <div className="branch-dashboard-header">
-          <div>
-            <div className="branch-header-badge">
-              <Icons.Sparkles />
-              <span>Branch Control Panel</span>
+        {/* Top Hero Header */}
+        <div className="branch-hero-header">
+          <div className="branch-hero-titles">
+            <div className="branch-badge-tag">
+              <span className="pulse-dot"></span>
+              <BranchIcons.Sparkles />
+              <span>Regional Operations Console</span>
             </div>
-            <h1 className="branch-dashboard-title">
-              Branch <span className="branch-title-gradient">Admin</span> Dashboard
+            <h1 className="branch-page-title">
+              <strong className="branch-bold-top-name">{branchName}</strong>
+              <span className="gradient-text"> Operations Hub</span>
             </h1>
-            <p className="branch-dashboard-subtitle">Manage your branch operations, agents, and revenue</p>
+            <p className="branch-page-subtitle">
+              Manage field collection routes, agent activities, and localized settlement velocity
+            </p>
           </div>
-          <div className="branch-header-date">
-            <Icons.Calendar />
-            <span>{new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+
+          <div className="branch-header-actions">
+            <button className="branch-export-btn" onClick={fetchBranchTelemetry} title="Refresh Telemetry">
+              <BranchIcons.Refresh />
+              <span>Refresh</span>
+            </button>
+            <button className="branch-export-btn" onClick={() => window.print()}>
+              <BranchIcons.Download />
+              <span>Export Dossier</span>
+            </button>
+            <button className="branch-add-btn" onClick={() => navigate('/accounts')}>
+              <BranchIcons.Building />
+              <span>Branch Accounts</span>
+            </button>
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="branch-stats-grid">
-          {stats.map((stat, i) => (
-            <div key={i} className="branch-stat-card">
-              <div className="branch-stat-glow" style={{ background: `radial-gradient(circle at 70% 30%, ${stat.color}20 0%, transparent 70%)` }}></div>
-              <div className="branch-stat-top">
-                <div className="branch-stat-icon" style={{ background: stat.bgColor, color: stat.color }}>
-                  {stat.icon}
-                </div>
-                <div className="branch-stat-change" style={{ background: stat.color + '15', color: stat.color }}>
-                  ↑ {stat.change}
-                </div>
-              </div>
-              <div className="branch-stat-value">{stat.value}</div>
-              <div className="branch-stat-label">{stat.label}</div>
+        {/* Branch Metadata Bar */}
+        <div className="branch-metadata-strip">
+          <div className="meta-strip-item">
+            <BranchIcons.Building />
+            <span>Node: <strong className="font-mono">{profile.code}</strong></span>
+          </div>
+          <div className="meta-strip-sep"></div>
+          <div className="meta-strip-item">
+            <BranchIcons.Location />
+            <span>Location: <strong>{profile.city ? `${profile.city}, ${profile.state}` : 'Main Circle'}</strong></span>
+          </div>
+          <div className="meta-strip-sep"></div>
+          <div className="meta-strip-item">
+            <BranchIcons.Shield />
+            <span>Branch Console: <strong>{branchName}</strong></span>
+          </div>
+          <div className="meta-strip-sep"></div>
+          <div className="meta-strip-item is-growth">
+            <BranchIcons.ArrowUp />
+            <span className="font-mono">{stats.revenueChange || '0%'} Velocity</span>
+          </div>
+        </div>
+
+        {/* 4 Primary KPI Stats Grid */}
+        <div className="branch-kpi-grid">
+          
+          <div className="branch-kpi-card" onClick={() => navigate('/accounts')} style={{ cursor: 'pointer' }}>
+            <div className="branch-kpi-glow" style={{ background: 'radial-gradient(circle, rgba(16, 185, 129, 0.25) 0%, transparent 70%)' }}></div>
+            <div className="branch-kpi-header">
+              <span className="branch-kpi-label">Disbursed Volume</span>
+              <div className="branch-kpi-icon is-green"><BranchIcons.Revenue /></div>
             </div>
-          ))}
+            <div className="branch-kpi-value font-mono text-green">₹{(stats.totalRevenue || 0).toLocaleString('en-IN')}</div>
+            <div className="branch-kpi-footer">
+              <span className="merchant-trend-tag is-up"><BranchIcons.ArrowUp /> Today: ₹{(stats.todayVolume || 0).toLocaleString('en-IN')}</span>
+            </div>
+          </div>
+
+          <div className="branch-kpi-card" onClick={() => navigate('/accounts')} style={{ cursor: 'pointer' }}>
+            <div className="branch-kpi-glow" style={{ background: 'radial-gradient(circle, rgba(99, 102, 241, 0.25) 0%, transparent 70%)' }}></div>
+            <div className="branch-kpi-header">
+              <span className="branch-kpi-label">Branch Accounts</span>
+              <div className="branch-kpi-icon is-indigo"><BranchIcons.Building /></div>
+            </div>
+            <div className="branch-kpi-value font-mono">{stats.totalMerchants || stats.totalAccounts || 0}</div>
+            <div className="branch-kpi-footer">
+              <span className="merchant-trend-tag is-up"><BranchIcons.ArrowUp /> Active Customer Accounts</span>
+            </div>
+          </div>
+
+          <div className="branch-kpi-card" onClick={() => navigate('/accounts')} style={{ cursor: 'pointer' }}>
+            <div className="branch-kpi-glow" style={{ background: 'radial-gradient(circle, rgba(6, 182, 212, 0.25) 0%, transparent 70%)' }}></div>
+            <div className="branch-kpi-header">
+              <span className="branch-kpi-label">Collection Accounts</span>
+              <div className="branch-kpi-icon is-cyan"><BranchIcons.Revenue /></div>
+            </div>
+            <div className="branch-kpi-value font-mono">{stats.totalAgents || 0}</div>
+            <div className="branch-kpi-footer">
+              <span className="merchant-trend-tag is-up"><BranchIcons.ArrowUp /> Active Portfolios</span>
+            </div>
+          </div>
+
+          <div className="branch-kpi-card" onClick={() => navigate('/transactions')} style={{ cursor: 'pointer' }}>
+            <div className="branch-kpi-glow" style={{ background: 'radial-gradient(circle, rgba(245, 158, 11, 0.25) 0%, transparent 70%)' }}></div>
+            <div className="branch-kpi-header">
+              <span className="branch-kpi-label">Cleared Transactions</span>
+              <div className="branch-kpi-icon is-amber"><BranchIcons.Transactions /></div>
+            </div>
+            <div className="branch-kpi-value font-mono">{(stats.totalTransactions || 0).toLocaleString('en-IN')}</div>
+            <div className="branch-kpi-footer">
+              <span className="merchant-trend-tag is-up"><BranchIcons.ArrowUp /> Total Branch Transactions</span>
+            </div>
+          </div>
+
         </div>
 
-        {/* Branch Info */}
-        <div className="branch-info-bar">
-          <div className="branch-info-item">
-            <Icons.Building />
-            <span>Mumbai Central Branch</span>
-          </div>
-          <div className="branch-info-divider"></div>
-          <div className="branch-info-item">
-            <Icons.Location />
-            <span>Mumbai, Maharashtra</span>
-          </div>
-          <div className="branch-info-divider"></div>
-          <div className="branch-info-item">
-            <Icons.User />
-            <span>Manager: Rajesh Kumar</span>
-          </div>
-          <div className="branch-info-divider"></div>
-          <div className="branch-info-item growth">
-            <Icons.TrendingUp />
-            <span>↑ 12.5% Growth</span>
-          </div>
-        </div>
-
-        {/* Charts Row 1 */}
+        {/* Row 1: Weekly Revenue Velocity (8 cols) & Channel Ratio (4 cols) */}
         <div className="branch-charts-row">
-          <div className="branch-chart-card">
-            <div className="branch-chart-header">
+          
+          <div className="branch-chart-panel is-col-8">
+            <div className="panel-header-zone">
               <div>
-                <div className="branch-chart-title">Revenue <span className="branch-title-gradient">Overview</span></div>
-                <div className="branch-chart-subtitle">Weekly revenue breakdown</div>
+                <h3 className="panel-title">Weekly Clearance Velocity</h3>
+                <span className="panel-subtitle">Localized daily transaction volume across 7 active cycles</span>
               </div>
-              <div className="branch-chart-range">
-                {['Week', 'Month', 'Year'].map((range) => (
+              
+              <div className="panel-ctrl-group">
+                <div className="mode-toggle-group">
                   <button 
-                    key={range}
-                    className={`branch-range-btn ${activeRange === range ? 'active' : ''}`}
-                    onClick={() => setActiveRange(range)}
+                    className={`mode-btn ${chartMode === 'bar' ? 'is-active' : ''}`}
+                    onClick={() => setChartMode('bar')}
                   >
-                    {range}
+                    Bars
                   </button>
-                ))}
+                  <button 
+                    className={`mode-btn ${chartMode === 'line' ? 'is-active' : ''}`}
+                    onClick={() => setChartMode('line')}
+                  >
+                    Area
+                  </button>
+                </div>
+                <span className="panel-metric-chip font-mono">Today: ₹{(stats.todayVolume || 0).toLocaleString('en-IN')}</span>
               </div>
             </div>
-            <div className="branch-chart-wrapper">
-              <Bar data={revenueData} options={revenueOptions} />
+
+            <div className="panel-canvas-box">
+              {chartMode === 'bar' ? (
+                <Bar data={revenueData} options={revenueOptions} />
+              ) : (
+                <Line data={revenueData} options={revenueOptions} />
+              )}
             </div>
           </div>
 
-          <div className="branch-chart-card">
-            <div className="branch-chart-header">
+          <div className="branch-chart-panel is-col-4">
+            <div className="panel-header-zone">
               <div>
-                <div className="branch-chart-title">Transaction <span className="branch-title-gradient">Volume</span></div>
-                <div className="branch-chart-subtitle">Monthly processing trajectory</div>
+                <h3 className="panel-title">Payment Channel Split</h3>
+                <span className="panel-subtitle">Branch transaction rails</span>
               </div>
             </div>
-            <div className="branch-chart-wrapper">
-              <Line data={volumeData} options={volumeOptions} />
+            
+            <div className="panel-canvas-box doughnut-wrap">
+              <Doughnut
+                data={{
+                  labels: paymentBreakdown.length > 0 ? paymentBreakdown.map(p => p.label) : ['UPI'],
+                  datasets: [{
+                    data: paymentBreakdown.length > 0 ? paymentBreakdown.map(p => p.value) : [100],
+                    backgroundColor: ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ec4899'],
+                    borderColor: 'var(--bgCard, #111827)',
+                    borderWidth: 3,
+                    hoverOffset: 8,
+                  }]
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  cutout: '74%',
+                  plugins: {
+                    legend: {
+                      position: 'bottom',
+                      labels: {
+                        color: '#94a3b8',
+                        padding: 10,
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        font: { size: 11, weight: '600' }
+                      }
+                    }
+                  }
+                }}
+              />
+              <div className="doughnut-center-info">
+                <span className="center-bold font-mono">{stats.totalTransactions || 0}</span>
+                <span className="center-tag">Transactions</span>
+              </div>
             </div>
           </div>
+
         </div>
 
-        {/* Charts Row 2 */}
+        {/* Row 2: Top Branch Agents (6 cols) & Real-Time Transactions Feed (6 cols) */}
         <div className="branch-charts-row">
-          <div className="branch-chart-card">
-            <div className="branch-chart-header">
+          
+          {/* Top Collection Accounts */}
+          <div className="branch-chart-panel is-col-6">
+            <div className="panel-header-zone">
               <div>
-                <div className="branch-chart-title">Payment <span className="branch-title-gradient">Methods</span></div>
-                <div className="branch-chart-subtitle">Channel distribution ratio</div>
+                <h3 className="panel-title">Top Collection Portfolios</h3>
+                <span className="panel-subtitle">Branch customer account activity</span>
               </div>
+              <button className="view-all-link-btn" onClick={() => navigate('/accounts')}>
+                View Accounts →
+              </button>
             </div>
-            <div className="branch-chart-wrapper" style={{ height: '220px' }}>
-              <Doughnut data={paymentData} options={paymentOptions} />
+
+            <div className="branch-leaderboard-table-wrap">
+              <table className="branch-mini-table">
+                <thead>
+                  <tr>
+                    <th>Representative</th>
+                    <th>Volume</th>
+                    <th>Status</th>
+                    <th style={{ textAlign: 'right' }}>Txns</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topAgents.length === 0 ? (
+                    <tr>
+                      <td colSpan="4" style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>
+                        No agents assigned to this branch yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    topAgents.map((ag, i) => (
+                      <tr key={i} className="mini-table-row">
+                        <td>
+                          <div className="agent-cell-stack">
+                            <span className="agent-name font-bold">{ag.name}</span>
+                            <span className="agent-code font-mono text-muted">{ag.code}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <span className="font-mono text-green font-bold">{ag.collections}</span>
+                        </td>
+                        <td>
+                          <span className="yield-badge font-mono">{ag.status}</span>
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <span className="font-mono font-bold">{ag.txns}</span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
 
-          <div className="branch-chart-card">
-            <div className="branch-chart-header">
+          {/* Recent Branch Activity Feed */}
+          <div className="branch-chart-panel is-col-6">
+            <div className="panel-header-zone">
               <div>
-                <div className="branch-chart-title">Quick <span className="branch-title-gradient">Stats</span></div>
-                <div className="branch-chart-subtitle">At a glance metrics</div>
+                <h3 className="panel-title">Live Settlement Stream</h3>
+                <span className="panel-subtitle">Real-time branch transaction feed</span>
               </div>
+              <button className="view-all-link-btn" onClick={() => navigate('/transactions')}>
+                Audit Ledger →
+              </button>
             </div>
-            <div className="branch-quick-stats">
-              <div className="branch-quick-stat">
-                <span className="branch-quick-stat-value">₹18.2L</span>
-                <span className="branch-quick-stat-label">Total Revenue</span>
-              </div>
-              <div className="branch-quick-stat">
-                <span className="branch-quick-stat-value">567</span>
-                <span className="branch-quick-stat-label">Transactions</span>
-              </div>
-              <div className="branch-quick-stat">
-                <span className="branch-quick-stat-value">89</span>
-                <span className="branch-quick-stat-label">Merchants</span>
-              </div>
-              <div className="branch-quick-stat">
-                <span className="branch-quick-stat-value">34</span>
-                <span className="branch-quick-stat-label">Agents</span>
-              </div>
+
+            <div className="branch-activity-feed-wrap">
+              {recentTxns.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '36px 16px', color: '#94a3b8' }}>
+                  No recent transaction records for this branch yet.
+                </div>
+              ) : (
+                recentTxns.map((tx, idx) => (
+                  <div key={idx} className="feed-item-card">
+                    <div className="feed-left">
+                      <span className="feed-id-chip font-mono">#{tx.id}</span>
+                      <div className="feed-merchant-stack">
+                        <span className="merchant-name font-bold">{tx.merchant}</span>
+                        <span className="feed-time font-mono text-muted">{tx.time} • {tx.mode}</span>
+                      </div>
+                    </div>
+
+                    <div className="feed-right">
+                      <span className="feed-amount font-mono font-bold text-green">₹{(tx.amount || 0).toLocaleString('en-IN')}</span>
+                      <span className={`feed-status-pill ${tx.status === 'Success' || tx.status === 'SUCCESS' ? 'is-success' : 'is-pending'}`}>
+                        <span className="status-dot"></span>
+                        <span>{tx.status}</span>
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
+
         </div>
 
       </div>

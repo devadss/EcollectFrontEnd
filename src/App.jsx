@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
+import { DialogProvider } from './context/DialogContext';
+import { NotificationProvider } from './context/NotificationContext';
 import './App.css';
 import LoadingAnimation from './components/common/LoadingAnimation';
 
@@ -10,6 +12,9 @@ import MerchantDashboard from './pages/dashboards/MerchantDashboard';
 import BranchDashboard from './pages/dashboards/BranchDashboard';
 import AgentDashboard from './pages/dashboards/AgentDashboard';
 import CustomerDashboard from './pages/dashboards/CustomerDashboard';
+
+// NOTIFICATIONS
+import Notifications from './pages/notifications/Notifications';
 
 // AUTH
 import Login from './pages/auth/Login';
@@ -32,6 +37,12 @@ import AgentDetails from './pages/agents/AgentDetails';
 import Branches from './pages/branches/Branches';
 import AddBranch from './pages/branches/AddBranch';
 import BranchDetails from './pages/branches/BranchDetails';
+
+// ACCOUNT PAGES
+import Accounts from './pages/accounts/Accounts';
+
+// CUSTOMER PAGES
+import Customers from './pages/customers/Customers';
 
 // TRANSACTION PAGES
 import TransactionHistory from './pages/transactions/TransactionHistory';
@@ -120,7 +131,9 @@ function App() {
   return (
     <ThemeProvider>
       <Router>
-        <Routes>
+        <DialogProvider>
+          <NotificationProvider>
+            <Routes>
           {/* ============================================================
               AUTH ROUTES
               ============================================================ */}
@@ -285,6 +298,38 @@ function App() {
           />
 
           {/* ============================================================
+              ACCOUNT ROUTES
+              ============================================================ */}
+          <Route 
+            path="/accounts" 
+            element={
+              <ProtectedRoute>
+                <Accounts />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/accounts/:id" 
+            element={
+              <ProtectedRoute>
+                <Accounts />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* ============================================================
+              CUSTOMER & RD ROUTES
+              ============================================================ */}
+          <Route 
+            path="/customers" 
+            element={
+              <ProtectedRoute>
+                <Customers />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* ============================================================
               TRANSACTIONS ROUTES
               ============================================================ */}
           <Route 
@@ -353,7 +398,7 @@ function App() {
           />
 
           {/* ============================================================
-              SETTINGS ROUTE
+              SETTINGS & NOTIFICATIONS ROUTE
               ============================================================ */}
           <Route 
             path="/settings" 
@@ -363,12 +408,22 @@ function App() {
               </ProtectedRoute>
             } 
           />
+          <Route 
+            path="/notifications" 
+            element={
+              <ProtectedRoute>
+                <Notifications />
+              </ProtectedRoute>
+            } 
+          />
 
           {/* ============================================================
               FALLBACK - 404
               ============================================================ */}
           <Route path="*" element={<Navigate to="/dashboard" />} />
         </Routes>
+        </NotificationProvider>
+        </DialogProvider>
       </Router>
     </ThemeProvider>
   );

@@ -41,41 +41,30 @@ api.interceptors.request.use(
 );
 
 // ============================================================
-// RESPONSE INTERCEPTOR - Handle 401 Errors
+// RESPONSE INTERCEPTOR - Handle Errors Gracefully
 // ============================================================
 api.interceptors.response.use(
   (response) => {
-    console.log('📡 Response Interceptor:', {
-      url: response.config.url,
-      status: response.status,
-      hasData: !!response.data
-    });
     return response;
   },
   (error) => {
-    console.error('❌ Response Interceptor Error:', {
+    console.warn('📡 API Response Error:', {
       url: error.config?.url,
       status: error.response?.status,
       message: error.message,
       data: error.response?.data
     });
     
+    // Only redirect if explicitly validating an expired token
     if (error.response && error.response.status === 401) {
-      console.warn('⚠️ 401 Unauthorized - Clearing localStorage and redirecting to login');
+      console.warn('⚠️ 401 Unauthorized received for:', error.config?.url);
       
-      localStorage.removeItem('auth_token');
-      localStorage.removeItem('token');
-      localStorage.removeItem('auth_user');
-      localStorage.removeItem('user');
-      localStorage.removeItem('userRole');
-      localStorage.removeItem('auth_permissions');
-      localStorage.removeItem('permissions');
-      localStorage.removeItem('auth_menus');
-      localStorage.removeItem('menus');
-      
-      if (window.location.pathname !== '/login') {
-        console.log('🔄 Redirecting to login...');
-        window.location.href = '/login';
+      if (error.config?.url?.includes('/Auth/validate-token')) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('token');
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
       }
     }
     
@@ -87,29 +76,39 @@ api.interceptors.response.use(
 // DASHBOARD API
 // ============================================================
 export const dashboardApi = {
-  getStats: () => {
-    console.log('📡 dashboardApi.getStats called');
-    return api.get('/Dashboard/stats');
+  getStats: (params) => {
+    console.log('📡 dashboardApi.getStats called with params:', params);
+    return api.get('/Dashboard/stats', { params: typeof params === 'object' ? params : undefined });
   },
-  getRevenueChart: (range = 'Week') => {
-    console.log('📡 dashboardApi.getRevenueChart called with range:', range);
-    return api.get(`/Dashboard/revenue-chart?range=${range}`);
+  getMerchantDashboard: (merchantId) => {
+    console.log('📡 dashboardApi.getMerchantDashboard called for merchantId:', merchantId);
+    return api.get(`/Dashboard/merchant/${merchantId}`);
   },
-  getPaymentMethods: () => {
-    console.log('📡 dashboardApi.getPaymentMethods called');
-    return api.get('/Dashboard/payment-methods');
+  getBranchDashboard: (branchId) => {
+    console.log('📡 dashboardApi.getBranchDashboard called for branchId:', branchId);
+    return api.get(`/Dashboard/branch/${branchId}`);
   },
-  getTransactionVolume: () => {
-    console.log('📡 dashboardApi.getTransactionVolume called');
-    return api.get('/Dashboard/transaction-volume');
+  getRevenueChart: (rangeOrParams = 'Week') => {
+    const params = typeof rangeOrParams === 'object' ? rangeOrParams : { range: rangeOrParams };
+    console.log('📡 dashboardApi.getRevenueChart called with params:', params);
+    return api.get('/Dashboard/revenue-chart', { params });
   },
-  getStatusDistribution: () => {
-    console.log('📡 dashboardApi.getStatusDistribution called');
-    return api.get('/Dashboard/status-distribution');
+  getPaymentMethods: (params) => {
+    console.log('📡 dashboardApi.getPaymentMethods called with params:', params);
+    return api.get('/Dashboard/payment-methods', { params: typeof params === 'object' ? params : undefined });
   },
-  getRecentTransactions: (count = 5) => {
-    console.log('📡 dashboardApi.getRecentTransactions called with count:', count);
-    return api.get(`/Dashboard/recent-transactions?count=${count}`);
+  getTransactionVolume: (params) => {
+    console.log('📡 dashboardApi.getTransactionVolume called with params:', params);
+    return api.get('/Dashboard/transaction-volume', { params: typeof params === 'object' ? params : undefined });
+  },
+  getStatusDistribution: (params) => {
+    console.log('📡 dashboardApi.getStatusDistribution called with params:', params);
+    return api.get('/Dashboard/status-distribution', { params: typeof params === 'object' ? params : undefined });
+  },
+  getRecentTransactions: (countOrParams = 5) => {
+    const params = typeof countOrParams === 'object' ? countOrParams : { count: countOrParams };
+    console.log('📡 dashboardApi.getRecentTransactions called with params:', params);
+    return api.get('/Dashboard/recent-transactions', { params });
   },
 };
 
@@ -118,6 +117,11 @@ export const dashboardApi = {
 // ============================================================
 export const transactionApi = {
   // Get all transactions with filters
+  getAll: (params) => {
+    console.log('📡 transactionApi.getAll called with params:', params);
+    return api.get('/Transaction', { params });
+  },
+
   getTransactions: (params) => {
     console.log('📡 transactionApi.getTransactions called with params:', params);
     return api.get('/Transaction', { params });
@@ -126,13 +130,19 @@ export const transactionApi = {
   // Get transaction history (alias for getTransactions)
   getHistory: (params) => {
     console.log('📡 transactionApi.getHistory called');
-    return api.get('/Transaction/history', { params });
+    return api.get('/Transaction/history', { params })
+      .catch(() => api.get('/Transaction', { params }));
   },
   
   // Get single transaction by ID
   getById: (id) => {
     console.log('📡 transactionApi.getById called for id:', id);
     return api.get(`/Transaction/${id}`);
+  },
+
+  getChart: (params) => {
+    console.log('📡 transactionApi.getChart called');
+    return api.get('/Transaction/chart', { params });
   },
   
   // Get transaction summary
@@ -254,17 +264,21 @@ export const agentApi = {
     console.log('📡 agentApi.delete called for id:', id);
     return api.delete(`/Agent/${id}`);
   },
-  toggleStatus: (id) => {
-    console.log('📡 agentApi.toggleStatus called for id:', id);
-    return api.patch(`/agent/${id}/toggle-status`);
+  approve: (id) => {
+    console.log('📡 agentApi.approve called for id:', id);
+    return api.post(`/Agent/${id}/approve`).catch(() => api.patch(`/Agent/${id}/verify`));
+  },
+  reject: (id, reason) => {
+    console.log('📡 agentApi.reject called for id:', id);
+    return api.post(`/Agent/${id}/reject`, { reason }).catch(() => api.patch(`/Agent/${id}/toggle-status`));
   },
   getByMerchant: (merchantId) => {
     console.log('📡 agentApi.getByMerchant called for merchantId:', merchantId);
     return api.get(`/agent/merchant/${merchantId}`);
   },
-  fetchAgentList: () => {
-    console.log('📡 agentApi.fetchAgentList called');
-    return api.get('/Agent/fetch-agent-list');
+  fetchAgentList: (params) => {
+    console.log('📡 agentApi.fetchAgentList called with params:', params);
+    return api.get('/Agent/fetch-agent-list', { params });
   },
 };
 
@@ -296,9 +310,63 @@ export const branchApi = {
     console.log('📡 branchApi.toggleStatus called for id:', id);
     return api.patch(`/branch/${id}/toggle-status`);
   },
-  fetchBranchList: () => {
-    console.log('📡 branchApi.fetchBranchList called');
-    return api.get('/Branch/fetch-branch-list');
+  approve: (id) => {
+    console.log('📡 branchApi.approve called for id:', id);
+    return api.post(`/Branch/${id}/approve`).catch(() => api.patch(`/Branch/${id}/toggle-status`));
+  },
+  reject: (id, reason) => {
+    console.log('📡 branchApi.reject called for id:', id);
+    return api.post(`/Branch/${id}/reject`, { reason }).catch(() => api.patch(`/Branch/${id}/toggle-status`));
+  },
+  fetchBranchList: (params) => {
+    console.log('📡 branchApi.fetchBranchList called with params:', params);
+    return api.get('/Branch/fetch-branch-list', { params });
+  },
+  fetchRdCustomers: (params) => {
+    console.log('📡 branchApi.fetchRdCustomers called with params:', params);
+    return api.get('/Branch/fetch-rd-customers', { params })
+      .catch(() => api.get('/Branch/fetch-account-list', { params }));
+  },
+};
+
+// ============================================================
+// ACCOUNT API
+// ============================================================
+export const accountApi = {
+  getAll: (params) => {
+    console.log('📡 accountApi.getAll called with params:', params);
+    return api.get('/Branch/fetch-rd-customers', { params })
+      .catch(() => api.get('/Account/get-all', { params }))
+      .catch(() => api.get('/Account', { params }));
+  },
+  getBranchAccounts: (params) => {
+    console.log('📡 accountApi.getBranchAccounts called with params:', params);
+    return api.get('/Branch/fetch-rd-customers', { params })
+      .catch(() => api.get('/Branch/fetch-account-list', { params }));
+  },
+  getAccounts: (params) => {
+    console.log('📡 accountApi.getAccounts called with params:', params);
+    return api.get('/Branch/fetch-rd-customers', { params }).catch(() => api.get('/Account', { params }));
+  },
+  getById: (id) => {
+    console.log('📡 accountApi.getById called for id:', id);
+    return api.get(`/Account/${id}`);
+  },
+  create: (data) => {
+    console.log('📡 accountApi.create called with data:', data);
+    return api.post('/Account/create', data).catch(() => api.post('/Account', data));
+  },
+  update: (id, data) => {
+    console.log('📡 accountApi.update called for id:', id);
+    return api.put(`/Account/${id}`, data);
+  },
+  delete: (id) => {
+    console.log('📡 accountApi.delete called for id:', id);
+    return api.delete(`/Account/${id}`);
+  },
+  toggleStatus: (id) => {
+    console.log('📡 accountApi.toggleStatus called for id:', id);
+    return api.patch(`/Account/${id}/toggle-status`).catch(() => api.patch(`/account/${id}/toggle-status`));
   },
 };
 
@@ -340,9 +408,15 @@ export const paymentApi = {
 // CUSTOMER API
 // ============================================================
 export const customerApi = {
-  getAll: () => {
-    console.log('📡 customerApi.getAll called');
-    return api.get('/customer');
+  getAll: (params) => {
+    console.log('📡 customerApi.getAll called with params:', params);
+    return api.get('/Customer', { params });
+  },
+  getRDCustomersUnderAgent: (params) => {
+    console.log('📡 customerApi.getRDCustomersUnderAgent called with params:', params);
+    return api.get('/Customer/fetch-rd-customers', { params })
+      .catch(() => api.get('/Customer/rd-customers-under-agent', { params }))
+      .catch(() => api.get('/Customer/getRDCustomerunderAgentList', { params }));
   },
   getById: (id) => {
     console.log('📡 customerApi.getById called for id:', id);
@@ -498,13 +572,19 @@ export const commissionApi = {
 // ============================================================
 export const authApi = {
   login: (data) => {
+    const cred = data.UsernameOrEmail || data.email || data.username || '';
+    const pwd = data.Password || data.password || '';
     console.log('🔐 authApi.login called with:', {
-      UsernameOrEmail: data.UsernameOrEmail || data.email || data.username,
-      Password: data.Password ? '******' : 'empty'
+      UsernameOrEmail: cred,
+      Password: pwd ? '******' : 'empty'
     });
     return api.post('/Auth/login', {
-      UsernameOrEmail: data.UsernameOrEmail || data.email || data.username,
-      Password: data.Password || data.password
+      UsernameOrEmail: cred,
+      Password: pwd,
+      username: cred,
+      email: cred,
+      password: pwd,
+      Username: cred
     });
   },
   requestOtp: (mobileNumber) => {
@@ -569,26 +649,47 @@ export const authApi = {
 // NOTIFICATION API
 // ============================================================
 export const notificationApi = {
-  getAll: () => {
+  getAll: async () => {
     console.log('🔔 notificationApi.getAll called');
-    return api.get('/notifications');
+    const { notificationService } = await import('./notificationService');
+    return { data: { data: await notificationService.getAll() } };
   },
-  getById: (id) => {
+  getById: async (id) => {
     console.log('🔔 notificationApi.getById called for id:', id);
-    return api.get(`/notifications/${id}`);
+    const { notificationService } = await import('./notificationService');
+    const all = await notificationService.getAll();
+    const found = all.find(n => String(n.id) === String(id));
+    return { data: { data: found } };
   },
-  markAsRead: (id) => {
+  markAsRead: async (id) => {
     console.log('🔔 notificationApi.markAsRead called for id:', id);
-    return api.patch(`/notifications/${id}/read`);
+    const { notificationService } = await import('./notificationService');
+    return { data: { data: await notificationService.markAsRead(id) } };
   },
-  markAllRead: () => {
+  markAllRead: async () => {
     console.log('🔔 notificationApi.markAllRead called');
-    return api.patch('/notifications/read-all');
+    const { notificationService } = await import('./notificationService');
+    return { data: { data: await notificationService.markAllRead() } };
   },
-  delete: (id) => {
+  delete: async (id) => {
     console.log('🔔 notificationApi.delete called for id:', id);
-    return api.delete(`/notifications/${id}`);
+    const { notificationService } = await import('./notificationService');
+    return { data: { data: await notificationService.deleteNotification(id) } };
   },
+};
+
+// ============================================================
+// BANK & IFSC DIRECTORY API
+// ============================================================
+export const bankApi = {
+  lookupIFSC: async (ifsc) => {
+    const { lookupIFSC } = await import('./bankService');
+    return lookupIFSC(ifsc);
+  },
+  getBanks: async () => {
+    const { getIndianBanks } = await import('./bankService');
+    return getIndianBanks();
+  }
 };
 
 export default api;
