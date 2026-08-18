@@ -90,7 +90,7 @@ const Branches = () => {
               <div className="header-badge">
                 <span className="pulse-dot"></span> Regional Infrastructure
               </div>
-              <h1 className="page-title">
+              <h1 className="page-title gradient-text">
                 Branch <span className="gradient-text">Network</span>
               </h1>
               <p className="page-subtitle">Manage regional office locations, field teams, and localized revenue</p>

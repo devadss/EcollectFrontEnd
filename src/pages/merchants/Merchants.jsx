@@ -72,7 +72,7 @@ const Merchants = () => {
               <div className="header-badge">
                 <span className="pulse-dot"></span> Registered Partners
               </div>
-              <h1 className="page-title">
+              <h1 className="page-title gradient-text">
                 Merchant <span className="gradient-text">Directory</span>
               </h1>
               <p className="page-subtitle">Manage registered business partners, access levels, and gateway status</p>

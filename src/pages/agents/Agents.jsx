@@ -103,7 +103,7 @@ const Agents = () => {
               <div className="header-badge">
                 <span className="pulse-dot"></span> Field Representative Portal
               </div>
-              <h1 className="page-title">
+              <h1 className="page-title gradient-text">
                 Field <span className="gradient-text">Agents</span>
               </h1>
               <p className="page-subtitle">Manage agent assignments, merchant links, and commission rates</p>
