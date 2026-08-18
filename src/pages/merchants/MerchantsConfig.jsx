@@ -86,7 +86,7 @@ const MerchantsConfig = () => {
               <h1 className="page-title"><span className="gradient-text">Merchants Config</span></h1>
               <p className="page-subtitle">Manage all registered merchants</p>
             </div>
-            <button className="btn-primary" onClick={() => navigate('/merchants/merchantconfig/add')}>
+            <button className="btn-primary-gradient" onClick={() => navigate('/merchants/merchantconfig/add')}>
               ➕ Add Merchants Config
             </button>
           </div>
