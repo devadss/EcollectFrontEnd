@@ -108,8 +108,15 @@ const setLocalStore = (items) => {
 export const notificationService = {
   // Fetch all notifications from backend with seamless fallback
   getAll: async () => {
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+    
+    // If user is not authenticated, serve local store without triggering 404s
+    if (!token) {
+      return getLocalStore();
+    }
+
     try {
-      // Attempt backend endpoints in sequence
+      // Attempt backend endpoint
       const res = await api.get('/Notification/get-all')
         .catch(() => api.get('/Notification'))
         .catch(() => api.get('/notifications'));
@@ -142,7 +149,7 @@ export const notificationService = {
         return finalItems;
       }
     } catch (error) {
-      console.log('ℹ️ Backend notification endpoint offline or empty, using active local telemetry cache.');
+      // Clean fallback without breaking UI
     }
 
     return getLocalStore();

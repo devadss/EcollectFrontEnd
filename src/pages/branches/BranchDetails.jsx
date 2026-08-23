@@ -103,6 +103,7 @@ const BranchDetails = () => {
   const [branch, setBranch] = useState(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [actionMsg, setActionMsg] = useState(null);
 
   const loadBranch = useCallback(async () => {
     try {
@@ -124,6 +125,24 @@ const BranchDetails = () => {
     navigator.clipboard.writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleToggleStatus = async () => {
+    try {
+      if (!branch?.isActive) {
+        await branchApi.approve(id).catch(() => branchApi.toggleStatus(id));
+        setActionMsg({ type: 'success', text: `✅ Branch "${branch?.name}" is now Active in live database!` });
+      } else {
+        await branchApi.reject(id, 'Deactivated by Software Admin').catch(() => branchApi.toggleStatus(id));
+        setActionMsg({ type: 'warning', text: `⏸️ Branch "${branch?.name}" deactivated.` });
+      }
+      setTimeout(() => setActionMsg(null), 4000);
+      loadBranch();
+    } catch (err) {
+      console.error('Error toggling branch status:', err);
+      setActionMsg({ type: 'error', text: `Failed to update status: ${err?.message || 'Error'}` });
+      setTimeout(() => setActionMsg(null), 4000);
+    }
   };
 
   if (loading) {
@@ -150,12 +169,38 @@ const BranchDetails = () => {
 
   const branchCode = branch.code || `BR-${String(branch.id).padStart(3, '0')}`;
 
-  const rawRole = localStorage.getItem('user_role') || localStorage.getItem('role') || 'softwareadmin';
-  const normRole = rawRole.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const isSoftwareAdmin = normRole.includes('softwareadmin') || normRole.includes('admin') || normRole.includes('superadmin');
+  const authUser = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
+    } catch {
+      return {};
+    }
+  })();
+
+  const rawRole = (localStorage.getItem('user_role') || localStorage.getItem('role') || authUser?.role || '').toLowerCase().trim();
+  const normRole = rawRole.replace(/[^a-z0-9]/g, '');
+  const isSoftwareAdmin = (normRole.includes('software') || normRole.includes('superadmin') || normRole === 'admin') && !normRole.includes('merchant') && !normRole.includes('branch') && !normRole.includes('agent');
 
   return (
     <DashboardLayout pageTitle={`Branch Dossier • ${branch.name}`} role={rawRole}>
+      {actionMsg && (
+        <div style={{
+          position: 'fixed',
+          top: '24px',
+          right: '24px',
+          zIndex: 9999,
+          padding: '12px 20px',
+          borderRadius: '10px',
+          background: actionMsg.type === 'success' ? '#065f46' : '#991b1b',
+          color: '#ffffff',
+          fontWeight: '700',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+          animation: 'fadeIn 0.2s ease-out'
+        }}>
+          {actionMsg.text}
+        </div>
+      )}
+
       <div className="branch-dossier-wrapper">
         
         {/* Top Hero Header */}
@@ -181,7 +226,7 @@ const BranchDetails = () => {
                 <span className="meta-sep">•</span>
                 <span className={`dossier-status-pill ${branch.isActive ? 'is-active' : 'is-inactive'}`}>
                   <span className="status-dot"></span>
-                  <span>{branch.isActive ? 'Active Node' : 'Suspended'}</span>
+                  <span>{branch.isActive ? 'Active Node' : 'Suspended / Inactive'}</span>
                 </span>
               </div>
             </div>
@@ -193,10 +238,32 @@ const BranchDetails = () => {
               <span>All Branches</span>
             </button>
             {isSoftwareAdmin && (
-              <button className="dossier-btn-primary" onClick={() => navigate(`/branches/edit/${id}`)}>
-                <Icons.Edit />
-                <span>Edit Branch</span>
-              </button>
+              <>
+                <button
+                  onClick={handleToggleStatus}
+                  style={{
+                    background: branch.isActive ? 'rgba(239, 68, 68, 0.15)' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    border: branch.isActive ? '1px solid rgba(239, 68, 68, 0.3)' : 'none',
+                    color: branch.isActive ? '#f87171' : '#ffffff',
+                    padding: '8px 16px',
+                    borderRadius: '10px',
+                    fontSize: '12.5px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: branch.isActive ? 'none' : '0 2px 10px rgba(16, 185, 129, 0.35)'
+                  }}
+                  title={branch.isActive ? 'Deactivate this branch' : 'Make this branch Active'}
+                >
+                  {branch.isActive ? '⏸️ Deactivate Node' : '✓ Make Active'}
+                </button>
+                <button className="dossier-btn-primary" onClick={() => navigate(`/branches/edit/${id}`)}>
+                  <Icons.Edit />
+                  <span>Edit Branch</span>
+                </button>
+              </>
             )}
           </div>
         </div>

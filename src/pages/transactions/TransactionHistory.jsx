@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Line, Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -14,7 +14,8 @@ import {
 } from 'chart.js';
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
-import { transactionApi, dashboardApi } from '../../services/api';
+import { transactionApi, branchApi, agentApi } from '../../services/api';
+import { useMerchantContext } from '../../context/MerchantContext';
 import './TransactionHistory.css';
 
 ChartJS.register(
@@ -28,6 +29,108 @@ ChartJS.register(
   ArcElement,
   Filler
 );
+
+// Comprehensive Multi-Format Date Parser
+export const parseAnyDate = (raw) => {
+  if (!raw) return null;
+  if (raw instanceof Date && !isNaN(raw.getTime())) return raw;
+  if (typeof raw === 'number') {
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const str = String(raw).trim();
+  if (!str) return null;
+
+  // 1. Native ISO parsing
+  const nativeParsed = new Date(str);
+  if (!isNaN(nativeParsed.getTime())) return nativeParsed;
+
+  // 2. DD-MM-YYYY or DD/MM/YYYY with optional time
+  const dmyMatch = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?(?:\s*(AM|PM))?)?/i);
+  if (dmyMatch) {
+    const day = parseInt(dmyMatch[1], 10);
+    const month = parseInt(dmyMatch[2], 10) - 1;
+    const year = parseInt(dmyMatch[3], 10);
+    let hours = dmyMatch[4] ? parseInt(dmyMatch[4], 10) : 0;
+    const minutes = dmyMatch[5] ? parseInt(dmyMatch[5], 10) : 0;
+    const seconds = dmyMatch[6] ? parseInt(dmyMatch[6], 10) : 0;
+    const ampm = dmyMatch[7];
+
+    if (ampm) {
+      if (ampm.toUpperCase() === 'PM' && hours < 12) hours += 12;
+      if (ampm.toUpperCase() === 'AM' && hours === 12) hours = 0;
+    }
+
+    const d = new Date(year, month, day, hours, minutes, seconds);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // 3. YYYY-MM-DD or YYYY/MM/DD
+  const ymdMatch = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (ymdMatch) {
+    const year = parseInt(ymdMatch[1], 10);
+    const month = parseInt(ymdMatch[2], 10) - 1;
+    const day = parseInt(ymdMatch[3], 10);
+    const d = new Date(year, month, day);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  return null;
+};
+
+// Robust Date Parser
+export const getTxDate = (t) => {
+  if (!t) return null;
+  const raw = t.createdAt || t.CreatedAt || t.created_at || t.Created_At ||
+              t.transactionDate || t.TransactionDate || t.transactionDateTime || t.TransactionDateTime ||
+              t.createdOn || t.CreatedOn || t.date || t.Date || t.txnDate || t.TxnDate ||
+              t.timestamp || t.Timestamp || t.trans_date || t.trans_time || t.trn_date || t.time;
+  return parseAnyDate(raw);
+};
+
+// Local YYYY-MM-DD formatter (avoids UTC timezone shift bugs)
+export const formatLocalDate = (d) => {
+  if (!d) return '';
+  const date = parseAnyDate(d);
+  if (!date || isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+// Safe record normalizer
+export const normalizeTransaction = (t) => {
+  const dateObj = getTxDate(t);
+  const txAmount = Number(
+    t.amount ?? t.Amount ?? t.netAmount ?? t.NetAmount ?? t.totalAmount ?? t.TotalAmount ??
+    t.transactionAmount ?? t.TransactionAmount ?? t.sale_amount ?? t.paidAmount ?? t.PaidAmount ?? 0
+  );
+  return {
+    ...t,
+    id: t.id ?? t.Id ?? t.transactionId ?? t.TransactionId,
+    transactionId: t.transactionId || t.TransactionId || t.paymentGatewayTransactionId || t.PaymentGatewayTransactionId || (t.id ?? t.Id)?.toString() || 'TXN-0000',
+    orderId: t.orderId || t.OrderId || '',
+    utr: t.utr || t.Utr || t.rrn || t.Rrn || t.paymentGatewayTransactionId || t.PaymentGatewayTransactionId || '',
+    amount: txAmount,
+    status: (t.status || t.Status || t.transactionStatus || t.TransactionStatus || 'SUCCESS').toString().toUpperCase(),
+    paymentMode: (t.paymentMode || t.PaymentMode || t.paymentMethod || t.PaymentMethod || t.method || t.Method || t.paymentChannel || t.PaymentChannel || t.mode || 'UPI').toString().toUpperCase(),
+    collectionType: (t.collectionType || t.CollectionType || t.udf5 || t.Udf5 || t.product || t.Product || 'RD').toString().toUpperCase(),
+    merchantId: t.merchantId ?? t.MerchantId ?? t.merchant_id ?? t.mid,
+    merchantName: t.merchantName || t.MerchantName || t.merchant || t.Merchant || '',
+    branchId: t.branchId ?? t.BranchId ?? t.branch_id,
+    branchName: t.branchName || t.BranchName || t.branch || t.Branch || '',
+    branchCode: t.branchCode || t.BranchCode || '',
+    agentId: t.agentId ?? t.AgentId ?? t.agent_id,
+    agentName: t.agentName || t.AgentName || t.agent || t.Agent || '',
+    agentCode: t.agentCode || t.AgentCode || '',
+    customer: t.customer || t.Customer || t.customerName || t.CustomerName || t.payer || 'Customer',
+    customerPhone: t.customerPhone || t.CustomerPhone || t.phone || '',
+    date: dateObj ? dateObj.toISOString() : null,
+    dateObj: dateObj,
+    rawDate: t.createdAt || t.CreatedAt || t.created_at || t.transactionDate || t.TransactionDate || t.date || t.Date || t.createdOn || t.CreatedOn || t.timestamp
+  };
+};
 
 // Crisp SVG Icons
 const TxIcons = {
@@ -134,80 +237,219 @@ const TransactionHistory = () => {
       return {};
     }
   })();
-  const rawRole = localStorage.getItem('user_role') || localStorage.getItem('role') || 'softwareadmin';
+  const rawRole = (localStorage.getItem('userRole') || localStorage.getItem('user_role') || localStorage.getItem('role') || user?.role || 'softwareadmin').toLowerCase().trim();
+  const isBranchUser = rawRole.includes('branch') && !rawRole.includes('merchant');
+  const isMerchantUser = rawRole.includes('merchant');
+  const branchSelfId = user?.branchId || user?.BranchId || user?.branch_id || localStorage.getItem('branchId');
+
+  // Global Merchant Scoping
+  const { 
+    merchants, 
+    selectedMerchantId, 
+    selectedMerchant, 
+    setSelectedMerchantId, 
+    isSoftwareAdmin 
+  } = useMerchantContext();
 
   const [transactions, setTransactions] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [agents, setAgents] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState(null);
+  const [, setError] = useState(null);
   const [selectedTxn, setSelectedTxn] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
 
-  const [backendVolume, setBackendVolume] = useState(null);
-  const [backendPaymentMethods, setBackendPaymentMethods] = useState(null);
+  // Pagination State (Default 5 entries per page)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
 
   const [filter, setFilter] = useState({
     search: '',
     statusTab: 'ALL', // 'ALL' | 'SUCCESS' | 'PENDING' | 'FAILED'
-    paymentMode: '',
+    paymentMode: '', // '' | 'CASH' | 'UPI'
+    collectionType: '', // '' | 'RD' | 'RDCL' | 'LOAN' | etc.
+    datePeriod: 'ALL', // 'ALL' | 'TODAY' | 'LAST_WEEK' | 'LAST_MONTH' | 'CUSTOM'
+    branchId: isBranchUser && branchSelfId ? branchSelfId : '',
+    agentId: '',
     dateFrom: '',
     dateTo: '',
   });
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
+  // Dynamic distinct Collection Types extracted from transactions & standard types
+  const availableCollectionTypes = useMemo(() => {
+    const types = new Set(['RD', 'RDCL', 'LOAN', 'SAVINGS']);
+    transactions.forEach(t => {
+      if (t.collectionType) types.add(t.collectionType.toUpperCase());
+    });
+    return Array.from(types).sort();
+  }, [transactions]);
 
-  const loadDashboardData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      await Promise.all([loadTransactions(), loadChartData()]);
-    } catch (err) {
-      console.error('Error loading transaction history:', err);
-      setError(err.message || 'Failed to load transaction records');
-    } finally {
-      setTimeout(() => setLoading(false), 350);
+  // Date range preset handler (Today, Last 7 Days, Last Month, Custom) with exact local date bounds
+  const handleDatePeriodChange = (period) => {
+    const now = new Date();
+    let from = '';
+    let to = '';
+
+    if (period === 'TODAY') {
+      const todayStr = formatLocalDate(now);
+      from = todayStr;
+      to = todayStr;
+    } else if (period === 'LAST_WEEK') {
+      const past7 = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+      from = formatLocalDate(past7);
+      to = formatLocalDate(now);
+    } else if (period === 'LAST_MONTH') {
+      const past30 = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
+      from = formatLocalDate(past30);
+      to = formatLocalDate(now);
+    } else if (period === 'CUSTOM') {
+      from = filter.dateFrom || '';
+      to = filter.dateTo || '';
+    } else { // ALL
+      from = '';
+      to = '';
     }
+
+    setFilter(prev => ({
+      ...prev,
+      datePeriod: period,
+      dateFrom: from,
+      dateTo: to
+    }));
   };
 
-  const loadTransactions = async () => {
-    try {
-      const res = await transactionApi.getHistory();
-      const listData = res?.data?.data || res?.data || [];
-      const safeData = Array.isArray(listData) ? listData : [];
+  // Reset pagination to page 1 whenever filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter]);
 
+  // Effective Active Merchant ID
+  const activeMerchantId = useMemo(() => {
+    if (selectedMerchantId && selectedMerchantId !== 'ALL') {
+      return selectedMerchantId;
+    }
+    return user?.merchantId || user?.MerchantId || (rawRole.toLowerCase().includes('merchant') ? (user?.merchantId || user?.MerchantId || user?.id) : null);
+  }, [selectedMerchantId, user, rawRole]);
+
+  // Load Branch & Agent Filter Options for this merchant / branch
+  useEffect(() => {
+    const loadFilterOptions = async () => {
+      try {
+        const branchQuery = isBranchUser && branchSelfId 
+          ? { id: branchSelfId } 
+          : (activeMerchantId ? { merchantId: activeMerchantId } : {});
+        const agentQuery = isBranchUser && branchSelfId 
+          ? { branchId: branchSelfId } 
+          : (activeMerchantId ? { merchantId: activeMerchantId } : {});
+
+        const [branchesRes, agentsRes] = await Promise.all([
+          branchApi.getAll(branchQuery).catch(() => ({ data: [] })),
+          agentApi.getAll(agentQuery).catch(() => ({ data: [] }))
+        ]);
+
+        const bList = branchesRes?.data?.data || branchesRes?.data || [];
+        const aList = agentsRes?.data?.data || agentsRes?.data || [];
+
+        let safeBranches = Array.isArray(bList) ? bList : [];
+        let safeAgents = Array.isArray(aList) ? aList : [];
+
+        if (isBranchUser && branchSelfId) {
+          safeAgents = safeAgents.filter(a => {
+            const bId = a.branchId ?? a.BranchId;
+            return bId == null || String(bId) === String(branchSelfId);
+          });
+        } else if (activeMerchantId) {
+          const hasBranchMerchantProps = safeBranches.some(b => (b.merchantId != null || b.MerchantId != null));
+          if (hasBranchMerchantProps) {
+            safeBranches = safeBranches.filter(b => {
+              const mId = b.merchantId ?? b.MerchantId;
+              return mId == null || String(mId) === String(activeMerchantId);
+            });
+          }
+
+          const hasAgentMerchantProps = safeAgents.some(a => (a.merchantId != null || a.MerchantId != null));
+          if (hasAgentMerchantProps) {
+            safeAgents = safeAgents.filter(a => {
+              const mId = a.merchantId ?? a.MerchantId;
+              return mId == null || String(mId) === String(activeMerchantId);
+            });
+          }
+        }
+
+        setBranches(safeBranches);
+        setAgents(safeAgents);
+      } catch (err) {
+        console.warn('Could not load branch/agent filter options:', err);
+      }
+    };
+
+    loadFilterOptions();
+  }, [activeMerchantId, isBranchUser, branchSelfId]);
+
+  // Filter available agents dynamically if a branch is chosen
+  const availableAgents = useMemo(() => {
+    const targetBranch = isBranchUser && branchSelfId ? branchSelfId : filter.branchId;
+    if (!targetBranch) return agents;
+    return agents.filter(a => String(a.branchId || a.BranchId) === String(targetBranch));
+  }, [agents, filter.branchId, isBranchUser, branchSelfId]);
+
+  const loadTransactions = useCallback(async () => {
+    try {
+      const queryParams = {
+        Search: filter.search && filter.search.trim() ? filter.search.trim() : 'ALL',
+        Status: filter.statusTab || 'ALL',
+        PaymentMode: filter.paymentMode || 'ALL',
+        BankCode: filter.branchId ? (branches.find(b => String(b.id) === String(filter.branchId))?.code || 'ALL') : 'ALL'
+      };
+      if (activeMerchantId && activeMerchantId !== 'ALL') {
+        queryParams.merchantId = activeMerchantId;
+        queryParams.MerchantId = activeMerchantId;
+      }
+      if (isBranchUser && branchSelfId) {
+        queryParams.branchId = branchSelfId;
+      } else if (filter.branchId) {
+        queryParams.branchId = filter.branchId;
+      }
+      if (filter.agentId) queryParams.agentId = filter.agentId;
+
+      let res = await transactionApi.getAll(queryParams).catch(() => null);
+      let listData = res?.data?.data || res?.data?.items || res?.data?.result || res?.data || [];
+
+      // Fallback for merchant users if generic list returned empty
+      if ((!Array.isArray(listData) || listData.length === 0) && activeMerchantId && activeMerchantId !== 'ALL') {
+        const mRes = await transactionApi.getByMerchant(activeMerchantId).catch(() => null);
+        const mList = mRes?.data?.data || mRes?.data?.items || mRes?.data?.result || mRes?.data || [];
+        if (Array.isArray(mList) && mList.length > 0) {
+          listData = mList;
+        }
+      }
+
+      const safeData = Array.isArray(listData) ? listData.map(normalizeTransaction) : [];
       setTransactions(safeData);
     } catch (err) {
       console.error('Error fetching transactions:', err);
       setTransactions([]);
     }
-  };
+  }, [activeMerchantId, isBranchUser, branchSelfId, filter.branchId, filter.agentId, filter.search, filter.statusTab, filter.paymentMode, branches]);
 
-  const loadChartData = async () => {
+  const loadDashboardData = useCallback(async () => {
     try {
-      const merchantId = user?.merchantId;
-      const branchId = user?.branchId;
-
-      const [volumeRes, paymentRes] = await Promise.all([
-        dashboardApi.getTransactionVolume({ merchantId, branchId }).catch(() => null),
-        dashboardApi.getPaymentMethods({ merchantId, branchId }).catch(() => null)
-      ]);
-
-      if (volumeRes?.data?.labels && volumeRes?.data?.data && volumeRes.data.data.some(v => v > 0)) {
-        setBackendVolume({ labels: volumeRes.data.labels, data: volumeRes.data.data });
-      }
-
-      if (paymentRes?.data && Array.isArray(paymentRes.data) && paymentRes.data.length > 0 && paymentRes.data.some(d => (d.value || d.count) > 0)) {
-        setBackendPaymentMethods({
-          labels: paymentRes.data.map(d => d.label || d.method || 'Unknown'),
-          data: paymentRes.data.map(d => d.value || d.count || 0)
-        });
-      }
+      setLoading(true);
+      setError(null);
+      await loadTransactions();
     } catch (err) {
-      console.error('Error loading telemetry charts:', err);
+      console.error('Error loading transaction history:', err);
+      setError(err.message || 'Failed to load transaction records');
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [loadTransactions]);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -221,18 +463,41 @@ const TransactionHistory = () => {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // Safe Filter Logic
+  // Safe Filter Logic with Merchant, Branch, Agent, Mode, Collection Type, and Date matching
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
       const q = filter.search.toLowerCase().trim();
       const matchesSearch = !q ||
-        (t.id || '').toLowerCase().includes(q) ||
+        (t.id || '').toString().toLowerCase().includes(q) ||
         (t.transactionId || '').toLowerCase().includes(q) ||
+        (t.orderId || '').toLowerCase().includes(q) ||
         (t.utr || '').toLowerCase().includes(q) ||
-        (t.merchant || t.merchantName || '').toLowerCase().includes(q) ||
-        (t.customer || t.customerName || '').toLowerCase().includes(q);
+        (t.merchantName || '').toLowerCase().includes(q) ||
+        (t.branchName || '').toLowerCase().includes(q) ||
+        (t.agentName || '').toLowerCase().includes(q) ||
+        (t.customer || '').toLowerCase().includes(q);
 
-      const matchesMode = !filter.paymentMode || (t.paymentMode || '').toLowerCase() === filter.paymentMode.toLowerCase();
+      const matchesMode = !filter.paymentMode || t.paymentMode === filter.paymentMode.toUpperCase();
+
+      const matchesCollectionType = !filter.collectionType || t.collectionType === filter.collectionType.toUpperCase();
+
+      const matchesMerchant = (isBranchUser || isMerchantUser)
+        ? true
+        : (!activeMerchantId || activeMerchantId === 'ALL'
+            ? true
+            : (t.merchantId == null || String(t.merchantId ?? t.MerchantId) === String(activeMerchantId) ||
+               (t.merchantName && selectedMerchant && t.merchantName.toLowerCase() === (selectedMerchant.merchantTradeName || selectedMerchant.merchantName || selectedMerchant.businessName || '').toLowerCase())));
+
+      const effectiveBranchId = (isBranchUser && branchSelfId) ? branchSelfId : filter.branchId;
+      const matchesBranch = !effectiveBranchId
+        ? true
+        : (String(t.branchId ?? t.BranchId) === String(effectiveBranchId) ||
+           (t.branchName && branches.find(b => String(b.id) === String(effectiveBranchId))?.name?.toLowerCase() === t.branchName.toLowerCase()));
+
+      const matchesAgent = !filter.agentId
+        ? true
+        : (String(t.agentId ?? t.AgentId) === String(filter.agentId) ||
+           (t.agentName && agents.find(a => String(a.id) === String(filter.agentId))?.agentName?.toLowerCase() === t.agentName.toLowerCase()));
 
       let matchesStatusTab = true;
       const statusLower = (t.status || '').toLowerCase();
@@ -241,143 +506,156 @@ const TransactionHistory = () => {
       if (filter.statusTab === 'FAILED') matchesStatusTab = statusLower === 'failed';
 
       let matchesDate = true;
-      if (filter.dateFrom) {
-        const txDate = new Date(t.date || t.createdAt);
-        matchesDate = txDate >= new Date(filter.dateFrom);
-      }
-      if (filter.dateTo && matchesDate) {
-        const txDate = new Date(t.date || t.createdAt);
-        matchesDate = txDate <= new Date(filter.dateTo);
+      if (filter.dateFrom || filter.dateTo) {
+        const txDate = t.dateObj || getTxDate(t);
+        if (!txDate) {
+          matchesDate = false;
+        } else {
+          if (filter.dateFrom) {
+            const [fYear, fMonth, fDay] = filter.dateFrom.split('-').map(Number);
+            const startOfDay = new Date(fYear, fMonth - 1, fDay, 0, 0, 0, 0);
+            if (txDate < startOfDay) {
+              matchesDate = false;
+            }
+          }
+          if (filter.dateTo && matchesDate) {
+            const [tYear, tMonth, tDay] = filter.dateTo.split('-').map(Number);
+            const endOfDay = new Date(tYear, tMonth - 1, tDay, 23, 59, 59, 999);
+            if (txDate > endOfDay) {
+              matchesDate = false;
+            }
+          }
+        }
       }
 
-      return matchesSearch && matchesMode && matchesStatusTab && matchesDate;
+      return matchesSearch && matchesMode && matchesCollectionType && matchesMerchant && matchesBranch && matchesAgent && matchesStatusTab && matchesDate;
     });
-  }, [transactions, filter]);
+  }, [transactions, filter, activeMerchantId, selectedMerchant, branches, agents, branchSelfId, isBranchUser, isMerchantUser]);
 
   // Statistics
   const stats = useMemo(() => {
     const total = filteredTransactions.length;
-    const successful = filteredTransactions.filter(t => (t.status || '').toLowerCase() === 'success').length;
+    const successful = filteredTransactions.filter(t => (t.status || '').toLowerCase() === 'success' || (t.status || '').toLowerCase() === 'completed').length;
     const failed = filteredTransactions.filter(t => (t.status || '').toLowerCase() === 'failed').length;
-    const pending = filteredTransactions.filter(t => (t.status || '').toLowerCase() === 'pending').length;
+    const pending = filteredTransactions.filter(t => (t.status || '').toLowerCase() === 'pending' || (t.status || '').toLowerCase() === 'processing').length;
     const totalAmount = filteredTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
     const successRate = total > 0 ? ((successful / total) * 100).toFixed(1) : '100';
 
     return { total, successful, failed, pending, totalAmount, successRate };
   }, [filteredTransactions]);
 
-  // Dynamic Weekly / Daily Volume Data derived from actual transactions or backend
+  // Dynamic Weekly / Daily Volume Trajectory derived strictly from filtered backend transactions
   const dynamicVolumeChart = useMemo(() => {
-    if (backendVolume?.labels?.length > 0 && backendVolume.data?.some(v => v > 0)) {
-      return backendVolume;
+    // If a single day is filtered (e.g. TODAY or same from/to date), group by time intervals
+    if (filter.datePeriod === 'TODAY' || (filter.dateFrom && filter.dateFrom === filter.dateTo)) {
+      const intervals = ['00-04h', '04-08h', '08-12h', '12-16h', '16-20h', '20-24h'];
+      const counts = [0, 0, 0, 0, 0, 0];
+
+      filteredTransactions.forEach(t => {
+        const tDate = t.dateObj || getTxDate(t);
+        if (tDate) {
+          const h = tDate.getHours();
+          if (h < 4) counts[0] += (Number(t.amount) || 0);
+          else if (h < 8) counts[1] += (Number(t.amount) || 0);
+          else if (h < 12) counts[2] += (Number(t.amount) || 0);
+          else if (h < 16) counts[3] += (Number(t.amount) || 0);
+          else if (h < 20) counts[4] += (Number(t.amount) || 0);
+          else counts[5] += (Number(t.amount) || 0);
+        }
+      });
+
+      return { labels: intervals, data: counts };
     }
 
+    // Default: group by days in range (past 7 or 14 days)
     const days = [];
     const counts = [];
     const now = new Date();
+    const numDays = filter.datePeriod === 'LAST_MONTH' ? 14 : 7;
 
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(now.getDate() - i);
-      const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short' });
-      const dateStr = d.toISOString().split('T')[0];
-
-      const dayTxns = transactions.filter(t => {
-        const tDate = (t.createdAt || t.date || '').split('T')[0];
-        return tDate === dateStr;
-      });
-
+    for (let i = numDays - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
       days.push(dayLabel);
-      counts.push(dayTxns.length);
-    }
 
-    return {
-      labels: days,
-      data: counts
-    };
-  }, [transactions, backendVolume]);
-
-  // Dynamic Payment Methods Data derived from actual transactions or backend
-  const dynamicPaymentMethods = useMemo(() => {
-    if (backendPaymentMethods?.labels?.length > 0 && backendPaymentMethods.data?.some(v => v > 0)) {
-      const total = backendPaymentMethods.data.reduce((a, b) => a + b, 0);
-      let maxIdx = 0;
-      backendPaymentMethods.data.forEach((val, idx) => {
-        if (val > backendPaymentMethods.data[maxIdx]) maxIdx = idx;
+      const dStr = formatLocalDate(d);
+      const dayTxns = filteredTransactions.filter(t => {
+        const tDate = t.dateObj || getTxDate(t);
+        return tDate ? formatLocalDate(tDate) === dStr : false;
       });
-      const topMethod = backendPaymentMethods.labels[maxIdx] || 'UPI';
-      const topPercent = total > 0 ? Math.round((backendPaymentMethods.data[maxIdx] / total) * 100) : 0;
-      return {
-        ...backendPaymentMethods,
-        topMethod,
-        topPercent
-      };
+
+      const dayTotal = dayTxns.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+      counts.push(dayTotal);
     }
 
-    if (!transactions || transactions.length === 0) {
-      return {
-        labels: ['UPI', 'Card', 'Net Banking', 'Cash'],
-        data: [0, 0, 0, 0],
-        topMethod: 'None',
-        topPercent: 0
-      };
-    }
+    return { labels: days, data: counts };
+  }, [filteredTransactions, filter.datePeriod, filter.dateFrom, filter.dateTo]);
 
-    const modeCounts = {};
-    transactions.forEach(t => {
-      const rawMode = (t.paymentMode || t.mode || t.paymentChannel || 'UPI').trim().toUpperCase();
-      const normMode = rawMode.includes('UPI') ? 'UPI' :
-                       rawMode.includes('CARD') ? 'Card' :
-                       rawMode.includes('NET') || rawMode.includes('BANK') ? 'Net Banking' :
-                       rawMode.includes('CASH') ? 'Cash' :
-                       rawMode.includes('WALLET') ? 'Wallet' :
-                       rawMode.includes('MANDATE') ? 'E-Mandate' : rawMode;
-      modeCounts[normMode] = (modeCounts[normMode] || 0) + 1;
-    });
+  const peakTxns = useMemo(() => {
+    if (!dynamicVolumeChart.data || dynamicVolumeChart.data.length === 0) return 0;
+    return Math.max(...dynamicVolumeChart.data);
+  }, [dynamicVolumeChart]);
 
-    const labels = Object.keys(modeCounts);
-    const data = labels.map(l => modeCounts[l]);
-    const total = data.reduce((a, b) => a + b, 0);
+  // Dynamic Payment Methods Split derived strictly from filtered backend transactions
+  const dynamicPaymentMethods = useMemo(() => {
+    const modeCounts = {
+      'UPI': 0,
+      'CASH': 0
+    };
 
-    let topMethod = 'None';
-    let maxCount = 0;
-    labels.forEach(l => {
-      if (modeCounts[l] > maxCount) {
-        maxCount = modeCounts[l];
-        topMethod = l;
+    filteredTransactions.forEach(t => {
+      const mode = (t.paymentMode || 'UPI').toUpperCase();
+      if (mode.includes('CASH')) {
+        modeCounts['CASH'] += (Number(t.amount) || 1);
+      } else {
+        modeCounts['UPI'] += (Number(t.amount) || 1);
       }
     });
 
-    const topPercent = total > 0 ? Math.round((maxCount / total) * 100) : 0;
+    const labels = ['UPI', 'CASH'];
+    const data = [modeCounts['UPI'], modeCounts['CASH']];
+    const totalVal = data.reduce((a, b) => a + b, 0);
+    const maxVal = Math.max(...data);
+    const maxIndex = data.indexOf(maxVal);
+    const topPercent = totalVal > 0 ? Math.round((maxVal / totalVal) * 100) : 0;
 
     return {
-      labels: labels.length > 0 ? labels : ['No Data'],
-      data: data.length > 0 ? data : [0],
-      topMethod,
-      topPercent
+      labels,
+      data,
+      topMethod: totalVal > 0 ? labels[maxIndex] : 'No Txns',
+      topPercent: totalVal > 0 ? topPercent : 0
     };
-  }, [transactions, backendPaymentMethods]);
+  }, [filteredTransactions]);
 
-  const peakTxns = useMemo(() => {
-    const vals = dynamicVolumeChart.data || [];
-    return vals.length > 0 ? Math.max(...vals, 0) : 0;
-  }, [dynamicVolumeChart]);
+  // Pagination Computations
+  const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / pageSize));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginatedTransactions = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredTransactions.slice(start, start + pageSize);
+  }, [filteredTransactions, currentPage, pageSize]);
 
   const getStatusClass = (status) => {
     const s = (status || '').toLowerCase();
     if (s === 'success' || s === 'completed') return 'is-success';
-    if (s === 'pending') return 'is-pending';
-    if (s === 'failed') return 'is-failed';
-    return 'is-refunded';
+    if (s === 'pending' || s === 'processing') return 'is-pending';
+    if (s === 'failed' || s === 'declined') return 'is-failed';
+    return 'is-pending';
   };
 
   return (
-    <DashboardLayout pageTitle="Transaction Ledger" role={rawRole}>
-      {loading && <LoadingAnimation message="Loading Gateway Telemetry..." />}
-      
-      <div className="tx-root-container">
+    <DashboardLayout pageTitle="Transaction History" role={rawRole}>
+      {loading && <LoadingAnimation message="Compiling Live Ledger Audit & Node Telemetry..." />}
+
+      <div className="tx-history-container">
         
-        {/* Top Hero Header */}
+        {/* Top Hero Section */}
         <div className="tx-hero-header">
           <div className="tx-hero-titles">
             <div className="tx-badge-tag">
@@ -389,7 +667,7 @@ const TransactionHistory = () => {
               Transaction <span className="gradient-text">History</span>
             </h1>
             <p className="tx-page-subtitle">
-              Audit live payment routing, customer fulfillments, and gateway clearance logs
+              Audit live payment routing, branch nodes, field agents, and gateway clearance logs
             </p>
           </div>
 
@@ -580,41 +858,40 @@ const TransactionHistory = () => {
           
           <div className="tx-filter-bar">
             
-            {/* Status Segmented Tabs */}
-            <div className="status-segmented-tabs">
-              <button 
-                className={`tab-btn ${filter.statusTab === 'ALL' ? 'is-active' : ''}`}
-                onClick={() => setFilter(prev => ({ ...prev, statusTab: 'ALL' }))}
-              >
-                All Txns ({transactions.length})
-              </button>
-              <button 
-                className={`tab-btn ${filter.statusTab === 'SUCCESS' ? 'is-active' : ''}`}
-                onClick={() => setFilter(prev => ({ ...prev, statusTab: 'SUCCESS' }))}
-              >
-                Success
-              </button>
-              <button 
-                className={`tab-btn ${filter.statusTab === 'PENDING' ? 'is-active' : ''}`}
-                onClick={() => setFilter(prev => ({ ...prev, statusTab: 'PENDING' }))}
-              >
-                Pending
-              </button>
-              <button 
-                className={`tab-btn ${filter.statusTab === 'FAILED' ? 'is-active' : ''}`}
-                onClick={() => setFilter(prev => ({ ...prev, statusTab: 'FAILED' }))}
-              >
-                Failed
-              </button>
-            </div>
+            {/* Top Filter Row: Status Segmented Tabs + Search Box */}
+            <div className="tx-filter-top-row">
+              <div className="status-segmented-tabs">
+                <button 
+                  className={`tab-btn ${filter.statusTab === 'ALL' ? 'is-active' : ''}`}
+                  onClick={() => setFilter(prev => ({ ...prev, statusTab: 'ALL' }))}
+                >
+                  All Txns ({transactions.length})
+                </button>
+                <button 
+                  className={`tab-btn ${filter.statusTab === 'SUCCESS' ? 'is-active' : ''}`}
+                  onClick={() => setFilter(prev => ({ ...prev, statusTab: 'SUCCESS' }))}
+                >
+                  Success
+                </button>
+                <button 
+                  className={`tab-btn ${filter.statusTab === 'PENDING' ? 'is-active' : ''}`}
+                  onClick={() => setFilter(prev => ({ ...prev, statusTab: 'PENDING' }))}
+                >
+                  Pending
+                </button>
+                <button 
+                  className={`tab-btn ${filter.statusTab === 'FAILED' ? 'is-active' : ''}`}
+                  onClick={() => setFilter(prev => ({ ...prev, statusTab: 'FAILED' }))}
+                >
+                  Failed
+                </button>
+              </div>
 
-            {/* Filter Search Cluster */}
-            <div className="tx-search-cluster">
               <div className="tx-search-box">
                 <span className="search-symbol"><TxIcons.Search /></span>
                 <input
                   type="text"
-                  placeholder="Search Txn ID, UTR, merchant, customer..."
+                  placeholder="Search ID, UTR, branch, agent, customer..."
                   value={filter.search}
                   onChange={(e) => setFilter(prev => ({ ...prev, search: e.target.value }))}
                   className="tx-search-field"
@@ -623,40 +900,222 @@ const TransactionHistory = () => {
                   <button className="clear-search-btn" onClick={() => setFilter(prev => ({ ...prev, search: '' }))}>✕</button>
                 )}
               </div>
+            </div>
 
+            {/* Row 2: Date Period Presets & Custom Calendar Date Pickers */}
+            <div className="tx-date-filter-row">
+              <div className="date-period-segmented-tabs">
+                <button
+                  className={`date-tab-btn ${filter.datePeriod === 'ALL' ? 'is-active' : ''}`}
+                  onClick={() => handleDatePeriodChange('ALL')}
+                >
+                  All Time
+                </button>
+                <button
+                  className={`date-tab-btn ${filter.datePeriod === 'TODAY' ? 'is-active' : ''}`}
+                  onClick={() => handleDatePeriodChange('TODAY')}
+                >
+                  Today
+                </button>
+                <button
+                  className={`date-tab-btn ${filter.datePeriod === 'LAST_WEEK' ? 'is-active' : ''}`}
+                  onClick={() => handleDatePeriodChange('LAST_WEEK')}
+                >
+                  Last 7 Days
+                </button>
+                <button
+                  className={`date-tab-btn ${filter.datePeriod === 'LAST_MONTH' ? 'is-active' : ''}`}
+                  onClick={() => handleDatePeriodChange('LAST_MONTH')}
+                >
+                  Last 30 Days
+                </button>
+                <button
+                  className={`date-tab-btn ${filter.datePeriod === 'CUSTOM' ? 'is-active' : ''}`}
+                  onClick={() => handleDatePeriodChange('CUSTOM')}
+                >
+                  📅 Custom Range
+                </button>
+              </div>
+
+              {/* Custom Date Range Calendar Inputs */}
+              <div className="custom-date-container">
+                <div 
+                  className="date-picker-wrap" 
+                  title="Click to select Start Date"
+                  onClick={(e) => {
+                    const inp = e.currentTarget.querySelector('input');
+                    if (inp && typeof inp.showPicker === 'function') {
+                      try { inp.showPicker(); } catch (err) {}
+                    }
+                  }}
+                >
+                  <TxIcons.Calendar />
+                  <span className="date-input-label">From:</span>
+                  <input
+                    type="date"
+                    value={filter.dateFrom}
+                    onClick={(e) => {
+                      if (typeof e.target.showPicker === 'function') {
+                        try { e.target.showPicker(); } catch (err) {}
+                      }
+                    }}
+                    onChange={(e) => setFilter(prev => ({ ...prev, datePeriod: 'CUSTOM', dateFrom: e.target.value }))}
+                    className="tx-date-input"
+                  />
+                  {filter.dateFrom && (
+                    <button 
+                      className="clear-date-mini-btn" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFilter(prev => ({ ...prev, dateFrom: '' }));
+                      }}
+                      title="Clear From Date"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                <span className="date-range-divider">to</span>
+
+                <div 
+                  className="date-picker-wrap" 
+                  title="Click to select End Date"
+                  onClick={(e) => {
+                    const inp = e.currentTarget.querySelector('input');
+                    if (inp && typeof inp.showPicker === 'function') {
+                      try { inp.showPicker(); } catch (err) {}
+                    }
+                  }}
+                >
+                  <TxIcons.Calendar />
+                  <span className="date-input-label">To:</span>
+                  <input
+                    type="date"
+                    value={filter.dateTo}
+                    onClick={(e) => {
+                      if (typeof e.target.showPicker === 'function') {
+                        try { e.target.showPicker(); } catch (err) {}
+                      }
+                    }}
+                    onChange={(e) => setFilter(prev => ({ ...prev, datePeriod: 'CUSTOM', dateTo: e.target.value }))}
+                    className="tx-date-input"
+                  />
+                  {filter.dateTo && (
+                    <button 
+                      className="clear-date-mini-btn" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFilter(prev => ({ ...prev, dateTo: '' }));
+                      }}
+                      title="Clear To Date"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Row 3: Dropdowns for Scope, Branch, Agent, Mode, Collection Type */}
+            <div className="tx-filter-bottom-row">
+              {/* Merchant Filter (Software Admin) */}
+              {merchants.length > 0 && isSoftwareAdmin && (
+                <select
+                  value={selectedMerchantId || 'ALL'}
+                  onChange={(e) => setSelectedMerchantId(e.target.value)}
+                  className="tx-mode-select"
+                  style={{ minWidth: '170px' }}
+                >
+                  <option value="ALL">🏢 All Merchants Scope</option>
+                  {merchants.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      🏢 {m.merchantName || m.businessName || `Merchant #${m.id}`}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {/* Branch Filter */}
+              <select
+                value={filter.branchId}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setFilter(prev => ({ ...prev, branchId: val, agentId: '' }));
+                }}
+                className="tx-mode-select"
+                style={{ minWidth: '150px' }}
+              >
+                <option value="">🏢 All Branches ({branches.length})</option>
+                {branches.map((b) => {
+                  const bId = b.id || b.branchId;
+                  const bName = b.name || b.branchName || `Branch #${bId}`;
+                  const bCode = b.code || b.branchCode ? ` (${b.code || b.branchCode})` : '';
+                  return (
+                    <option key={bId} value={bId}>
+                      🏢 {bName}{bCode}
+                    </option>
+                  );
+                })}
+              </select>
+
+              {/* Agent Filter */}
+              <select
+                value={filter.agentId}
+                onChange={(e) => setFilter(prev => ({ ...prev, agentId: e.target.value }))}
+                className="tx-mode-select"
+                style={{ minWidth: '160px' }}
+              >
+                <option value="">👤 All Field Agents ({availableAgents.length})</option>
+                {availableAgents.map((a) => {
+                  const aId = a.id || a.agentId;
+                  const aName = a.agentName || a.fullName || a.name || `Agent #${aId}`;
+                  const aCode = a.agentCode || a.code ? ` (${a.agentCode || a.code})` : '';
+                  return (
+                    <option key={aId} value={aId}>
+                      👤 {aName}{aCode}
+                    </option>
+                  );
+                })}
+              </select>
+
+              {/* Payment Mode Filter (Only CASH and UPI) */}
               <select
                 value={filter.paymentMode}
                 onChange={(e) => setFilter(prev => ({ ...prev, paymentMode: e.target.value }))}
                 className="tx-mode-select"
+                style={{ minWidth: '140px' }}
               >
-                <option value="">All Payment Modes</option>
-                <option value="UPI">UPI</option>
-                <option value="Credit Card">Credit Card</option>
-                <option value="Debit Card">Debit Card</option>
-                <option value="Net Banking">Net Banking</option>
+                <option value="">💳 All Payment Modes</option>
+                <option value="CASH">💵 CASH</option>
+                <option value="UPI">⚡ UPI</option>
               </select>
 
-              <div className="date-picker-wrap">
-                <TxIcons.Calendar />
-                <input
-                  type="date"
-                  value={filter.dateFrom}
-                  onChange={(e) => setFilter(prev => ({ ...prev, dateFrom: e.target.value }))}
-                  className="tx-date-input"
-                  title="From Date"
-                />
-              </div>
+              {/* Collection Type Filter (Dynamic from backend) */}
+              <select
+                value={filter.collectionType}
+                onChange={(e) => setFilter(prev => ({ ...prev, collectionType: e.target.value }))}
+                className="tx-mode-select"
+                style={{ minWidth: '160px' }}
+              >
+                <option value="">📁 All Collection Types</option>
+                {availableCollectionTypes.map(ct => (
+                  <option key={ct} value={ct}>
+                    📁 {ct}
+                  </option>
+                ))}
+              </select>
 
-              <div className="date-picker-wrap">
-                <TxIcons.Calendar />
-                <input
-                  type="date"
-                  value={filter.dateTo}
-                  onChange={(e) => setFilter(prev => ({ ...prev, dateTo: e.target.value }))}
-                  className="tx-date-input"
-                  title="To Date"
-                />
-              </div>
+              {/* Reset Filters button if any active */}
+              {(filter.search || filter.paymentMode || filter.collectionType || filter.branchId || filter.agentId || filter.dateFrom || filter.dateTo || filter.datePeriod !== 'ALL' || filter.statusTab !== 'ALL') && (
+                <button
+                  className="tx-reset-filters-btn"
+                  onClick={() => setFilter({ search: '', statusTab: 'ALL', paymentMode: '', collectionType: '', datePeriod: 'ALL', branchId: '', agentId: '', dateFrom: '', dateTo: '' })}
+                  title="Reset all active filters"
+                >
+                  ✕ Reset Filters
+                </button>
+              )}
             </div>
 
           </div>
@@ -668,34 +1127,38 @@ const TransactionHistory = () => {
                 <tr>
                   <th style={{ width: '50px' }}>#</th>
                   <th>Transaction ID / UTR</th>
-                  <th>Merchant Partner</th>
+                  {isSoftwareAdmin && <th>Merchant Partner</th>}
+                  <th>Branch Outlet</th>
+                  <th>Agent Representative</th>
                   <th>Customer Payer</th>
+                  <th>Collection Type</th>
                   <th>Amount</th>
-                  <th>Payment Channel</th>
+                  <th>Payment Mode</th>
                   <th>Status</th>
                   <th>Timestamp</th>
                   <th style={{ textAlign: 'right' }}>Audit</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredTransactions.length === 0 ? (
+                {paginatedTransactions.length === 0 ? (
                   <tr>
-                    <td colSpan="9" className="empty-tx-cell">
+                    <td colSpan={isSoftwareAdmin ? 12 : 11} className="empty-tx-cell">
                       <div className="empty-tx-box">
                         <span className="empty-glyph">📋</span>
                         <h4>No Transactions Found</h4>
-                        <p>No transaction logs match your active filter filters.</p>
+                        <p>No transaction logs match your active filters.</p>
                       </div>
                     </td>
                   </tr>
                 ) : (
-                  filteredTransactions.map((t, index) => {
+                  paginatedTransactions.map((t, index) => {
                     const statusClass = getStatusClass(t.status);
                     const isCopied = copiedId === (t.id || t.transactionId);
+                    const absoluteIndex = (currentPage - 1) * pageSize + index + 1;
 
                     return (
                       <tr key={t.id || t.transactionId || index} className="tx-table-row">
-                        <td className="row-index font-mono">{String(index + 1).padStart(2, '0')}</td>
+                        <td className="row-index font-mono">{String(absoluteIndex).padStart(2, '0')}</td>
                         
                         {/* Transaction ID & UTR */}
                         <td>
@@ -706,17 +1169,35 @@ const TransactionHistory = () => {
                                 {isCopied ? <TxIcons.CheckMark /> : <TxIcons.Copy />}
                               </button>
                             </span>
-                            <span className="tx-utr-code font-mono text-muted">{t.utr || `UTR-2026-${index + 900}`}</span>
+                            <span className="tx-utr-code font-mono text-muted">{t.utr || `UTR-2026-${absoluteIndex + 900}`}</span>
                           </div>
                         </td>
 
-                        {/* Merchant */}
-                        <td>
-                          <div className="tx-merchant-cell">
-                            <div className="merchant-avatar-mini">
-                              {(t.merchant || t.merchantName || 'M').charAt(0).toUpperCase()}
+                        {/* Merchant Partner (Software Admin Only) */}
+                        {isSoftwareAdmin && (
+                          <td>
+                            <div className="tx-merchant-cell">
+                              <div className="merchant-avatar-mini">
+                                {(t.merchant || t.merchantName || 'M').charAt(0).toUpperCase()}
+                              </div>
+                              <span className="merchant-name-text font-bold">{t.merchant || t.merchantName || 'Apex Retail Services'}</span>
                             </div>
-                            <span className="merchant-name-text font-bold">{t.merchant || t.merchantName || 'Apex Retail Services'}</span>
+                          </td>
+                        )}
+
+                        {/* Branch Outlet */}
+                        <td>
+                          <div className="branch-cell-stack">
+                            <span className="branch-name font-bold">{t.branchName || t.branch || 'Main Branch'}</span>
+                            {t.branchCode && <span className="branch-code font-mono text-muted">{t.branchCode}</span>}
+                          </div>
+                        </td>
+
+                        {/* Agent Representative */}
+                        <td>
+                          <div className="agent-cell-stack">
+                            <span className="agent-name font-bold">{t.agentName || t.agent || 'Direct Gateway'}</span>
+                            {t.agentCode && <span className="agent-code font-mono text-muted">{t.agentCode}</span>}
                           </div>
                         </td>
 
@@ -725,9 +1206,16 @@ const TransactionHistory = () => {
                           <span className="customer-name-text text-muted">{t.customer || t.customerName || 'Payer Account'}</span>
                         </td>
 
+                        {/* Collection Type */}
+                        <td>
+                          <span className="collection-type-chip font-mono">
+                            {t.collectionType || t.CollectionType || t.udf5 || 'RD'}
+                          </span>
+                        </td>
+
                         {/* Amount */}
                         <td>
-                          <span className="tx-amount-text font-mono font-bold">
+                          <span className="tx-amount-text font-mono font-bold text-green">
                             ₹{(Number(t.amount) || 0).toLocaleString('en-IN')}
                           </span>
                         </td>
@@ -735,7 +1223,7 @@ const TransactionHistory = () => {
                         {/* Mode */}
                         <td>
                           <span className="tx-channel-chip font-mono">
-                            {t.paymentMode || t.method || 'UPI'}
+                            {(t.paymentMode || t.method || 'UPI').toUpperCase()}
                           </span>
                         </td>
 
@@ -751,10 +1239,10 @@ const TransactionHistory = () => {
                         <td>
                           <div className="tx-date-stack">
                             <span className="date-main">
-                              {t.date ? new Date(t.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '16 Aug 2026'}
+                              {t.dateObj ? t.dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                             </span>
                             <span className="time-sub font-mono text-muted">
-                              {t.date ? new Date(t.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '14:32 IST'}
+                              {t.dateObj ? t.dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : ''}
                             </span>
                           </div>
                         </td>
@@ -777,9 +1265,85 @@ const TransactionHistory = () => {
             </table>
           </div>
 
-          {/* Footer */}
+          {/* Footer & Pagination Toolbar */}
           <div className="tx-table-footer">
-            <span>Showing <strong className="font-mono">{filteredTransactions.length}</strong> of <strong className="font-mono">{transactions.length}</strong> processed transactions</span>
+            <div className="tx-footer-left">
+              <span className="tx-footer-info">
+                Showing <strong className="font-mono">{filteredTransactions.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}</strong> to <strong className="font-mono">{Math.min(currentPage * pageSize, filteredTransactions.length)}</strong> of <strong className="font-mono">{filteredTransactions.length}</strong> processed transactions
+              </span>
+              <div className="tx-page-size-selector">
+                <span>Per page:</span>
+                <select 
+                  value={pageSize} 
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="tx-size-select"
+                >
+                  <option value={5}>5 entries</option>
+                  <option value={10}>10 entries</option>
+                  <option value={20}>20 entries</option>
+                  <option value={50}>50 entries</option>
+                </select>
+              </div>
+            </div>
+
+            {totalPages > 1 && (
+              <div className="tx-pagination-controls">
+                <button 
+                  className="tx-page-btn" 
+                  onClick={() => setCurrentPage(1)} 
+                  disabled={currentPage === 1}
+                  title="First Page"
+                >
+                  «
+                </button>
+                <button 
+                  className="tx-page-btn" 
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} 
+                  disabled={currentPage === 1}
+                  title="Previous Page"
+                >
+                  ‹
+                </button>
+                
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(page => page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1)
+                  .map((page, idx, arr) => {
+                    const prev = arr[idx - 1];
+                    return (
+                      <React.Fragment key={page}>
+                        {prev && page - prev > 1 && <span className="tx-page-ellipsis">…</span>}
+                        <button
+                          className={`tx-page-num-btn ${currentPage === page ? 'is-active' : ''}`}
+                          onClick={() => setCurrentPage(page)}
+                        >
+                          {page}
+                        </button>
+                      </React.Fragment>
+                    );
+                  })
+                }
+
+                <button 
+                  className="tx-page-btn" 
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} 
+                  disabled={currentPage === totalPages}
+                  title="Next Page"
+                >
+                  ›
+                </button>
+                <button 
+                  className="tx-page-btn" 
+                  onClick={() => setCurrentPage(totalPages)} 
+                  disabled={currentPage === totalPages}
+                  title="Last Page"
+                >
+                  »
+                </button>
+              </div>
+            )}
           </div>
 
         </div>
@@ -823,6 +1387,14 @@ const TransactionHistory = () => {
                     <span className="item-val font-bold">{selectedTxn.merchant || selectedTxn.merchantName || 'Apex Retail Services'}</span>
                   </div>
                   <div className="telemetry-item">
+                    <span className="item-label">Branch Outlet</span>
+                    <span className="item-val font-bold">{selectedTxn.branchName || selectedTxn.branch || 'Main Branch'}</span>
+                  </div>
+                  <div className="telemetry-item">
+                    <span className="item-label">Agent Representative</span>
+                    <span className="item-val font-bold">{selectedTxn.agentName || selectedTxn.agent || selectedTxn.agentCode || 'Direct Gateway Clearance'}</span>
+                  </div>
+                  <div className="telemetry-item">
                     <span className="item-label">Customer Payer</span>
                     <span className="item-val">{selectedTxn.customer || selectedTxn.customerName || 'Direct Payer'}</span>
                   </div>
@@ -831,8 +1403,12 @@ const TransactionHistory = () => {
                     <span className="item-val font-mono">{selectedTxn.utr || 'UTR-2026-99120'}</span>
                   </div>
                   <div className="telemetry-item">
+                    <span className="item-label">Collection Type</span>
+                    <span className="item-val font-mono font-bold" style={{ color: 'var(--accent, #6366f1)' }}>{selectedTxn.collectionType || selectedTxn.CollectionType || selectedTxn.udf5 || 'RD'}</span>
+                  </div>
+                  <div className="telemetry-item">
                     <span className="item-label">Payment Channel</span>
-                    <span className="item-val font-mono">{selectedTxn.paymentMode || 'UPI'}</span>
+                    <span className="item-val font-mono">{(selectedTxn.paymentMode || selectedTxn.method || 'UPI').toUpperCase()}</span>
                   </div>
                   <div className="telemetry-item">
                     <span className="item-label">Gateway RRN</span>
@@ -841,7 +1417,7 @@ const TransactionHistory = () => {
                   <div className="telemetry-item">
                     <span className="item-label">Processed Timestamp</span>
                     <span className="item-val font-mono text-muted">
-                      {selectedTxn.date ? new Date(selectedTxn.date).toLocaleString() : '16 Aug 2026, 14:32:00 IST'}
+                      {selectedTxn.dateObj ? selectedTxn.dateObj.toLocaleString() : (selectedTxn.date ? new Date(selectedTxn.date).toLocaleString() : '—')}
                     </span>
                   </div>
                 </div>

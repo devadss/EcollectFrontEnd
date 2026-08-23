@@ -115,9 +115,17 @@ const Merchants = () => {
   const [approvingId, setApprovingId] = useState(null);
   const { showSuccess, showError, showConfirm } = useDialog();
 
-  const rawRole = localStorage.getItem('user_role') || localStorage.getItem('role') || 'softwareadmin';
-  const normRole = rawRole.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const isSoftwareAdmin = normRole.includes('softwareadmin') || normRole.includes('admin') || normRole.includes('superadmin');
+  const authUser = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
+    } catch {
+      return {};
+    }
+  })();
+
+  const rawRole = (localStorage.getItem('user_role') || localStorage.getItem('role') || authUser?.role || '').toLowerCase().trim();
+  const normRole = rawRole.replace(/[^a-z0-9]/g, '');
+  const isSoftwareAdmin = (normRole.includes('software') || normRole.includes('superadmin') || normRole === 'admin') && !normRole.includes('merchant') && !normRole.includes('branch') && !normRole.includes('agent');
 
   useEffect(() => {
     loadMerchants();

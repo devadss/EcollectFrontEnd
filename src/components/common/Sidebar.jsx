@@ -207,8 +207,16 @@ const Sidebar = ({
     if (normRole.includes('branch') || normRole.includes('bank')) {
       return [
         { section: 'Overview', items: [{ label: 'Dashboard', path: '/dashboard' }] },
-        { section: 'Accounts', items: [
+        { section: 'Management', items: [
+          { label: 'Agents', path: '/agents' },
           { label: 'Accounts', path: '/accounts' },
+        ]},
+        { section: 'Transactions', items: [
+          { label: 'Transaction History', path: '/transactions' },
+          { label: 'Settlements', path: '/settlements' },
+        ]},
+        { section: 'Analytics', items: [
+          { label: 'Reports', path: '/reports' },
         ]},
         { section: 'System', items: [
           { label: 'Notifications', path: '/notifications' },
@@ -429,16 +437,14 @@ const Sidebar = ({
         
         {/* Brand Header */}
         <div className="sidebar-brand-header">
-          <div className="brand-logo-pill" onClick={() => navigate('/dashboard')} role="button" tabIndex={0}>
-            <div className="brand-icon-box">
-              <Icons.Logo />
+          <div className="brand-logo-pill" onClick={() => navigate('/dashboard')} role="button" tabIndex={0} title="eCollect • Smart Payment Solutions">
+            <div className="brand-logo-img-wrapper">
+              <img 
+                src="/ecollect-logo.png" 
+                alt="eCollect - Smart Payment Solutions" 
+                className={collapsed ? "sidebar-logo-collapsed-img" : "sidebar-logo-expanded-img"} 
+              />
             </div>
-            {!collapsed && (
-              <div className="brand-titles">
-                <span className="brand-name">Ecollect<span className="brand-name-suffix">PG</span></span>
-                <span className="brand-tagline">PAYMENT GATEWAY</span>
-              </div>
-            )}
           </div>
 
           {!isMobile && (

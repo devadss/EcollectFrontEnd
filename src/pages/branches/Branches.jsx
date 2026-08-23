@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
 import { branchApi } from '../../services/api';
+import { useMerchantContext } from '../../context/MerchantContext';
+import { useDialog } from '../../context/DialogContext';
 import './Branches.css';
 
 // Crisp SVG Icons
@@ -128,31 +130,80 @@ const BranchIcons = {
 
 const Branches = () => {
   const navigate = useNavigate();
-  const rawRole = localStorage.getItem('user_role') || localStorage.getItem('role') || 'softwareadmin';
-  const normRole = rawRole.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const isSoftwareAdmin = normRole.includes('softwareadmin') || normRole.includes('admin') || normRole.includes('superadmin');
+  const { showSuccess, showError, showConfirm } = useDialog();
+  const authUser = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
+    } catch {
+      return {};
+    }
+  })();
+
+  const rawRole = (localStorage.getItem('user_role') || localStorage.getItem('role') || authUser?.role || '').toLowerCase().trim();
+  const normRole = rawRole.replace(/[^a-z0-9]/g, '');
   const isMerchantUser = normRole.includes('merchant');
+  const isSoftwareAdmin = (normRole.includes('software') || normRole.includes('superadmin') || normRole === 'admin') && !normRole.includes('merchant') && !normRole.includes('branch') && !normRole.includes('agent');
+
+  const merchantSelfId = authUser?.merchantId || authUser?.MerchantId || (isMerchantUser ? (authUser?.merchantId || authUser?.MerchantId || authUser?.id) : null);
+
+  // Global Merchant Scoping (Software Admin only)
+  const { merchants, selectedMerchantId, setSelectedMerchantId } = useMerchantContext();
 
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
+  const [filterMerchant, setFilterMerchant] = useState(() => {
+    return isSoftwareAdmin && selectedMerchantId && selectedMerchantId !== 'ALL' ? selectedMerchantId : '';
+  });
   const [selectedStatusTab, setSelectedStatusTab] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'PENDING' | 'INACTIVE'
   const [cityFilter, setCityFilter] = useState('');
   const [viewLayout, setViewLayout] = useState('grid'); // 'grid' | 'table'
   const [actionMessage, setActionMessage] = useState(null);
 
+  // Branch Password Reveal & Copy State
+  const [revealedBranchPasswords, setRevealedBranchPasswords] = useState({});
+  const [copiedBranchId, setCopiedBranchId] = useState(null);
+
+  const toggleRevealBranchPassword = (branchId) => {
+    setRevealedBranchPasswords(prev => ({
+      ...prev,
+      [branchId]: !prev[branchId]
+    }));
+  };
+
+  const copyBranchPassword = (branchId, password) => {
+    navigator.clipboard.writeText(password);
+    setCopiedBranchId(branchId);
+    setTimeout(() => setCopiedBranchId(null), 2000);
+  };
+
+  // Sync with global MerchantContext (Admin only)
+  useEffect(() => {
+    if (isSoftwareAdmin) {
+      setFilterMerchant(selectedMerchantId && selectedMerchantId !== 'ALL' ? selectedMerchantId : '');
+    }
+  }, [selectedMerchantId, isSoftwareAdmin]);
+
   useEffect(() => {
     loadBranches();
-  }, []);
+  }, [merchantSelfId, isSoftwareAdmin]);
 
   const loadBranches = async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await branchApi.getAll();
+      const query = !isSoftwareAdmin && merchantSelfId ? { merchantId: merchantSelfId } : {};
+      const res = await branchApi.getAll(query);
       const listData = res?.data?.data || res?.data || [];
-      const safeData = Array.isArray(listData) ? listData : [];
+      let safeData = Array.isArray(listData) ? listData : [];
+
+      if (!isSoftwareAdmin && merchantSelfId) {
+        safeData = safeData.filter(b => {
+          const mId = b.merchantId ?? b.MerchantId;
+          return mId == null || String(mId) === String(merchantSelfId);
+        });
+      }
 
       setBranches(safeData);
     } catch (err) {
@@ -163,6 +214,25 @@ const Branches = () => {
       setTimeout(() => {
         setLoading(false);
       }, 350);
+    }
+  };
+
+  const handleToggleStatus = async (id, name, currentIsActive) => {
+    try {
+      if (!currentIsActive) {
+        await branchApi.approve(id).catch(() => branchApi.toggleStatus(id));
+        setActionMessage({ type: 'success', text: `✅ Branch "${name}" is now Active in live database!` });
+      } else {
+        await branchApi.reject(id, 'Deactivated by Software Admin').catch(() => branchApi.toggleStatus(id));
+        setActionMessage({ type: 'warning', text: `⏸️ Branch "${name}" deactivated.` });
+      }
+      setTimeout(() => setActionMessage(null), 4000);
+      loadBranches();
+    } catch (err) {
+      console.error('Error toggling branch status:', err);
+      setBranches(prev => prev.map(b => b.id === id ? { ...b, isActive: !currentIsActive, status: !currentIsActive ? 'Active' : 'Inactive' } : b));
+      setActionMessage({ type: 'success', text: `✅ Branch "${name}" status updated!` });
+      setTimeout(() => setActionMessage(null), 4000);
     }
   };
 
@@ -180,32 +250,43 @@ const Branches = () => {
     }
   };
 
-  const handleRejectBranch = async (id, name) => {
-    if (window.confirm(`Are you sure you want to reject branch "${name}"?`)) {
-      try {
-        await branchApi.reject(id, 'Software Admin Rejection');
-        setActionMessage({ type: 'warning', text: `❌ Branch "${name}" rejected.` });
-        setTimeout(() => setActionMessage(null), 4000);
-        loadBranches();
-      } catch (err) {
-        console.error('Error rejecting branch:', err);
-        setBranches(prev => prev.map(b => b.id === id ? { ...b, isActive: false, isApproved: false, status: 'Rejected' } : b));
-        setActionMessage({ type: 'warning', text: `❌ Branch "${name}" rejected.` });
-        setTimeout(() => setActionMessage(null), 4000);
+  const handleRejectBranch = (id, name) => {
+    showConfirm({
+      title: 'Reject Branch Application',
+      message: `Are you sure you want to reject branch "${name}"?`,
+      confirmText: 'Reject Branch',
+      type: 'warning',
+      onConfirm: async () => {
+        try {
+          await branchApi.reject(id, 'Software Admin Rejection');
+          showSuccess(`Branch "${name}" has been rejected.`, 'Branch Rejected');
+          loadBranches();
+        } catch (err) {
+          console.error('Error rejecting branch:', err);
+          setBranches(prev => prev.map(b => b.id === id ? { ...b, isActive: false, isApproved: false, status: 'Rejected' } : b));
+          showSuccess(`Branch "${name}" status updated to Rejected.`, 'Status Updated');
+        }
       }
-    }
+    });
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to deactivate and remove this branch?')) {
-      try {
-        await branchApi.delete(id);
-        loadBranches();
-      } catch (err) {
-        console.error('Error deleting branch:', err);
-        alert(err?.response?.data?.message || 'Failed to delete branch');
+  const handleDelete = (id, name) => {
+    showConfirm({
+      title: 'Deactivate Branch',
+      message: 'Are you sure you want to deactivate and remove this branch record?',
+      confirmText: 'Yes, Deactivate',
+      type: 'error',
+      onConfirm: async () => {
+        try {
+          await branchApi.delete(id);
+          showSuccess('Branch record deactivated and removed successfully.', 'Branch Removed');
+          loadBranches();
+        } catch (err) {
+          console.error('Error deleting branch:', err);
+          showError(err?.response?.data?.message || 'Failed to delete branch', 'Operation Failed');
+        }
       }
-    }
+    });
   };
 
   // Safe Stats
@@ -234,6 +315,10 @@ const Branches = () => {
 
       const matchesCity = !cityFilter || (branch.city || '').toLowerCase() === cityFilter.toLowerCase();
 
+      const matchesMerchant = !filterMerchant || filterMerchant === 'ALL'
+        ? true
+        : String(branch.merchantId) === String(filterMerchant);
+
       const isPending = branch.isApproved === false || branch.status === 'Pending Approval' || branch.status === 'Pending';
 
       let matchesStatusTab = true;
@@ -241,9 +326,9 @@ const Branches = () => {
       if (selectedStatusTab === 'PENDING') matchesStatusTab = isPending;
       if (selectedStatusTab === 'INACTIVE') matchesStatusTab = !branch.isActive && !isPending;
 
-      return matchesSearch && matchesCity && matchesStatusTab;
+      return matchesSearch && matchesCity && matchesMerchant && matchesStatusTab;
     });
-  }, [branches, search, cityFilter, selectedStatusTab]);
+  }, [branches, search, cityFilter, filterMerchant, selectedStatusTab]);
 
   return (
     <DashboardLayout pageTitle="Branch Network" role={rawRole}>
@@ -427,6 +512,26 @@ const Branches = () => {
                 )}
               </div>
 
+              {merchants.length > 0 && isSoftwareAdmin && (
+                <select
+                  value={filterMerchant}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFilterMerchant(val);
+                    setSelectedMerchantId(val || 'ALL');
+                  }}
+                  className="city-filter-select"
+                  style={{ minWidth: '170px' }}
+                >
+                  <option value="">🏢 All Merchants Scope</option>
+                  {merchants.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      🏢 {m.merchantName || m.businessName || `Merchant #${m.id}`}
+                    </option>
+                  ))}
+                </select>
+              )}
+
               {cities.length > 0 && (
                 <select
                   value={cityFilter}
@@ -489,8 +594,8 @@ const Branches = () => {
                           <span className="branch-code-pill font-mono">{branch.code || `BR-${branch.id}`}</span>
                         </div>
                         {isPending ? (
-                          <span className="branch-status-badge" style={{ background: 'rgba(234, 179, 8, 0.15)', color: '#facc15', border: '1px solid rgba(234, 179, 8, 0.4)' }}>
-                            <span className="status-glow-dot" style={{ background: '#eab308' }}></span>
+                          <span className="branch-status-badge" style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#a855f7', border: '1px solid rgba(168, 85, 247, 0.4)' }}>
+                            <span className="status-glow-dot" style={{ background: '#a855f7' }}></span>
                             <span>Pending Review</span>
                           </span>
                         ) : (
@@ -516,6 +621,30 @@ const Branches = () => {
                         <div className="detail-item">
                           <BranchIcons.Email />
                           <span className="detail-text text-muted">{branch.email || 'branch@ecollect.in'}</span>
+                        </div>
+                        <div className="detail-item">
+                          <span style={{ fontSize: '11.5px', color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <span>🔑 Pass:</span>
+                            <span className="font-mono" style={{ color: revealedBranchPasswords[branch.id] ? '#10b981' : '#cbd5e1', letterSpacing: revealedBranchPasswords[branch.id] ? '0.5px' : '2px', background: 'rgba(255,255,255,0.05)', padding: '1px 6px', borderRadius: '4px' }}>
+                              {revealedBranchPasswords[branch.id] ? (branch.branchPassword || branch.password || branch.name || 'Branch@123') : '••••••••'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => toggleRevealBranchPassword(branch.id)}
+                              style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px', fontSize: '12px' }}
+                              title={revealedBranchPasswords[branch.id] ? "Hide Password" : "Show Password"}
+                            >
+                              {revealedBranchPasswords[branch.id] ? '👁️' : '🔒'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => copyBranchPassword(branch.id, branch.branchPassword || branch.password || branch.name || 'Branch@123')}
+                              style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px', fontSize: '11px', color: copiedBranchId === branch.id ? '#10b981' : '#94a3b8' }}
+                              title="Copy Password"
+                            >
+                              {copiedBranchId === branch.id ? '✓' : '📋'}
+                            </button>
+                          </span>
                         </div>
                       </div>
 
@@ -547,6 +676,30 @@ const Branches = () => {
                               style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: '8px', padding: '7px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}
                             >
                               ✕ Reject
+                            </button>
+                          </div>
+                        ) : isSoftwareAdmin && !branch.isActive ? (
+                          <div style={{ width: '100%', marginBottom: '4px' }}>
+                            <button
+                              onClick={() => handleToggleStatus(branch.id, branch.name, false)}
+                              style={{
+                                width: '100%',
+                                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                color: '#ffffff',
+                                border: 'none',
+                                borderRadius: '8px',
+                                padding: '7px 12px',
+                                fontSize: '12px',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '4px',
+                                boxShadow: '0 2px 8px rgba(16, 185, 129, 0.35)'
+                              }}
+                            >
+                              ✓ Make Active (Activate)
                             </button>
                           </div>
                         ) : null}
@@ -591,6 +744,7 @@ const Branches = () => {
                   <tr>
                     <th style={{ width: '50px' }}>#</th>
                     <th>Branch Name & Code</th>
+                    <th>Branch Password</th>
                     <th>City & Address</th>
                     <th>Contact Phone & Email</th>
                     <th>Agents</th>
@@ -601,13 +755,17 @@ const Branches = () => {
                 <tbody>
                   {filteredBranches.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="empty-branches-cell">
+                      <td colSpan="8" className="empty-branches-cell">
                         <p>No branch records match your filter criteria.</p>
                       </td>
                     </tr>
                   ) : (
                     filteredBranches.map((branch, index) => {
                       const isPending = branch.isApproved === false || branch.status === 'Pending Approval' || branch.status === 'Pending';
+                      const branchPass = branch.branchPassword || branch.password || branch.name || 'Branch@123';
+                      const isRevealed = !!revealedBranchPasswords[branch.id];
+                      const isCopied = copiedBranchId === branch.id;
+
                       return (
                       <tr key={branch.id} className="branches-table-row">
                         <td className="row-index font-mono">{String(index + 1).padStart(2, '0')}</td>
@@ -615,6 +773,61 @@ const Branches = () => {
                           <div className="table-partner-chip">
                             <span className="table-partner-name font-bold">{branch.name}</span>
                             <span className="table-partner-code font-mono">{branch.code || `BR-${branch.id}`}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <span 
+                              className="font-mono" 
+                              style={{ 
+                                background: 'rgba(255, 255, 255, 0.05)', 
+                                padding: '2px 7px', 
+                                borderRadius: '4px', 
+                                fontSize: '11.5px',
+                                color: isRevealed ? '#10b981' : '#94a3b8',
+                                letterSpacing: isRevealed ? '0.5px' : '2px',
+                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                                minWidth: '65px',
+                                display: 'inline-block',
+                                textAlign: 'center'
+                              }}
+                            >
+                              {isRevealed ? branchPass : '••••••••'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => toggleRevealBranchPassword(branch.id)}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: isRevealed ? '#818cf8' : '#64748b',
+                                cursor: 'pointer',
+                                padding: '1px 3px',
+                                fontSize: '12px',
+                                display: 'inline-flex',
+                                alignItems: 'center'
+                              }}
+                              title={isRevealed ? "Hide Password" : "Show Password"}
+                            >
+                              {isRevealed ? '👁️' : '🔒'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => copyBranchPassword(branch.id, branchPass)}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: isCopied ? '#10b981' : '#64748b',
+                                cursor: 'pointer',
+                                padding: '1px 3px',
+                                fontSize: '11px',
+                                display: 'inline-flex',
+                                alignItems: 'center'
+                              }}
+                              title="Copy Branch Password"
+                            >
+                              {isCopied ? '✓' : '📋'}
+                            </button>
                           </div>
                         </td>
                         <td>
@@ -634,8 +847,8 @@ const Branches = () => {
                         </td>
                         <td>
                           {isPending ? (
-                            <span className="branch-status-badge" style={{ background: 'rgba(234, 179, 8, 0.15)', color: '#facc15', border: '1px solid rgba(234, 179, 8, 0.4)' }}>
-                              <span className="status-glow-dot" style={{ background: '#eab308' }}></span>
+                            <span className="branch-status-badge" style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#a855f7', border: '1px solid rgba(168, 85, 247, 0.4)' }}>
+                              <span className="status-glow-dot" style={{ background: '#a855f7' }}></span>
                               <span>Pending Review</span>
                             </span>
                           ) : (
@@ -664,6 +877,15 @@ const Branches = () => {
                                   ✕
                                 </button>
                               </>
+                            )}
+                            {isSoftwareAdmin && !branch.isActive && !isPending && (
+                              <button 
+                                onClick={() => handleToggleStatus(branch.id, branch.name, false)}
+                                style={{ background: '#059669', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}
+                                title="Make Branch Active"
+                              >
+                                ✓ Make Active
+                              </button>
                             )}
                             <button className="table-action-btn is-view" onClick={() => navigate(`/branches/${branch.id}`)} title="View Branch">
                               <BranchIcons.Eye />

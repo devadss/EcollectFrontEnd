@@ -5,12 +5,14 @@ import LoadingAnimation from '../../components/common/LoadingAnimation';
 import StateDistrictSelect from '../../components/common/StateDistrictSelect';
 import { lookupLocationByPincode } from '../../services/locationService';
 import { agentApi, merchantApi, branchApi } from '../../services/api';
+import { useDialog } from '../../context/DialogContext';
 import './AddAgent.css';
 
 const AddAgent = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEdit = !!id;
+  const { showSuccess, showError, showWarning } = useDialog();
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [merchants, setMerchants] = useState([]);
@@ -26,12 +28,6 @@ const AddAgent = () => {
   // Selected ID for external dropdown
   const [selectedAgentId, setSelectedAgentId] = useState('');
 
-  const rawRole = localStorage.getItem('user_role') || localStorage.getItem('role') || 'softwareadmin';
-  const normRole = rawRole.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const isBranchUser = normRole.includes('branch') || normRole.includes('bank');
-  const isMerchantUser = normRole.includes('merchant');
-  const isSoftwareAdmin = normRole.includes('softwareadmin') || normRole.includes('admin') || normRole.includes('superadmin');
-
   const authUser = (() => {
     try {
       return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
@@ -40,7 +36,13 @@ const AddAgent = () => {
     }
   })();
 
-  const currentMerchantId = authUser?.merchantId || localStorage.getItem('merchantId') || (isMerchantUser ? authUser?.id : null);
+  const rawRole = (localStorage.getItem('user_role') || localStorage.getItem('role') || authUser?.role || '').toLowerCase().trim();
+  const normRole = rawRole.replace(/[^a-z0-9]/g, '');
+  const isBranchUser = normRole.includes('branch') && !normRole.includes('merchant');
+  const isMerchantUser = normRole.includes('merchant');
+  const isSoftwareAdmin = (normRole.includes('software') || normRole.includes('superadmin') || normRole === 'admin') && !normRole.includes('merchant') && !normRole.includes('branch') && !normRole.includes('agent');
+
+  const currentMerchantId = authUser?.merchantId || authUser?.MerchantId || localStorage.getItem('merchantId') || (isMerchantUser ? (authUser?.merchantId || authUser?.MerchantId || authUser?.id) : null);
 
   const [formData, setFormData] = useState({
     agentName: '',
@@ -49,7 +51,7 @@ const AddAgent = () => {
     agentCode: '',
     merchantId: currentMerchantId ? String(currentMerchantId) : '',
     branchId: '',
-    commissionRate: '',
+    commissionRate: '0',
     isActive: isSoftwareAdmin ? true : false,
     isVerified: isSoftwareAdmin ? true : false,
     address: '',
@@ -124,12 +126,12 @@ const AddAgent = () => {
       }
 
       if (isBranchUser) {
-        alert('Field Agent registration is managed by Merchant and Software Admin portals. Branch users do not have permission to register agents.');
+        showWarning('Field Agent registration is managed by Merchant and Software Admin portals. Branch users do not have permission to register agents.', 'Permission Denied');
         navigate('/agents');
         return;
       }
       if (isEdit && !isSoftwareAdmin) {
-        alert('Modification of Field Agent credentials is restricted to the Software Admin portal.');
+        showWarning('Modification of Field Agent credentials is restricted to the Software Admin portal.', 'Access Restricted');
         navigate('/agents');
         return;
       }
@@ -137,19 +139,40 @@ const AddAgent = () => {
       try {
         setPageLoading(true);
 
-        // 1. Load merchants and branches concurrently
-        const [mRes, bRes] = await Promise.all([
-          merchantApi.getAll(),
-          branchApi.getAll()
-        ]);
+        const targetMid = initialMid;
+        let safeMerchants = [];
+        let safeBranches = [];
 
-        const mList = mRes?.data?.data || mRes?.data || [];
-        const safeMerchants = Array.isArray(mList) ? mList : [];
-        if (isMounted) setMerchants(safeMerchants);
+        if (isSoftwareAdmin) {
+          // Software admin loads all merchants and all branches
+          const [mRes, bRes] = await Promise.all([
+            merchantApi.getAll().catch(() => ({ data: [] })),
+            branchApi.getAll().catch(() => ({ data: [] }))
+          ]);
+          const mList = mRes?.data?.data || mRes?.data || [];
+          safeMerchants = Array.isArray(mList) ? mList : [];
+          const bList = bRes?.data?.data || bRes?.data || [];
+          safeBranches = Array.isArray(bList) ? bList : [];
+        } else if (targetMid) {
+          // Merchant user loads only their own merchant & branches
+          const [mRes, bRes] = await Promise.all([
+            merchantApi.getById(targetMid).catch(() => ({ data: null })),
+            branchApi.getAll({ merchantId: targetMid }).catch(() => ({ data: [] }))
+          ]);
+          const mData = mRes?.data?.data || mRes?.data;
+          if (mData) safeMerchants = [mData];
+          const bList = bRes?.data?.data || bRes?.data || [];
+          const allB = Array.isArray(bList) ? bList : [];
+          safeBranches = allB.filter(b => {
+            const mId = b.merchantId ?? b.MerchantId;
+            return mId == null || String(mId) === String(targetMid);
+          });
+        }
 
-        const bList = bRes?.data?.data || bRes?.data || [];
-        const safeBranches = Array.isArray(bList) ? bList : [];
-        if (isMounted) setBranches(safeBranches);
+        if (isMounted) {
+          setMerchants(safeMerchants);
+          setBranches(safeBranches);
+        }
 
         // 2. If editing, load agent
         if (isEdit) {
@@ -172,20 +195,29 @@ const AddAgent = () => {
               description: aData.description || '',
             });
 
-            const finalMid = aData.merchantId ? String(aData.merchantId) : initialMid;
+            const finalMid = aData.merchantId ? String(aData.merchantId) : targetMid;
             const selectedMerchant = safeMerchants.find(m => String(m.id) === String(finalMid));
             if (selectedMerchant) {
               setIntegrationStatus(selectedMerchant.integrationStatus || selectedMerchant.IntegrationStatus || 'No');
             }
           }
-        } else if (initialMid && safeMerchants.length > 0) {
+        } else if (targetMid && isMounted) {
           // 3. New agent with pre-selected merchant
-          const selectedMerchant = safeMerchants.find(m => String(m.id) === String(initialMid));
+          let selectedMerchant = safeMerchants.find(m => String(m.id) === String(targetMid));
+          if (!selectedMerchant && targetMid) {
+            try {
+              const sRes = await merchantApi.getById(targetMid);
+              selectedMerchant = sRes?.data?.data || sRes?.data;
+            } catch (e) {
+              console.warn('Could not load merchant:', e);
+            }
+          }
           if (selectedMerchant && isMounted) {
             const status = selectedMerchant.integrationStatus || selectedMerchant.IntegrationStatus || 'No';
             setIntegrationStatus(status);
-            if (status === 'Y' || status === 'Yes') {
-              loadExternalAgents(initialMid, false);
+            const isLive = String(status).toUpperCase() === 'Y' || String(status).toUpperCase() === 'YES' || status === true;
+            if (isLive) {
+              loadExternalAgents(targetMid, true);
             }
           }
         }
@@ -275,7 +307,18 @@ const AddAgent = () => {
   };
 
   const handleChange = async (e) => {
-    const { name, value, type, checked } = e.target;
+    let { name, value, type, checked } = e.target;
+
+    // Strict sanitization for mobile phone: numeric only, max 10 digits
+    if (name === 'phone') {
+      value = value.replace(/\D/g, '').slice(0, 10);
+    }
+
+    // Strict sanitization for zipCode: numeric only, max 6 digits
+    if (name === 'zipCode') {
+      value = value.replace(/\D/g, '').slice(0, 6);
+    }
+
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
@@ -305,17 +348,38 @@ const AddAgent = () => {
   const validate = () => {
     let tempErrors = {};
     if (isSoftwareAdmin && !formData.merchantId) tempErrors.merchantId = "Please select the respective merchant partner first";
-    if (!formData.agentName) tempErrors.agentName = "Agent name is required";
-    if (!formData.email) tempErrors.email = "Email is required";
-    if (!formData.phone) tempErrors.phone = "Phone is required";
-    if (!formData.agentCode) tempErrors.agentCode = "Agent Code is required";
+    if (!formData.agentName?.trim()) tempErrors.agentName = "Agent Full Name is required";
+    
+    // Strict Email Validation
+    if (!formData.email?.trim()) {
+      tempErrors.email = "Official Email is required";
+    } else if (!/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(formData.email.trim())) {
+      tempErrors.email = "Enter a valid email address (e.g. agent@partner.in)";
+    }
+
+    // Strict Phone Number Validation (10 numeric digits starting with 6, 7, 8, or 9)
+    if (!formData.phone?.trim()) {
+      tempErrors.phone = "Registered Mobile Number is required";
+    } else if (formData.phone.trim().length !== 10) {
+      tempErrors.phone = "Mobile number must be exactly 10 numeric digits";
+    } else if (!/^[6-9]\d{9}$/.test(formData.phone.trim())) {
+      tempErrors.phone = "Invalid Indian mobile number. Must start with 6, 7, 8, or 9";
+    }
+
+    if (!formData.agentCode?.trim()) tempErrors.agentCode = "Agent Identification Code is required";
     if (!formData.branchId) tempErrors.branchId = "Branch assignment is required";
-    if (!formData.commissionRate) tempErrors.commissionRate = "Commission rate is required";
-    if (!formData.address) tempErrors.address = "Address is required";
-    if (!formData.city) tempErrors.city = "City is required";
-    if (!formData.state) tempErrors.state = "State is required";
-    if (!formData.zipCode) tempErrors.zipCode = "Zip code is required";
-    if (!formData.description) tempErrors.description = "Description is required";
+    if (!formData.address?.trim()) tempErrors.address = "Residential / Operational Address is required";
+    if (!formData.city?.trim()) tempErrors.city = "City / District is required";
+    if (!formData.state?.trim()) tempErrors.state = "State jurisdiction is required";
+    
+    // Strict Zipcode Validation (6 numeric digits)
+    if (!formData.zipCode?.trim()) {
+      tempErrors.zipCode = "Postal PIN code is required";
+    } else if (formData.zipCode.trim().length !== 6 || !/^\d{6}$/.test(formData.zipCode.trim())) {
+      tempErrors.zipCode = "PIN Code must be exactly 6 numeric digits";
+    }
+
+    if (!formData.description?.trim()) tempErrors.description = "KYC & operational description is required";
 
     setErrors(tempErrors);
     return Object.keys(tempErrors).length === 0;
@@ -348,15 +412,18 @@ const AddAgent = () => {
     try {
       if (isEdit) {
         await agentApi.update(id, submitData);
+        showSuccess("Agent credentials and operational parameters updated successfully.", "Agent Updated");
       } else {
         await agentApi.create(submitData);
-      }
-      if (!isSoftwareAdmin) {
-        alert('✅ Agent registered successfully! Submitted for Software Admin review & approval.');
+        if (!isSoftwareAdmin) {
+          showSuccess('Field Representative registered successfully! Submitted for Software Admin review & approval.', 'Agent Registered');
+        } else {
+          showSuccess('Field Representative registered and provisioned successfully.', 'Agent Registered');
+        }
       }
       navigate('/agents');
     } catch (error) {
-      alert(error.response?.data?.message || 'Failed to save agent. Please try again.');
+      showError(error.response?.data?.message || 'Failed to save agent. Please verify all required entries.', 'Agent Save Failed');
     } finally {
       setLoading(false);
     }
@@ -622,19 +689,24 @@ const AddAgent = () => {
               </div>
 
               <div className="form-group">
-                <label>Commission Rate (%) <span style={{ color: '#ef4444' }}>*</span></label>
+                <label>Commission Rate (%)</label>
                 <input
-                  type="number"
+                  type="text"
                   name="commissionRate"
-                  value={formData.commissionRate || ''}
-                  onChange={handleChange}
-                  placeholder="e.g. 2.5"
-                  step="0.1"
-                  min="0"
-                  max="100"
-                  className={`font-mono ${errors.commissionRate ? 'input-error' : ''}`}
+                  value="0"
+                  readOnly
+                  disabled
+                  className="font-mono"
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.04)',
+                    color: '#94a3b8',
+                    cursor: 'not-allowed',
+                    borderColor: 'rgba(255, 255, 255, 0.08)'
+                  }}
                 />
-                {errors.commissionRate && <p className="error-text">{errors.commissionRate}</p>}
+                <span style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', display: 'block' }}>
+                  🔒 Default fixed at 0.00% (Read-Only)
+                </span>
               </div>
             </div>
           </div>

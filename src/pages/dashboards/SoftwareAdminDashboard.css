@@ -70,15 +70,15 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(15, 23, 42, 0.85);
-  border: 1px solid rgba(99, 102, 241, 0.35);
+  background: var(--bgCard, rgba(15, 23, 42, 0.85));
+  border: 1px solid var(--borderGlow, rgba(99, 102, 241, 0.35));
   border-radius: 12px;
   padding: 4px 12px;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--cardShadow, 0 4px 18px rgba(0, 0, 0, 0.15));
 }
 
 .scope-icon {
-  color: #818cf8;
+  color: var(--accent, #6366f1);
   display: flex;
   align-items: center;
 }
@@ -86,7 +86,7 @@
 .merchant-scope-select {
   background: transparent;
   border: none;
-  color: #ffffff;
+  color: var(--textPrimary, #ffffff);
   font-size: 13px;
   font-weight: 700;
   outline: none;
@@ -97,8 +97,8 @@
 }
 
 .merchant-scope-select option {
-  background: #0f172a;
-  color: #f8fafc;
+  background: var(--bgCard, #0f172a);
+  color: var(--textPrimary, #f8fafc);
   padding: 10px;
 }
 
@@ -196,11 +196,11 @@
    ============================================================ */
 .merchant-focused-hero-card {
   position: relative;
-  background: linear-gradient(135deg, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.95) 100%);
-  border: 1px solid rgba(99, 102, 241, 0.4);
+  background: var(--bgCard, #111827);
+  border: 1px solid var(--borderGlow, rgba(99, 102, 241, 0.4));
   border-radius: 20px;
   padding: 24px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), 0 0 30px rgba(99, 102, 241, 0.15);
+  box-shadow: var(--cardShadow, 0 16px 40px rgba(0, 0, 0, 0.25));
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -215,7 +215,7 @@
   width: 250px;
   height: 250px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.25) 0%, transparent 70%);
+  background: radial-gradient(circle, var(--accentGlow, rgba(99, 102, 241, 0.25)) 0%, transparent 70%);
   pointer-events: none;
 }
 
@@ -231,14 +231,14 @@
   width: 56px;
   height: 56px;
   border-radius: 16px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: var(--accentGradient, linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%));
   color: #ffffff;
   font-size: 24px;
   font-weight: 800;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 6px 20px var(--accentGlow, rgba(99, 102, 241, 0.4));
   flex-shrink: 0;
 }
 
@@ -259,8 +259,8 @@
 .focused-id-pill {
   font-size: 11px;
   font-weight: 800;
-  background: rgba(255, 255, 255, 0.08);
-  color: #a5b4fc;
+  background: var(--accentLight, rgba(99, 102, 241, 0.12));
+  color: var(--accent, #6366f1);
   padding: 2px 8px;
   border-radius: 6px;
 }
@@ -274,32 +274,32 @@
 
 .focused-tag.is-api {
   background: rgba(16, 185, 129, 0.18);
-  color: #6ee7b7;
+  color: #10b981;
   border: 1px solid rgba(16, 185, 129, 0.35);
 }
 
 .focused-tag.is-std {
-  background: rgba(245, 158, 11, 0.18);
-  color: #fcd34d;
-  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(168, 85, 247, 0.18);
+  color: #a855f7;
+  border: 1px solid rgba(168, 85, 247, 0.35);
 }
 
 .focused-tag.is-kyc {
-  background: rgba(99, 102, 241, 0.18);
-  color: #c7d2fe;
+  background: var(--accentLight, rgba(99, 102, 241, 0.18));
+  color: var(--accent, #6366f1);
 }
 
 .focused-trade-name {
   font-size: 22px;
   font-weight: 800;
-  color: #ffffff;
+  color: var(--textPrimary, #ffffff);
   margin: 0;
   letter-spacing: -0.4px;
 }
 
 .focused-legal-name {
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--textMuted, #94a3b8);
   margin: 0;
 }
 
@@ -307,8 +307,8 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bgPrimary, rgba(0, 0, 0, 0.05));
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.08));
   border-radius: 14px;
   padding: 14px 18px;
   position: relative;
@@ -324,7 +324,7 @@
 .info-label {
   font-size: 11px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--textMuted, #64748b);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -332,7 +332,7 @@
 .info-value {
   font-size: 13px;
   font-weight: 700;
-  color: #f8fafc;
+  color: var(--textPrimary, #f8fafc);
 }
 
 .focused-action-cluster {
@@ -820,11 +820,11 @@
 .badge-status-pill.is-success .badge-status-dot { background: #10b981; }
 
 .badge-status-pill.is-pending {
-  background: rgba(245, 158, 11, 0.12);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.25);
+  background: rgba(168, 85, 247, 0.12);
+  color: #a855f7;
+  border: 1px solid rgba(168, 85, 247, 0.25);
 }
-.badge-status-pill.is-pending .badge-status-dot { background: #f59e0b; }
+.badge-status-pill.is-pending .badge-status-dot { background: #a855f7; }
 
 .badge-status-pill.is-failed {
   background: rgba(239, 68, 68, 0.12);

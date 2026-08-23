@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { ThemeProvider } from './context/ThemeContext';
 import { DialogProvider } from './context/DialogContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { MerchantProvider } from './context/MerchantContext';
 import './App.css';
 import LoadingAnimation from './components/common/LoadingAnimation';
 
@@ -125,7 +126,7 @@ function App() {
   };
 
   if (loading) {
-    return <LoadingAnimation message="Loading EcollectPG" />;
+    return <LoadingAnimation message="Loading eCollect..." />;
   }
 
   return (
@@ -133,7 +134,8 @@ function App() {
       <Router>
         <DialogProvider>
           <NotificationProvider>
-            <Routes>
+            <MerchantProvider>
+              <Routes>
           {/* ============================================================
               AUTH ROUTES
               ============================================================ */}
@@ -422,7 +424,8 @@ function App() {
               ============================================================ */}
           <Route path="*" element={<Navigate to="/dashboard" />} />
         </Routes>
-        </NotificationProvider>
+            </MerchantProvider>
+          </NotificationProvider>
         </DialogProvider>
       </Router>
     </ThemeProvider>

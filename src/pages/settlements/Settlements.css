@@ -167,7 +167,7 @@
 }
 
 .settle-kpi-icon.is-green { background: rgba(16, 185, 129, 0.15); color: #10b981; }
-.settle-kpi-icon.is-amber { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+.settle-kpi-icon.is-amber { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
 .settle-kpi-icon.is-cyan { background: rgba(6, 182, 212, 0.15); color: #06b6d4; }
 .settle-kpi-icon.is-purple { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; }
 
@@ -479,11 +479,11 @@
 .settle-status-badge.is-success .status-dot { background: #10b981; }
 
 .settle-status-badge.is-pending {
-  background: rgba(245, 158, 11, 0.12);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.25);
+  background: rgba(168, 85, 247, 0.12);
+  color: #a855f7;
+  border: 1px solid rgba(168, 85, 247, 0.25);
 }
-.settle-status-badge.is-pending .status-dot { background: #f59e0b; }
+.settle-status-badge.is-pending .status-dot { background: #a855f7; }
 
 .settle-status-badge.is-processing {
   background: rgba(6, 182, 212, 0.12);

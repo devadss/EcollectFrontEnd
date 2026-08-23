@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useMerchantContext } from '../../context/MerchantContext';
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
 import { agentApi, merchantApi } from '../../services/api';
+import { useDialog } from '../../context/DialogContext';
 import './Agents.css';
 
 // SVG Icons
@@ -123,38 +125,79 @@ const AgentIcons = {
 
 const Agents = () => {
   const navigate = useNavigate();
+  const { showSuccess, showError, showConfirm } = useDialog();
+  const authUser = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
+    } catch {
+      return {};
+    }
+  })();
+
   const [agents, setAgents] = useState([]);
   const [merchants, setMerchants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const rawRole = localStorage.getItem('user_role') || localStorage.getItem('role') || 'softwareadmin';
-  const normRole = rawRole.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const isSoftwareAdmin = normRole.includes('softwareadmin') || normRole.includes('admin') || normRole.includes('superadmin');
-  const isBranchUser = normRole.includes('branch') || normRole.includes('bank');
+
+  const rawRole = (localStorage.getItem('user_role') || localStorage.getItem('role') || authUser?.role || '').toLowerCase().trim();
+  const normRole = rawRole.replace(/[^a-z0-9]/g, '');
   const isMerchantUser = normRole.includes('merchant');
+  const isBranchUser = normRole.includes('branch') && !normRole.includes('merchant');
+  const isSoftwareAdmin = (normRole.includes('software') || normRole.includes('superadmin') || normRole === 'admin') && !normRole.includes('merchant') && !normRole.includes('branch') && !normRole.includes('agent');
+
+  const merchantSelfId = authUser?.merchantId || authUser?.MerchantId || (isMerchantUser ? (authUser?.merchantId || authUser?.MerchantId || authUser?.id) : null);
+  const branchSelfId = authUser?.branchId || authUser?.BranchId || authUser?.branch_id || localStorage.getItem('branchId');
+
+  // Global Merchant Scoping (Software Admin only)
+  const { selectedMerchantId, setSelectedMerchantId } = useMerchantContext();
 
   const [search, setSearch] = useState('');
-  const [filterMerchant, setFilterMerchant] = useState('');
+  const [filterMerchant, setFilterMerchant] = useState(() => {
+    return isSoftwareAdmin && selectedMerchantId && selectedMerchantId !== 'ALL' ? selectedMerchantId : '';
+  });
   const [selectedStatusTab, setSelectedStatusTab] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'PENDING' | 'INACTIVE'
   const [viewLayout, setViewLayout] = useState('grid'); // 'grid' | 'table'
   const [actionMessage, setActionMessage] = useState(null);
 
+  // Sync with global MerchantContext (Admin only)
+  useEffect(() => {
+    if (isSoftwareAdmin) {
+      setFilterMerchant(selectedMerchantId && selectedMerchantId !== 'ALL' ? selectedMerchantId : '');
+    }
+  }, [selectedMerchantId, isSoftwareAdmin]);
+
   useEffect(() => {
     loadData();
-  }, []);
+  }, [merchantSelfId, branchSelfId, isSoftwareAdmin, isBranchUser]);
 
   const loadData = async () => {
     try {
       setLoading(true);
       setError(null);
+      const query = isBranchUser && branchSelfId
+        ? { branchId: branchSelfId }
+        : (!isSoftwareAdmin && merchantSelfId ? { merchantId: merchantSelfId } : {});
+
       const [agentsRes, merchantsRes] = await Promise.all([
-        agentApi.getAll(),
-        merchantApi.getAll()
+        agentApi.getAll(query),
+        isSoftwareAdmin ? merchantApi.getAll().catch(() => ({ data: [] })) : Promise.resolve({ data: [] })
       ]);
       
       const agentList = agentsRes?.data?.data || agentsRes?.data || [];
       const merchantList = merchantsRes?.data?.data || merchantsRes?.data || [];
-      const safeAgents = Array.isArray(agentList) ? agentList : [];
+      let safeAgents = Array.isArray(agentList) ? agentList : [];
+
+      if (isBranchUser && branchSelfId) {
+        safeAgents = safeAgents.filter(a => {
+          const bId = a.branchId ?? a.BranchId;
+          return bId == null || String(bId) === String(branchSelfId);
+        });
+      } else if (!isSoftwareAdmin && merchantSelfId) {
+        safeAgents = safeAgents.filter(a => {
+          const mId = a.merchantId ?? a.MerchantId;
+          return mId == null || String(mId) === String(merchantSelfId);
+        });
+      }
       
       setAgents(safeAgents);
       setMerchants(Array.isArray(merchantList) ? merchantList : []);
@@ -182,33 +225,43 @@ const Agents = () => {
     }
   };
 
-  const handleRejectAgent = async (id, name) => {
-    if (window.confirm(`Are you sure you want to reject agent "${name}"?`)) {
-      try {
-        await agentApi.reject(id, 'Software Admin Rejection');
-        setActionMessage({ type: 'warning', text: `❌ Agent "${name}" rejected.` });
-        setTimeout(() => setActionMessage(null), 4000);
-        loadData();
-      } catch (err) {
-        console.error('Error rejecting agent:', err);
-        setAgents(prev => prev.map(a => a.id === id ? { ...a, isActive: false, isVerified: false, isApproved: false, status: 'Rejected' } : a));
-        setActionMessage({ type: 'warning', text: `❌ Agent "${name}" rejected.` });
-        setTimeout(() => setActionMessage(null), 4000);
+  const handleRejectAgent = (id, name) => {
+    showConfirm({
+      title: 'Reject Agent Application',
+      message: `Are you sure you want to reject field representative "${name}"?`,
+      confirmText: 'Reject Agent',
+      type: 'warning',
+      onConfirm: async () => {
+        try {
+          await agentApi.reject(id, 'Software Admin Rejection');
+          showSuccess(`Field representative "${name}" has been rejected.`, 'Agent Rejected');
+          loadData();
+        } catch (err) {
+          console.error('Error rejecting agent:', err);
+          setAgents(prev => prev.map(a => a.id === id ? { ...a, isActive: false, isVerified: false, isApproved: false, status: 'Rejected' } : a));
+          showSuccess(`Agent "${name}" status updated to Rejected.`, 'Status Updated');
+        }
       }
-    }
+    });
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this field representative?')) {
-      try {
-        const response = await agentApi.delete(id);
-        alert(response?.data?.message || 'Agent removed successfully');
-        loadData();
-      } catch (err) {
-        console.error('Error deleting agent:', err);
-        alert(err?.response?.data?.message || 'Failed to delete agent');
+  const handleDelete = (id, name) => {
+    showConfirm({
+      title: 'Delete Field Representative',
+      message: 'Are you sure you want to delete this field representative account?',
+      confirmText: 'Yes, Delete',
+      type: 'error',
+      onConfirm: async () => {
+        try {
+          const response = await agentApi.delete(id);
+          showSuccess(response?.data?.message || 'Field representative removed successfully.', 'Agent Deleted');
+          loadData();
+        } catch (err) {
+          console.error('Error deleting agent:', err);
+          showError(err?.response?.data?.message || 'Failed to delete agent', 'Operation Failed');
+        }
       }
-    }
+    });
   };
 
   // Safe Stats
@@ -432,16 +485,20 @@ const Agents = () => {
                 )}
               </div>
 
-              {merchants.length > 0 && (
+              {merchants.length > 0 && isSoftwareAdmin && (
                 <select
                   value={filterMerchant}
-                  onChange={(e) => setFilterMerchant(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFilterMerchant(val);
+                    setSelectedMerchantId(val || 'ALL');
+                  }}
                   className="merchant-filter-select"
                 >
-                  <option value="">All Merchant Links</option>
+                  <option value="">🏢 All Merchants Scope</option>
                   {merchants.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.merchantName}
+                      🏢 {m.merchantName || m.businessName || `Merchant #${m.id}`}
                     </option>
                   ))}
                 </select>
@@ -498,8 +555,8 @@ const Agents = () => {
                           <span className="agent-code-pill font-mono">{agent.agentCode || `AG-${agent.id}`}</span>
                         </div>
                         {isPending ? (
-                          <span className="agent-status-badge" style={{ background: 'rgba(234, 179, 8, 0.15)', color: '#facc15', border: '1px solid rgba(234, 179, 8, 0.4)' }}>
-                            <span className="status-glow-dot" style={{ background: '#eab308' }}></span>
+                          <span className="agent-status-badge" style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#a855f7', border: '1px solid rgba(168, 85, 247, 0.4)' }}>
+                            <span className="status-glow-dot" style={{ background: '#a855f7' }}></span>
                             <span>Pending Review</span>
                           </span>
                         ) : (
@@ -528,7 +585,7 @@ const Agents = () => {
                       {/* Commission Yield Row */}
                       <div className="agent-metrics-row">
                         <span className="metric-label">Commission Yield</span>
-                        <span className="metric-value font-mono text-green">{agent.commissionRate || '1.5'}% Share</span>
+                        <span className="metric-value font-mono text-green">{agent.commissionRate || '0'}% Share</span>
                       </div>
 
                       {/* Action Hub */}
@@ -626,12 +683,12 @@ const Agents = () => {
                           <span className="merchant-chip font-bold">{getMerchantName(agent.merchantId)}</span>
                         </td>
                         <td>
-                          <span className="commission-pill font-mono">{agent.commissionRate || '1.5'}%</span>
+                          <span className="commission-pill font-mono">{agent.commissionRate || '0'}%</span>
                         </td>
                         <td>
                           {isPending ? (
-                            <span className="agent-status-badge" style={{ background: 'rgba(234, 179, 8, 0.15)', color: '#facc15', border: '1px solid rgba(234, 179, 8, 0.4)' }}>
-                              <span className="status-glow-dot" style={{ background: '#eab308' }}></span>
+                            <span className="agent-status-badge" style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#a855f7', border: '1px solid rgba(168, 85, 247, 0.4)' }}>
+                              <span className="status-glow-dot" style={{ background: '#a855f7' }}></span>
                               <span>Pending Review</span>
                             </span>
                           ) : (

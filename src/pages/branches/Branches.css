@@ -195,7 +195,7 @@
 .branches-kpi-icon.is-indigo { background: rgba(99, 102, 241, 0.15); color: #6366f1; }
 .branches-kpi-icon.is-green { background: rgba(16, 185, 129, 0.15); color: #10b981; }
 .branches-kpi-icon.is-red { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-.branches-kpi-icon.is-amber { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+.branches-kpi-icon.is-amber { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
 
 .branches-kpi-value {
   position: relative;
@@ -225,7 +225,7 @@
 }
 
 .branches-trend-tag.is-up { background: rgba(16, 185, 129, 0.12); color: #10b981; }
-.branches-trend-tag.is-down { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
+.branches-trend-tag.is-down { background: rgba(244, 63, 94, 0.12); color: #f43f5e; }
 
 /* ==========================================================================
    DIRECTORY CARD & FILTER BAR

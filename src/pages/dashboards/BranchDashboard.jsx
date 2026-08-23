@@ -16,7 +16,7 @@ import {
 } from 'chart.js';
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
-import { dashboardApi } from '../../services/api';
+import { dashboardApi, transactionApi } from '../../services/api';
 import './BranchDashboard.css';
 
 ChartJS.register(
@@ -129,7 +129,7 @@ const BranchDashboard = () => {
   })();
 
   const rawRole = localStorage.getItem('user_role') || localStorage.getItem('role') || 'branchadmin';
-  const branchId = user?.branchId || localStorage.getItem('branchId') || user?.id || 1;
+  const branchId = user?.branchId || user?.BranchId || user?.branch_id || localStorage.getItem('branchId') || user?.id || 1;
 
   const [profile, setProfile] = useState({
     name: user?.branchName || user?.branch || 'Branch Operations Hub',
@@ -203,7 +203,33 @@ const BranchDashboard = () => {
         setTopAgents([]);
       }
 
-      if (Array.isArray(data.recentTransactions)) {
+      let txList = [];
+      try {
+        const txRes = await transactionApi.getByBranch(branchId).catch(() => transactionApi.getAll({ branchId })).catch(() => transactionApi.getHistory({ branchId }));
+        const rawTxs = txRes?.data?.data || txRes?.data?.items || txRes?.data || [];
+        if (Array.isArray(rawTxs)) {
+          txList = rawTxs.map(t => {
+            const amt = Number(t.amount ?? t.Amount ?? t.netAmount ?? t.NetAmount ?? t.totalAmount ?? t.TotalAmount ?? 0);
+            const rawD = t.createdAt || t.CreatedAt || t.transactionDate || t.TransactionDate || t.date || t.Date || t.timestamp;
+            const parsedD = rawD ? new Date(rawD) : new Date();
+            return {
+              ...t,
+              id: t.id || t.Id || t.transactionId || t.TransactionId,
+              merchant: t.merchantName || t.MerchantName || t.merchant || 'Merchant',
+              customer: t.customer || t.Customer || t.customerName || t.CustomerName || 'Customer',
+              amount: amt,
+              mode: (t.paymentMode || t.PaymentMode || t.method || t.Method || t.mode || 'UPI').toUpperCase(),
+              status: (t.status || t.Status || t.transactionStatus || 'SUCCESS').toUpperCase(),
+              dateObj: isNaN(parsedD.getTime()) ? new Date() : parsedD,
+              time: rawD ? new Date(rawD).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) : 'Recently'
+            };
+          });
+        }
+      } catch (txErr) {
+        console.warn('Could not load transaction records for branch:', txErr.message);
+      }
+
+      if (Array.isArray(data.recentTransactions) && data.recentTransactions.length > 0) {
         setRecentTxns(data.recentTransactions.map(tx => ({
           id: tx.id,
           merchant: tx.merchant || 'Merchant',
@@ -213,20 +239,63 @@ const BranchDashboard = () => {
           status: tx.status || 'Pending',
           time: tx.time || tx.timeAgo || 'Recently'
         })));
+      } else if (txList.length > 0) {
+        setRecentTxns(txList.slice(0, 8));
       } else {
         setRecentTxns([]);
       }
 
-      if (data.volumeChart && Array.isArray(data.volumeChart.labels)) {
+      if (data.volumeChart && Array.isArray(data.volumeChart.labels) && data.volumeChart.labels.length > 0 && Array.isArray(data.volumeChart.data) && data.volumeChart.data.some(v => Number(v) > 0)) {
         setRevenueDataLabels(data.volumeChart.labels);
-        setRevenueDataValues(data.volumeChart.data || []);
+        setRevenueDataValues(data.volumeChart.data);
+      } else if (txList.length > 0) {
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const now = new Date();
+        const chartLabels = [];
+        const chartBuckets = [0, 0, 0, 0, 0, 0, 0];
+
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date(now);
+          d.setDate(d.getDate() - i);
+          chartLabels.push(days[d.getDay()]);
+        }
+
+        let matched = 0;
+        txList.forEach(t => {
+          const diffDays = Math.floor((now - t.dateObj) / 86400000);
+          if (diffDays >= 0 && diffDays < 7) {
+            const idx = 6 - diffDays;
+            chartBuckets[idx] += t.amount;
+            matched++;
+          }
+        });
+
+        if (matched === 0) {
+          txList.forEach(t => {
+            const dIdx = t.dateObj.getDay();
+            const targetDay = days[dIdx];
+            const lIdx = chartLabels.lastIndexOf(targetDay);
+            if (lIdx !== -1) chartBuckets[lIdx] += t.amount;
+            else chartBuckets[dIdx % 7] += t.amount;
+          });
+        }
+
+        setRevenueDataLabels(chartLabels);
+        setRevenueDataValues(chartBuckets);
       }
 
-      if (Array.isArray(data.paymentMethods)) {
+      if (Array.isArray(data.paymentMethods) && data.paymentMethods.length > 0) {
         setPaymentBreakdown(data.paymentMethods.map(m => ({
           label: m.method || m.label || 'Unknown',
           value: Number(m.value) || Number(m.count) || 0
         })));
+      } else if (txList.length > 0) {
+        const methodCounts = {};
+        txList.forEach(t => {
+          const m = t.mode || 'UPI';
+          methodCounts[m] = (methodCounts[m] || 0) + t.amount;
+        });
+        setPaymentBreakdown(Object.entries(methodCounts).map(([label, value]) => ({ label, value })));
       } else {
         setPaymentBreakdown([]);
       }
@@ -500,15 +569,15 @@ const BranchDashboard = () => {
         {/* Row 2: Top Branch Agents (6 cols) & Real-Time Transactions Feed (6 cols) */}
         <div className="branch-charts-row">
           
-          {/* Top Collection Accounts */}
+          {/* Top Collection Agents */}
           <div className="branch-chart-panel is-col-6">
             <div className="panel-header-zone">
               <div>
-                <h3 className="panel-title">Top Collection Portfolios</h3>
-                <span className="panel-subtitle">Branch customer account activity</span>
+                <h3 className="panel-title">Top Branch Agents</h3>
+                <span className="panel-subtitle">Field representative collection activity</span>
               </div>
-              <button className="view-all-link-btn" onClick={() => navigate('/accounts')}>
-                View Accounts →
+              <button className="view-all-link-btn" onClick={() => navigate('/agents')}>
+                View All Agents →
               </button>
             </div>
 

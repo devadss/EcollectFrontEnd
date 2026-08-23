@@ -46,11 +46,11 @@
   border-color: var(--accent, #6366f1);
 }
 
-.topbar-breadcrumbs {
+.topbar-breadcrumb-trail {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .breadcrumb-home-link {
@@ -69,11 +69,12 @@
 .breadcrumb-slash {
   color: var(--textMuted, #64748b);
   opacity: 0.5;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .breadcrumb-active-title {
-  font-weight: 700;
+  font-weight: 750;
+  font-size: 15px;
   color: var(--textPrimary, #f8fafc);
   letter-spacing: -0.2px;
 }
@@ -83,12 +84,12 @@
   align-items: center;
   gap: 7px;
   margin-left: 12px;
-  padding: 4px 12px;
+  padding: 5px 14px;
   border-radius: 8px;
   background: var(--accentLight, rgba(99, 102, 241, 0.12));
   border: 1px solid var(--borderGlow, rgba(99, 102, 241, 0.3));
   color: var(--accent, #6366f1);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 .topbar-branch-emblem-badge svg {
@@ -97,7 +98,7 @@
 }
 
 .branch-emblem-prefix {
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -105,7 +106,7 @@
 }
 
 .branch-emblem-bold-name {
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 800;
   color: var(--textPrimary, #ffffff);
   letter-spacing: -0.2px;
@@ -145,7 +146,7 @@
   border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.08));
   border-radius: var(--radius-full, 9999px);
   color: var(--textPrimary, #ffffff);
-  font-size: 13px;
+  font-size: 14px;
   transition: all var(--transition-normal);
 }
 
@@ -542,6 +543,212 @@
 }
 
 /* ==========================================================================
+   GLOBAL MERCHANT SELECTOR (SOFTWARE ADMIN ONLY)
+   ========================================================================== */
+.merchant-selector-container {
+  position: relative;
+}
+
+.merchant-selector-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(6, 182, 212, 0.08));
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 12px;
+  color: var(--textPrimary, #f8fafc);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.merchant-selector-trigger:hover,
+.merchant-selector-trigger.active {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.22), rgba(6, 182, 212, 0.15));
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.2);
+  transform: translateY(-1px);
+}
+
+.merchant-selector-icon {
+  font-size: 16px;
+}
+
+.merchant-selector-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+}
+
+.merchant-selector-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #818cf8;
+  line-height: 1.1;
+}
+
+.merchant-selector-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--textPrimary, #f8fafc);
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.merchant-selector-arrow {
+  font-size: 9px;
+  color: #818cf8;
+  margin-left: 2px;
+}
+
+.merchant-popover {
+  width: 320px;
+  max-height: 420px;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  right: 0;
+}
+
+.merchant-popover-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+}
+
+.merchant-heading-left {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.merchant-count-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.merchant-search-wrapper {
+  margin-bottom: 8px;
+}
+
+.merchant-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+  font-size: 12.5px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.merchant-search-input:focus {
+  border-color: #6366f1;
+}
+
+.merchant-dropdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 270px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.merchant-dropdown-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.merchant-dropdown-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+.merchant-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #cbd5e1;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.merchant-dropdown-item:hover {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: rgba(99, 102, 241, 0.2);
+  color: #ffffff;
+}
+
+.merchant-dropdown-item.is-selected {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(6, 182, 212, 0.12));
+  border-color: rgba(99, 102, 241, 0.4);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.merchant-item-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.merchant-item-icon {
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.merchant-item-text {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.merchant-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.merchant-item-sub {
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.merchant-dropdown-empty {
+  padding: 16px;
+  text-align: center;
+  font-size: 12.5px;
+  color: #94a3b8;
+}
+
+/* ==========================================================================
    RESPONSIVE BREAKPOINTS
    ========================================================================== */
 @media (max-width: 900px) {
@@ -569,5 +776,9 @@
 
   .profile-pill-trigger {
     padding: 3px;
+  }
+
+  .merchant-selector-name {
+    max-width: 90px;
   }
 }

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
 import { merchantApi } from '../../services/api';
+import { useDialog } from '../../context/DialogContext';
 import './MerchantsConfig.css';
 
 // SVG Icons
@@ -73,6 +74,7 @@ const ConfigIcons = {
 const MerchantsConfig = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { showSuccess, showError, showConfirm } = useDialog();
   const [merchantsConfig, setMerchantsConfig] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -88,20 +90,11 @@ const MerchantsConfig = () => {
       setError(null);
       const res = await merchantApi.getAllMerchantConfig();
       const listData = res?.data?.data || res?.data || [];
-      const safeData = Array.isArray(listData) ? listData : [];
-
-      const finalData = safeData.length > 0 ? safeData : [
-        { id: 1, merchantName: 'Apex Retail Services', productType: 'PG / UPI Dynamic', apiCode: 'API_UPI_PAY', apiName: 'Initiate Dynamic UPI Intent', httpMethod: 'POST', endpointUrl: '/api/v1/upi/create', isActive: true },
-        { id: 2, merchantName: 'Apex Retail Services', productType: 'Card Tokenization', apiCode: 'API_CARD_TOKEN', apiName: 'Card Auth & Tokenize', httpMethod: 'POST', endpointUrl: '/api/v1/card/tokenize', isActive: true },
-        { id: 3, merchantName: 'GreenLeaf Agro Corp', productType: 'Payout Disbursement', apiCode: 'API_PAYOUT_DISB', apiName: 'IMPS Direct Transfer', httpMethod: 'POST', endpointUrl: '/api/v1/payout/transfer', isActive: true },
-        { id: 4, merchantName: 'BlueWave Digital Hub', productType: 'Recurring Subscriptions', apiCode: 'API_AUTO_DEBIT', apiName: 'E-Mandate Mandate Fetch', httpMethod: 'GET', endpointUrl: '/api/v1/mandate/status', isActive: false },
-        { id: 5, merchantName: 'Sunrise Financial Tech', productType: 'Virtual Account Engine', apiCode: 'API_VAN_WEBHOOK', apiName: 'Inward Credit Webhook', httpMethod: 'POST', endpointUrl: '/api/v1/van/webhook', isActive: true },
-      ];
-
-      setMerchantsConfig(finalData);
+      const configArray = Array.isArray(listData) ? listData : (listData.result || [listData]);
+      setMerchantsConfig(configArray);
     } catch (err) {
-      console.error('Error loading merchant configuration:', err);
-      setError(err?.response?.data?.message || err.message || 'Failed to load merchant configuration');
+      console.error('Error fetching merchant config:', err);
+      setError('Failed to load merchant configurations.');
     } finally {
       setTimeout(() => {
         setLoading(false);
@@ -109,17 +102,23 @@ const MerchantsConfig = () => {
     }
   };
 
-  const handleDelete = async (configId) => {
-    if (window.confirm('Are you sure you want to delete this merchant API configuration?')) {
-      try {
-        const response = await merchantApi.configMerchantDelete(configId);
-        alert(response?.data?.message || 'Configuration deleted successfully.');
-        loadMerchants();
-      } catch (err) {
-        console.error('Error deleting merchant config:', err);
-        alert('Failed to delete merchant configuration. Please try again.');
+  const handleDelete = (configId) => {
+    showConfirm({
+      title: 'Delete API Configuration',
+      message: 'Are you sure you want to delete this merchant API configuration?',
+      confirmText: 'Yes, Delete',
+      type: 'error',
+      onConfirm: async () => {
+        try {
+          const response = await merchantApi.configMerchantDelete(configId);
+          showSuccess(response?.data?.message || 'Configuration deleted successfully.', 'Configuration Deleted');
+          loadMerchants();
+        } catch (err) {
+          console.error('Error deleting merchant config:', err);
+          showError(err?.response?.data?.message || 'Failed to delete merchant configuration. Please try again.', 'Operation Failed');
+        }
       }
-    }
+    });
   };
 
   const totalConfigs = merchantsConfig.length;

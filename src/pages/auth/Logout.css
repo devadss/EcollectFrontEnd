@@ -95,46 +95,27 @@
   z-index: 2;
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
   cursor: pointer;
   transition: transform 0.2s ease;
 }
 
-.logout-top-branding:hover {
-  transform: translateY(-1px);
+.logout-brand-logo-img {
+  height: 52px;
+  width: auto;
+  max-width: 230px;
+  object-fit: contain;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+  filter: drop-shadow(0 2px 14px rgba(0, 0, 0, 0.6)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.25)) brightness(1.15) contrast(1.15);
+  display: block;
+  transition: transform 0.2s ease;
 }
 
-.branding-logo-box {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
-}
-
-.branding-text-block {
-  display: flex;
-  flex-direction: column;
-}
-
-.branding-title {
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  color: #ffffff;
-  line-height: 1.2;
-}
-
-.branding-sub {
-  font-size: 11px;
-  font-weight: 600;
-  color: #94a3b8;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
+.logout-top-branding:hover .logout-brand-logo-img {
+  transform: scale(1.05);
 }
 
 /* Main Card Container */
@@ -183,8 +164,8 @@
   pointer-events: none;
 }
 
-.card-ambient-glow.is-amber {
-  background: radial-gradient(circle, rgba(245, 158, 11, 0.25) 0%, transparent 70%);
+.card-ambient-glow.is-violet {
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.28) 0%, transparent 70%);
 }
 
 .card-ambient-glow.is-indigo {
@@ -207,11 +188,11 @@
   z-index: 1;
 }
 
-.logout-icon-bubble.is-amber {
-  background: rgba(245, 158, 11, 0.15);
-  border: 1px solid rgba(245, 158, 11, 0.35);
-  color: #fbbf24;
-  box-shadow: 0 0 30px rgba(245, 158, 11, 0.25);
+.logout-icon-bubble.is-violet {
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  color: #c084fc;
+  box-shadow: 0 0 30px rgba(168, 85, 247, 0.25);
 }
 
 .logout-icon-bubble.is-green {
@@ -247,10 +228,10 @@
   border-radius: 9999px;
 }
 
-.logout-security-pill.is-amber {
-  background: rgba(245, 158, 11, 0.12);
-  color: #fbbf24;
-  border: 1px solid rgba(245, 158, 11, 0.3);
+.logout-security-pill.is-violet {
+  background: rgba(168, 85, 247, 0.12);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.3);
 }
 
 .logout-security-pill.is-green {

@@ -87,11 +87,11 @@
 .settle-status-pill.is-success .pill-dot { background: #10b981; }
 
 .settle-status-pill.is-pending {
-  background: rgba(245, 158, 11, 0.12);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.25);
+  background: rgba(168, 85, 247, 0.12);
+  color: #a855f7;
+  border: 1px solid rgba(168, 85, 247, 0.25);
 }
-.settle-status-pill.is-pending .pill-dot { background: #f59e0b; }
+.settle-status-pill.is-pending .pill-dot { background: #a855f7; }
 
 .settle-status-pill.is-processing {
   background: rgba(6, 182, 212, 0.12);

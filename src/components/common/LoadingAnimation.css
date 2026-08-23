@@ -1,5 +1,5 @@
 /* ==========================================================================
-   EcollectPG - Ultra-Premium 3D Gold Coin Loader Animation
+   EcollectPG - Theme-Adaptive Ultra-Premium Fintech Loader Animation
    ========================================================================== */
 
 .fintech-loading-overlay {
@@ -9,16 +9,16 @@
   align-items: center;
   justify-content: center;
   z-index: 99999;
-  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-main, 'Plus Jakarta Sans', -apple-system, sans-serif);
   user-select: none;
 }
 
 .fintech-loading-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(9, 13, 22, 0.82);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  background: rgba(4, 7, 14, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   animation: fadeInBackdrop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -39,14 +39,15 @@
   max-width: 420px;
   margin: 20px;
   padding: 36px 32px 28px;
-  background: #101624;
-  border: 1px solid rgba(234, 179, 8, 0.35);
-  border-radius: var(--radius-lg, 22px);
+  background: var(--bgCard, #101624);
+  border: 1px solid var(--borderGlow, rgba(99, 102, 241, 0.4));
+  border-radius: var(--radius-xl, 22px);
   box-shadow: 
-    0 24px 64px rgba(0, 0, 0, 0.7),
-    0 0 50px rgba(234, 179, 8, 0.18);
+    0 24px 64px rgba(0, 0, 0, 0.75),
+    0 0 50px var(--accentGlow, rgba(99, 102, 241, 0.25));
   animation: popInModal 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
+  transition: all var(--transition-smooth, 0.35s ease);
 }
 
 @keyframes popInModal {
@@ -54,24 +55,30 @@
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-/* Ambient Warm Gold Radiance */
-.loading-gold-halo {
+/* Ambient Dynamic Theme Radiance */
+.loading-theme-halo {
   position: absolute;
   top: -30px;
   left: 50%;
   transform: translateX(-50%);
-  width: 220px;
-  height: 220px;
-  background: radial-gradient(circle, rgba(234, 179, 8, 0.35) 0%, rgba(245, 158, 11, 0.1) 50%, transparent 70%);
+  width: 240px;
+  height: 240px;
+  background: radial-gradient(circle, var(--accentGlow, rgba(99, 102, 241, 0.45)) 0%, var(--accentLight, rgba(99, 102, 241, 0.12)) 50%, transparent 70%);
   border-radius: 50%;
   pointer-events: none;
-  filter: blur(30px);
+  filter: blur(32px);
+  animation: haloPulse 3s ease-in-out infinite alternate;
+}
+
+@keyframes haloPulse {
+  0% { transform: translateX(-50%) scale(0.9); opacity: 0.7; }
+  100% { transform: translateX(-50%) scale(1.15); opacity: 1; }
 }
 
 /* ==========================================================================
-   3D GOLD COIN STAGE & SPINNER
+   3D FINTECH EMBLEM STAGE & SPINNER
    ========================================================================== */
-.gold-coin-stage {
+.fintech-stage {
   position: relative;
   width: 110px;
   height: 110px;
@@ -81,18 +88,18 @@
   perspective: 1000px;
 }
 
-.gold-coin-stage.small {
+.fintech-stage.small {
   width: 75px;
   height: 75px;
 }
 
-.gold-coin-stage.large {
+.fintech-stage.large {
   width: 135px;
   height: 135px;
 }
 
-/* Orbital Rings */
-.gold-orbit-ring {
+/* Orbital Theme Rings */
+.theme-orbit-ring {
   position: absolute;
   inset: -6px;
   border-radius: 50%;
@@ -100,17 +107,17 @@
   pointer-events: none;
 }
 
-.gold-orbit-ring.ring-1 {
-  border-top-color: #eab308;
-  border-right-color: #f59e0b;
+.theme-orbit-ring.ring-1 {
+  border-top-color: var(--accent, #6366f1);
+  border-right-color: var(--accentDark, #4f46e5);
   animation: spinClockwise 2.2s linear infinite;
-  box-shadow: 0 0 16px rgba(234, 179, 8, 0.4);
+  box-shadow: 0 0 16px var(--accentGlow, rgba(99, 102, 241, 0.5));
 }
 
-.gold-orbit-ring.ring-2 {
+.theme-orbit-ring.ring-2 {
   inset: -14px;
-  border-bottom-color: rgba(234, 179, 8, 0.5);
-  border-left-color: rgba(251, 191, 36, 0.3);
+  border-bottom-color: var(--borderGlow, rgba(99, 102, 241, 0.4));
+  border-left-color: var(--accentLight, rgba(99, 102, 241, 0.25));
   animation: spinCounterClockwise 3s linear infinite;
 }
 
@@ -123,7 +130,7 @@
 }
 
 /* 3D Coin Image Wrapper - FULL 360 ROTATION */
-.gold-coin-3d-wrapper {
+.theme-coin-3d-wrapper {
   position: relative;
   width: 88px;
   height: 88px;
@@ -131,11 +138,11 @@
   transform-style: preserve-3d;
   animation: coinFloat3D 2.5s ease-in-out infinite, coinFullRotate360 2.2s linear infinite;
   box-shadow: 
-    0 0 35px rgba(234, 179, 8, 0.65),
+    0 0 35px var(--accentGlow, rgba(99, 102, 241, 0.65)),
     0 12px 28px rgba(0, 0, 0, 0.5);
 }
 
-.gold-coin-face {
+.theme-coin-face {
   position: absolute;
   inset: 0;
   border-radius: 50%;
@@ -145,30 +152,30 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border: 2px solid rgba(253, 224, 71, 0.85);
-  box-shadow: inset 0 0 14px rgba(234, 179, 8, 0.9);
+  border: 2px solid var(--accent, #6366f1);
+  box-shadow: inset 0 0 14px var(--accentGlow, rgba(99, 102, 241, 0.8));
 }
 
-.gold-coin-front {
+.theme-coin-face.coin-front {
   transform: rotateY(0deg);
 }
 
-.gold-coin-back {
+.theme-coin-face.coin-back {
   transform: rotateY(180deg);
 }
 
-.gold-coin-img {
+.theme-coin-img {
   width: 100%;
   height: 100%;
   border-radius: 50%;
   object-fit: cover;
 }
 
-.gold-coin-shine-sweep {
+.theme-coin-shine-sweep {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.45) 0%, transparent 45%, rgba(234, 179, 8, 0.3) 100%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.45) 0%, transparent 45%, var(--accentLight, rgba(99, 102, 241, 0.3)) 100%);
   pointer-events: none;
 }
 
@@ -190,24 +197,24 @@
   }
 }
 
-/* Sparkles */
-.coin-sparkle {
+/* Sparkles Matching Active Theme */
+.theme-sparkle {
   position: absolute;
-  color: #fde047;
+  color: var(--accent, #818cf8);
   font-size: 14px;
   font-weight: 800;
   pointer-events: none;
   animation: sparkleTwinkle 2s ease-in-out infinite;
-  text-shadow: 0 0 8px #eab308;
+  text-shadow: 0 0 10px var(--accentGlow, #6366f1);
 }
 
-.coin-sparkle.sp-1 { top: -2px; right: 6px; animation-delay: 0s; font-size: 16px; }
-.coin-sparkle.sp-2 { bottom: 6px; left: -4px; animation-delay: 0.7s; font-size: 13px; }
-.coin-sparkle.sp-3 { top: 40%; left: -10px; animation-delay: 1.3s; font-size: 12px; }
+.theme-sparkle.sp-1 { top: -2px; right: 6px; animation-delay: 0s; font-size: 16px; }
+.theme-sparkle.sp-2 { bottom: 6px; left: -4px; animation-delay: 0.7s; font-size: 13px; }
+.theme-sparkle.sp-3 { top: 40%; left: -10px; animation-delay: 1.3s; font-size: 12px; }
 
 @keyframes sparkleTwinkle {
-  0%, 100% { opacity: 0.2; transform: scale(0.7) rotate(0deg); }
-  50% { opacity: 1; transform: scale(1.3) rotate(45deg); filter: drop-shadow(0 0 6px #fde047); }
+  0%, 100% { opacity: 0.25; transform: scale(0.7) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1.3) rotate(45deg); filter: drop-shadow(0 0 6px var(--accent, #818cf8)); }
 }
 
 /* ==========================================================================
@@ -225,22 +232,22 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
-  font-weight: 700;
-  color: #ffffff;
+  font-size: 15.5px;
+  font-weight: 750;
+  color: var(--textPrimary, #ffffff);
   letter-spacing: -0.2px;
 }
 
-.live-dots.gold-dots span {
+.live-dots.theme-dots span {
   display: inline-block;
-  color: #eab308;
+  color: var(--accent, #6366f1);
   font-size: 18px;
   font-weight: 900;
   animation: dotBlink 1.4s infinite;
 }
 
-.live-dots.gold-dots span:nth-child(2) { animation-delay: 0.2s; }
-.live-dots.gold-dots span:nth-child(3) { animation-delay: 0.4s; }
+.live-dots.theme-dots span:nth-child(2) { animation-delay: 0.2s; }
+.live-dots.theme-dots span:nth-child(3) { animation-delay: 0.4s; }
 
 @keyframes dotBlink {
   0%, 20% { opacity: 0.2; transform: translateY(0); }
@@ -248,26 +255,26 @@
   100% { opacity: 0.2; transform: translateY(0); }
 }
 
-.loading-security-badge.gold-badge {
+.loading-security-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
+  padding: 5px 12px;
   border-radius: 9999px;
-  background: rgba(234, 179, 8, 0.1);
-  border: 1px solid rgba(234, 179, 8, 0.25);
-  font-size: 11px;
+  background: var(--accentLight, rgba(99, 102, 241, 0.12));
+  border: 1px solid var(--borderGlow, rgba(99, 102, 241, 0.3));
+  font-size: 11.5px;
   font-weight: 700;
-  color: #facc15;
+  color: var(--accent, #818cf8);
   letter-spacing: 0.3px;
 }
 
-.security-dot.gold-dot {
+.security-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #eab308;
-  box-shadow: 0 0 8px #eab308;
+  background: var(--accent, #6366f1);
+  box-shadow: 0 0 8px var(--accent, #6366f1);
   animation: pulseSecurityDot 1.5s ease-in-out infinite;
 }
 
@@ -286,25 +293,25 @@
   gap: 8px;
 }
 
-.fintech-progress-track.gold-track {
+.fintech-progress-track {
   position: relative;
   width: 100%;
-  height: 5px;
-  background: rgba(255, 255, 255, 0.08);
+  height: 6px;
+  background: var(--borderLight, rgba(255, 255, 255, 0.08));
   border-radius: 9999px;
   overflow: hidden;
 }
 
-.fintech-progress-bar.gold-bar {
+.fintech-progress-bar {
   height: 100%;
   border-radius: 9999px;
-  background: linear-gradient(90deg, #ca8a04 0%, #eab308 50%, #fde047 100%);
-  box-shadow: 0 0 14px rgba(234, 179, 8, 0.6);
+  background: var(--accentGradient, linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%));
+  box-shadow: 0 0 16px var(--accentGlow, rgba(99, 102, 241, 0.6));
   position: relative;
   transition: width 0.15s ease-out;
 }
 
-.progress-light-sweep.gold-sweep {
+.progress-light-sweep {
   position: absolute;
   top: 0;
   left: -100%;
@@ -322,15 +329,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
   letter-spacing: 0.5px;
 }
 
-.progress-state.gold-text {
-  color: #a1a1aa;
+.progress-state {
+  color: var(--textMuted, #94a3b8);
 }
 
-.progress-number.gold-text {
-  color: #facc15;
+.progress-number {
+  color: var(--accent, #818cf8);
+  font-weight: 800;
 }

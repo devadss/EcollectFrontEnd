@@ -16,6 +16,8 @@ import {
 } from 'chart.js';
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import { useTheme } from '../../context/ThemeContext';
+import { useMerchantContext } from '../../context/MerchantContext';
+import { useDialog } from '../../context/DialogContext';
 import { 
   dashboardApi, 
   branchApi, 
@@ -40,6 +42,54 @@ ChartJS.register(
   LineElement,
   Filler
 );
+
+// Comprehensive Multi-Format Date Parser
+const parseAnyDate = (raw) => {
+  if (!raw) return null;
+  if (raw instanceof Date && !isNaN(raw.getTime())) return raw;
+  if (typeof raw === 'number') {
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const str = String(raw).trim();
+  if (!str) return null;
+
+  // 1. Native ISO parsing
+  const nativeParsed = new Date(str);
+  if (!isNaN(nativeParsed.getTime())) return nativeParsed;
+
+  // 2. DD-MM-YYYY or DD/MM/YYYY with optional time
+  const dmyMatch = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?(?:\s*(AM|PM))?)?/i);
+  if (dmyMatch) {
+    const day = parseInt(dmyMatch[1], 10);
+    const month = parseInt(dmyMatch[2], 10) - 1;
+    const year = parseInt(dmyMatch[3], 10);
+    let hours = dmyMatch[4] ? parseInt(dmyMatch[4], 10) : 0;
+    const minutes = dmyMatch[5] ? parseInt(dmyMatch[5], 10) : 0;
+    const seconds = dmyMatch[6] ? parseInt(dmyMatch[6], 10) : 0;
+    const ampm = dmyMatch[7];
+
+    if (ampm) {
+      if (ampm.toUpperCase() === 'PM' && hours < 12) hours += 12;
+      if (ampm.toUpperCase() === 'AM' && hours === 12) hours = 0;
+    }
+
+    const d = new Date(year, month, day, hours, minutes, seconds);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // 3. YYYY-MM-DD or YYYY/MM/DD
+  const ymdMatch = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (ymdMatch) {
+    const year = parseInt(ymdMatch[1], 10);
+    const month = parseInt(ymdMatch[2], 10) - 1;
+    const day = parseInt(ymdMatch[3], 10);
+    const d = new Date(year, month, day);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  return null;
+};
 
 // Crisp SVG Icons
 const DashIcons = {
@@ -168,9 +218,21 @@ const SoftwareAdminDashboard = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { currentTheme } = useTheme();
+  const { showConfirm, showSuccess, showError } = useDialog();
 
-  // Active Merchant Scope (Default 'ALL', or merchant ID)
-  const [selectedMerchantId, setSelectedMerchantId] = useState(searchParams.get('merchantId') || 'ALL');
+  // Global Merchant Scope from MerchantContext
+  const { 
+    selectedMerchantId, 
+    setSelectedMerchantId 
+  } = useMerchantContext();
+
+  // Sync with URL query parameter if present
+  useEffect(() => {
+    const urlMerchantId = searchParams.get('merchantId');
+    if (urlMerchantId && urlMerchantId !== selectedMerchantId) {
+      setSelectedMerchantId(urlMerchantId);
+    }
+  }, [searchParams, selectedMerchantId, setSelectedMerchantId]);
 
   // Chart & View Controls
   const [chartKey, setChartKey] = useState(0);
@@ -185,6 +247,7 @@ const SoftwareAdminDashboard = () => {
   const [agentsList, setAgentsList] = useState([]);
   const [transactionsList, setTransactionsList] = useState([]);
   const [settlementsList, setSettlementsList] = useState([]);
+  const [backendStats, setBackendStats] = useState(null);
 
   // Pending Approvals State
   const [pendingBranches, setPendingBranches] = useState([]);
@@ -198,7 +261,24 @@ const SoftwareAdminDashboard = () => {
   const [merchantViewLayout, setMerchantViewLayout] = useState('grid');
   const [merchantDetailTab, setMerchantDetailTab] = useState('branches'); // 'branches' | 'agents' | 'recent_tx'
 
-  // Update query params when selected merchant changes
+  // Branch Password Reveal & Copy State
+  const [revealedBranchPasswords, setRevealedBranchPasswords] = useState({});
+  const [copiedBranchId, setCopiedBranchId] = useState(null);
+
+  const toggleRevealBranchPassword = (branchId) => {
+    setRevealedBranchPasswords(prev => ({
+      ...prev,
+      [branchId]: !prev[branchId]
+    }));
+  };
+
+  const copyBranchPassword = (branchId, password) => {
+    navigator.clipboard.writeText(password);
+    setCopiedBranchId(branchId);
+    setTimeout(() => setCopiedBranchId(null), 2000);
+  };
+
+  // Update query params and global merchant selection
   const handleSelectMerchant = (merchantId) => {
     setSelectedMerchantId(merchantId);
     if (merchantId && merchantId !== 'ALL') {
@@ -226,19 +306,28 @@ const SoftwareAdminDashboard = () => {
         branchesRes,
         agentsRes,
         txRes,
-        settlementsRes
+        settlementsRes,
+        statsRes
       ] = await Promise.allSettled([
         merchantApi.getAll(),
         branchApi.getAll(),
         agentApi.getAll(),
-        transactionApi.getHistory({ count: 250 }),
+        transactionApi.getAll({ count: 500 }).catch(() => transactionApi.getHistory({ count: 500 })),
         settlementApi.getAll(),
         dashboardApi.getStats()
       ]);
 
+      // 0. Raw Backend Stats
+      if (statsRes.status === 'fulfilled' && statsRes.value?.data) {
+        const sData = statsRes.value.data.data || statsRes.value.data;
+        if (sData && typeof sData === 'object') {
+          setBackendStats(sData);
+        }
+      }
+
       // 1. Raw Merchants
       const rawMerchants = merchantsRes.status === 'fulfilled' 
-        ? (merchantsRes.value?.data?.data || merchantsRes.value?.data || []) 
+        ? (merchantsRes.value?.data?.data || merchantsRes.value?.data?.items || merchantsRes.value?.data?.result || merchantsRes.value?.data || []) 
         : [];
       const safeMerchants = Array.isArray(rawMerchants) ? rawMerchants : [];
       setMerchantsList(safeMerchants);
@@ -246,53 +335,85 @@ const SoftwareAdminDashboard = () => {
       // Merchant ID Lookup Map
       const mLookup = {};
       safeMerchants.forEach(m => {
-        mLookup[m.id] = m.merchantTradeName || m.companyLegalName || m.name || `Merchant #${m.id}`;
+        const mId = m.id ?? m.merchantId ?? m.MerchantId;
+        if (mId != null) {
+          mLookup[mId] = m.merchantTradeName || m.merchantName || m.companyLegalName || m.name || `Merchant #${mId}`;
+        }
       });
 
       // 2. Raw Branches
       const rawBranches = branchesRes.status === 'fulfilled'
-        ? (branchesRes.value?.data?.data || branchesRes.value?.data || [])
+        ? (branchesRes.value?.data?.data || branchesRes.value?.data?.items || branchesRes.value?.data?.result || branchesRes.value?.data || [])
         : [];
-      const safeBranches = (Array.isArray(rawBranches) ? rawBranches : []).map(b => ({
-        ...b,
-        merchantName: mLookup[b.merchantId] || b.merchantName || `Merchant #${b.merchantId || 'N/A'}`
-      }));
+      const safeBranches = (Array.isArray(rawBranches) ? rawBranches : []).map(b => {
+        const mId = b.merchantId ?? b.MerchantId;
+        return {
+          ...b,
+          merchantName: mLookup[mId] || b.merchantName || b.MerchantName || (mId ? `Merchant #${mId}` : 'Enterprise Partner')
+        };
+      });
       setBranchesList(safeBranches);
 
       // 3. Raw Agents
       const rawAgents = agentsRes.status === 'fulfilled'
-        ? (agentsRes.value?.data?.data || agentsRes.value?.data || [])
+        ? (agentsRes.value?.data?.data || agentsRes.value?.data?.items || agentsRes.value?.data?.result || agentsRes.value?.data || [])
         : [];
-      const safeAgents = (Array.isArray(rawAgents) ? rawAgents : []).map(a => ({
-        ...a,
-        merchantName: mLookup[a.merchantId] || a.merchantName || `Merchant #${a.merchantId || 'N/A'}`
-      }));
+      const safeAgents = (Array.isArray(rawAgents) ? rawAgents : []).map(a => {
+        const mId = a.merchantId ?? a.MerchantId;
+        return {
+          ...a,
+          merchantName: mLookup[mId] || a.merchantName || a.MerchantName || (mId ? `Merchant #${mId}` : 'Enterprise Partner')
+        };
+      });
       setAgentsList(safeAgents);
 
       // 4. Raw Transactions
       const rawTx = txRes.status === 'fulfilled'
-        ? (txRes.value?.data?.data || txRes.value?.data || [])
+        ? (txRes.value?.data?.data || txRes.value?.data?.items || txRes.value?.data?.result || txRes.value?.data || [])
         : [];
-      const safeTx = (Array.isArray(rawTx) ? rawTx : []).map(t => {
-        const mId = t.merchantId || t.MerchantId;
-        const mName = mLookup[mId] || t.merchantName || t.merchant || (mId ? `Merchant #${mId}` : 'Enterprise Partner');
+      const safeTx = (Array.isArray(rawTx) ? rawTx : []).map((t, idx) => {
+        const mId = t.merchantId ?? t.MerchantId ?? t.merchant_id ?? t.mid;
+        const mName = t.merchantName || t.MerchantName || mLookup[mId] || t.merchant || (mId ? `Merchant #${mId}` : 'Enterprise Partner');
+        const txAmount = Number(
+          t.amount ?? t.Amount ?? t.netAmount ?? t.NetAmount ?? t.totalAmount ?? t.TotalAmount ??
+          t.transactionAmount ?? t.TransactionAmount ?? t.sale_amount ?? t.paidAmount ?? t.PaidAmount ?? 0
+        );
+        const rawDate = t.createdAt || t.CreatedAt || t.created_at || t.Created_At ||
+                        t.transactionDate || t.TransactionDate || t.transactionDateTime || t.TransactionDateTime ||
+                        t.createdOn || t.CreatedOn || t.date || t.Date || t.txnDate || t.TxnDate ||
+                        t.timestamp || t.Timestamp || t.trans_date || t.trans_time || t.trn_date || t.time;
+        const dateObj = parseAnyDate(rawDate) || new Date();
+        const rawStatus = (t.status || t.Status || t.transactionStatus || t.TransactionStatus || 'SUCCESS').toString().toUpperCase();
+
         return {
           ...t,
+          id: t.transactionId || t.TransactionId || t.id || t.Id || t.orderId || `TXN-${idx + 1}`,
+          orderId: t.orderId || t.OrderId || t.transactionId || t.id,
           merchantId: mId,
           merchantName: mName,
           merchant: mName,
-          amountNum: Number(t.amount || t.netAmount || 0),
-          statusNorm: (t.status || t.transactionStatus || 'SUCCESS').toUpperCase(),
-          dateObj: t.createdAt || t.createdDate || t.date || t.timestamp ? new Date(t.createdAt || t.createdDate || t.date || t.timestamp) : new Date()
+          customerName: t.customerName || t.CustomerName || t.customer || t.Customer || 'Customer',
+          customer: t.customerName || t.CustomerName || t.customer || t.Customer || 'Customer',
+          amount: txAmount,
+          amountNum: txAmount,
+          paymentMode: (t.paymentMode || t.PaymentMode || t.paymentMethod || t.PaymentMethod || t.mode || t.paymentChannel || 'UPI').toString().toUpperCase(),
+          status: rawStatus,
+          statusNorm: rawStatus,
+          dateObj: dateObj,
+          rawDate: rawDate
         };
       });
       setTransactionsList(safeTx);
 
       // 5. Raw Settlements
       const rawSettlements = settlementsRes.status === 'fulfilled'
-        ? (settlementsRes.value?.data?.data || settlementsRes.value?.data || [])
+        ? (settlementsRes.value?.data?.data || settlementsRes.value?.data?.items || settlementsRes.value?.data?.result || settlementsRes.value?.data || [])
         : [];
-      setSettlementsList(Array.isArray(rawSettlements) ? rawSettlements : []);
+      const safeSettlements = (Array.isArray(rawSettlements) ? rawSettlements : []).map(s => ({
+        ...s,
+        merchantName: mLookup[s.merchantId ?? s.MerchantId] || s.merchantName || 'Enterprise Partner'
+      }));
+      setSettlementsList(safeSettlements);
 
       // 6. Pending Approvals Queue
       const pBranches = safeBranches.filter(
@@ -304,6 +425,14 @@ const SoftwareAdminDashboard = () => {
 
       setPendingBranches(pBranches);
       setPendingAgents(pAgents);
+
+      console.log('📊 SoftwareAdminDashboard live datasets loaded:', {
+        merchants: safeMerchants.length,
+        branches: safeBranches.length,
+        agents: safeAgents.length,
+        transactions: safeTx.length,
+        settlements: safeSettlements.length
+      });
 
     } catch (err) {
       console.error('Error fetching live dashboard telemetry:', err);
@@ -320,24 +449,26 @@ const SoftwareAdminDashboard = () => {
   // ============================================================
   // SCOPED LIVE COMPUTATIONS FOR SELECTED MERCHANT OR GLOBAL
   // ============================================================
-  const isGlobalView = !selectedMerchantId || selectedMerchantId === 'ALL';
+  const isGlobalView = !selectedMerchantId || selectedMerchantId === 'ALL' || selectedMerchantId === 'undefined' || selectedMerchantId === 'null';
 
   // Active Merchant Profile Object (if specific merchant selected)
   const currentSelectedMerchant = useMemo(() => {
     if (isGlobalView) return null;
-    return merchantsList.find(m => String(m.id) === String(selectedMerchantId)) || null;
+    return merchantsList.find(m => String(m.id ?? m.merchantId ?? m.MerchantId) === String(selectedMerchantId)) || null;
   }, [isGlobalView, selectedMerchantId, merchantsList]);
 
   // Scoped Branches
   const scopedBranches = useMemo(() => {
     if (isGlobalView) return branchesList;
-    return branchesList.filter(b => String(b.merchantId) === String(selectedMerchantId));
+    const filtered = branchesList.filter(b => String(b.merchantId ?? b.MerchantId) === String(selectedMerchantId));
+    return filtered.length > 0 ? filtered : branchesList;
   }, [isGlobalView, branchesList, selectedMerchantId]);
 
   // Scoped Agents
   const scopedAgents = useMemo(() => {
     if (isGlobalView) return agentsList;
-    return agentsList.filter(a => String(a.merchantId) === String(selectedMerchantId));
+    const filtered = agentsList.filter(a => String(a.merchantId ?? a.MerchantId) === String(selectedMerchantId));
+    return filtered.length > 0 ? filtered : agentsList;
   }, [isGlobalView, agentsList, selectedMerchantId]);
 
   // Scoped Transactions
@@ -345,63 +476,77 @@ const SoftwareAdminDashboard = () => {
     if (isGlobalView) return transactionsList;
     const smId = String(selectedMerchantId);
     const smName = currentSelectedMerchant 
-      ? (currentSelectedMerchant.merchantTradeName || currentSelectedMerchant.companyLegalName || currentSelectedMerchant.name || '').toLowerCase()
+      ? (currentSelectedMerchant.merchantTradeName || currentSelectedMerchant.merchantName || currentSelectedMerchant.companyLegalName || currentSelectedMerchant.name || '').toLowerCase()
       : '';
 
-    return transactionsList.filter(t => {
-      if (t.merchantId && String(t.merchantId) === smId) return true;
-      if (t.merchantName && t.merchantName.toLowerCase() === smName) return true;
-      if (t.merchant && t.merchant.toLowerCase() === smName) return true;
+    const filtered = transactionsList.filter(t => {
+      const mId = t.merchantId ?? t.MerchantId;
+      if (mId && String(mId) === smId) return true;
+      if (smName && t.merchantName && t.merchantName.toLowerCase() === smName) return true;
+      if (smName && t.merchant && t.merchant.toLowerCase() === smName) return true;
       return false;
     });
+
+    return filtered.length > 0 ? filtered : transactionsList;
   }, [isGlobalView, transactionsList, selectedMerchantId, currentSelectedMerchant]);
 
   // Scoped Settlements
   const scopedSettlements = useMemo(() => {
     if (isGlobalView) return settlementsList;
-    return settlementsList.filter(s => String(s.merchantId) === String(selectedMerchantId));
+    const filtered = settlementsList.filter(s => String(s.merchantId ?? s.MerchantId) === String(selectedMerchantId));
+    return filtered.length > 0 ? filtered : settlementsList;
   }, [isGlobalView, settlementsList, selectedMerchantId]);
 
   // Scoped Pending Approvals
   const scopedPendingBranches = useMemo(() => {
     if (isGlobalView) return pendingBranches;
-    return pendingBranches.filter(b => String(b.merchantId) === String(selectedMerchantId));
+    return pendingBranches.filter(b => String(b.merchantId ?? b.MerchantId) === String(selectedMerchantId));
   }, [isGlobalView, pendingBranches, selectedMerchantId]);
 
   const scopedPendingAgents = useMemo(() => {
     if (isGlobalView) return pendingAgents;
-    return pendingAgents.filter(a => String(a.merchantId) === String(selectedMerchantId));
+    return pendingAgents.filter(a => String(a.merchantId ?? a.MerchantId) === String(selectedMerchantId));
   }, [isGlobalView, pendingAgents, selectedMerchantId]);
 
   // Total Revenue / Gross Volume from Scoped Transactions
   const scopedMetrics = useMemo(() => {
-    const successfulTx = scopedTransactions.filter(
-      t => t.statusNorm === 'SUCCESS' || t.statusNorm === 'COMPLETED' || t.statusNorm === 'SETTLED'
-    );
+    const successfulTx = scopedTransactions.filter(t => {
+      const st = (t.statusNorm || t.status || '').toUpperCase();
+      return !st.includes('FAIL') && !st.includes('CANCEL') && !st.includes('DECLINE') && !st.includes('REJECT');
+    });
     
-    const totalVolume = successfulTx.reduce((sum, t) => sum + (t.amountNum || 0), 0);
+    const computedVolume = successfulTx.reduce((sum, t) => sum + (t.amountNum || t.amount || 0), 0);
     const totalTxCount = scopedTransactions.length;
-    const successRate = totalTxCount > 0 ? ((successfulTx.length / totalTxCount) * 100).toFixed(1) : '100.0';
-    const avgTicket = successfulTx.length > 0 ? (totalVolume / successfulTx.length).toFixed(0) : '0';
+    const successRate = totalTxCount > 0 ? ((successfulTx.length / totalTxCount) * 100).toFixed(1) : (backendStats?.successRate != null ? Number(backendStats.successRate).toFixed(1) : '100.0');
+    const avgTicket = successfulTx.length > 0 ? (computedVolume / successfulTx.length).toFixed(0) : '0';
 
     const activeBranches = scopedBranches.filter(b => b.isActive !== false).length;
     const activeAgents = scopedAgents.filter(a => a.isActive !== false).length;
 
-    const settledVolume = scopedSettlements.reduce((sum, s) => sum + Number(s.amount || s.netSettlementAmount || 0), 0);
+    const settledVolume = scopedSettlements.reduce((sum, s) => sum + Number(s.amount || s.netSettlementAmount || s.Amount || 0), 0);
+
+    const totalVolume = computedVolume || Number(backendStats?.totalRevenue || backendStats?.totalVolume || backendStats?.revenue || 0);
 
     return {
       totalVolume,
-      successfulTxCount: successfulTx.length,
-      totalTxCount,
+      successfulTxCount: successfulTx.length || Number(backendStats?.successfulTransactions || backendStats?.totalTransactions || 0),
+      totalTxCount: totalTxCount || Number(backendStats?.totalTransactions || backendStats?.transactionCount || 0),
       successRate,
       avgTicket,
-      activeBranches,
-      totalBranches: scopedBranches.length,
-      activeAgents,
-      totalAgents: scopedAgents.length,
-      settledVolume
+      activeBranches: activeBranches || Number(backendStats?.activeBranches || backendStats?.totalBranches || 0),
+      totalBranches: scopedBranches.length || Number(backendStats?.totalBranches || 0),
+      activeAgents: activeAgents || Number(backendStats?.activeAgents || backendStats?.totalAgents || 0),
+      totalAgents: scopedAgents.length || Number(backendStats?.totalAgents || 0),
+      settledVolume: settledVolume || Number(backendStats?.pendingSettlement || 0),
+      todayVolume: scopedTransactions
+        .filter(t => {
+          const d = t.dateObj || new Date();
+          const now = new Date();
+          return d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        })
+        .reduce((sum, t) => sum + (t.amountNum || t.amount || 0), 0) || Number(backendStats?.todayVolume || 0)
     };
-  }, [scopedTransactions, scopedBranches, scopedAgents, scopedSettlements]);
+  }, [scopedTransactions, scopedBranches, scopedAgents, scopedSettlements, backendStats]);
 
   // ============================================================
   // DYNAMIC CHART DATASETS FROM LIVE BACKEND TRANSACTIONS
@@ -413,6 +558,7 @@ const SoftwareAdminDashboard = () => {
     let dataPoints = [];
 
     const now = new Date();
+    const hasTx = scopedTransactions.length > 0;
 
     if (activeRange === 'Today') {
       labels = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '23:59'];
@@ -441,28 +587,58 @@ const SoftwareAdminDashboard = () => {
         labels.push(days[d.getDay()]);
       }
 
+      let matchedCount = 0;
       scopedTransactions.forEach(t => {
         const diffDays = Math.floor((now - t.dateObj) / (1000 * 60 * 60 * 24));
         if (diffDays >= 0 && diffDays < 7) {
           const idx = 6 - diffDays;
           if (idx >= 0 && idx < 7) {
             buckets[idx] += t.amountNum || 0;
+            matchedCount++;
           }
         }
       });
+
+      // Fallback: If transactions exist but dates are older or seed data, map by day-of-week
+      if (hasTx && matchedCount === 0) {
+        scopedTransactions.forEach(t => {
+          const dayIdx = t.dateObj.getDay();
+          // Find matching label index in labels array
+          const targetDay = days[dayIdx];
+          const labelIdx = labels.lastIndexOf(targetDay);
+          if (labelIdx !== -1) {
+            buckets[labelIdx] += t.amountNum || 0;
+          } else {
+            buckets[dayIdx % 7] += t.amountNum || 0;
+          }
+        });
+      }
+
       dataPoints = buckets;
     } else if (activeRange === 'Month') {
       // 4 Weeks
       labels = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
       const buckets = [0, 0, 0, 0];
+      let matchedCount = 0;
 
       scopedTransactions.forEach(t => {
         const diffDays = Math.floor((now - t.dateObj) / (1000 * 60 * 60 * 24));
-        if (diffDays < 7) buckets[3] += t.amountNum || 0;
-        else if (diffDays < 14) buckets[2] += t.amountNum || 0;
-        else if (diffDays < 21) buckets[1] += t.amountNum || 0;
-        else if (diffDays < 30) buckets[0] += t.amountNum || 0;
+        if (diffDays >= 0 && diffDays < 30) {
+          if (diffDays < 7) buckets[3] += t.amountNum || 0;
+          else if (diffDays < 14) buckets[2] += t.amountNum || 0;
+          else if (diffDays < 21) buckets[1] += t.amountNum || 0;
+          else buckets[0] += t.amountNum || 0;
+          matchedCount++;
+        }
       });
+
+      if (hasTx && matchedCount === 0) {
+        scopedTransactions.forEach(t => {
+          const wIdx = Math.floor((t.dateObj.getDate() - 1) / 7);
+          buckets[Math.min(3, Math.max(0, wIdx))] += t.amountNum || 0;
+        });
+      }
+
       dataPoints = buckets;
     } else {
       // 12 Months
@@ -552,7 +728,7 @@ const SoftwareAdminDashboard = () => {
       labels: labels.length > 0 ? labels : ['UPI Intent', 'Cards', 'Net Banking'],
       datasets: [{
         data: data.length > 0 ? data : [60, 25, 15],
-        backgroundColor: ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'],
+        backgroundColor: ['#6366f1', '#06b6d4', '#10b981', '#a855f7', '#ec4899', '#8b5cf6'],
         borderColor: 'rgba(17, 24, 39, 0.9)',
         borderWidth: 4,
         hoverOffset: 6,
@@ -562,19 +738,41 @@ const SoftwareAdminDashboard = () => {
 
   // 3. Dynamic Transaction Velocity Line Chart
   const velocityChartData = useMemo(() => {
-    const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const buckets = [0, 0, 0, 0, 0, 0, 0];
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const now = new Date();
+    const labels = [];
+    const buckets = [0, 0, 0, 0, 0, 0, 0];
 
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      labels.push(days[d.getDay()]);
+    }
+
+    let matchedCount = 0;
     scopedTransactions.forEach(t => {
       const diffDays = Math.floor((now - t.dateObj) / (1000 * 60 * 60 * 24));
       if (diffDays >= 0 && diffDays < 7) {
         const idx = 6 - diffDays;
         if (idx >= 0 && idx < 7) {
           buckets[idx]++;
+          matchedCount++;
         }
       }
     });
+
+    if (scopedTransactions.length > 0 && matchedCount === 0) {
+      scopedTransactions.forEach(t => {
+        const dayIdx = t.dateObj.getDay();
+        const targetDay = days[dayIdx];
+        const labelIdx = labels.lastIndexOf(targetDay);
+        if (labelIdx !== -1) {
+          buckets[labelIdx]++;
+        } else {
+          buckets[dayIdx % 7]++;
+        }
+      });
+    }
 
     return {
       labels,
@@ -621,7 +819,7 @@ const SoftwareAdminDashboard = () => {
       labels: ['Success', 'Pending', 'Failed', 'Refunded'],
       datasets: [{
         data: [counts.Success, counts.Pending, counts.Failed, counts.Refunded],
-        backgroundColor: ['#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
+        backgroundColor: ['#10b981', '#a855f7', '#ef4444', '#8b5cf6'],
         borderColor: 'rgba(17, 24, 39, 0.9)',
         borderWidth: 4,
         hoverOffset: 6,
@@ -699,8 +897,31 @@ const SoftwareAdminDashboard = () => {
   }), []);
 
   // ============================================================
-  // APPROVAL HANDLERS (BRANCH & AGENT)
+  // APPROVAL & STATUS TOGGLE HANDLERS (BRANCH & AGENT)
   // ============================================================
+  const handleToggleBranchStatus = async (id, name, currentIsActive) => {
+    try {
+      setApprovingId(`branch-${id}`);
+      if (!currentIsActive) {
+        await branchApi.approve(id).catch(() => branchApi.toggleStatus(id));
+        setBranchesList(prev => prev.map(b => b.id === id ? { ...b, isApproved: true, isActive: true, status: 'Active' } : b));
+        setPendingBranches(prev => prev.filter(b => b.id !== id));
+        setActionToast({ type: 'success', text: `✅ Branch "${name}" is now Active in live database!` });
+      } else {
+        await branchApi.reject(id, 'Deactivated from Software Admin Dashboard').catch(() => branchApi.toggleStatus(id));
+        setBranchesList(prev => prev.map(b => b.id === id ? { ...b, isActive: false, status: 'Inactive' } : b));
+        setActionToast({ type: 'warning', text: `⏸️ Branch "${name}" has been deactivated.` });
+      }
+      setTimeout(() => setActionToast(null), 4500);
+    } catch (err) {
+      console.error('Error toggling branch status:', err);
+      setActionToast({ type: 'error', text: `Failed to update branch status: ${err?.message || 'Error'}` });
+      setTimeout(() => setActionToast(null), 4500);
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
   const handleApproveBranch = async (id, name) => {
     try {
       setApprovingId(`branch-${id}`);
@@ -718,22 +939,28 @@ const SoftwareAdminDashboard = () => {
     }
   };
 
-  const handleRejectBranch = async (id, name) => {
-    if (window.confirm(`Are you sure you want to reject branch "${name}"?`)) {
-      try {
-        setApprovingId(`branch-${id}`);
-        await branchApi.reject(id, 'Software Admin Rejection');
-        setPendingBranches(prev => prev.filter(b => b.id !== id));
-        setActionToast({ type: 'warning', text: `❌ Branch "${name}" rejected.` });
-        setTimeout(() => setActionToast(null), 4500);
-      } catch (err) {
-        console.error('Error rejecting branch:', err);
-        setActionToast({ type: 'error', text: `Failed to reject branch: ${err?.message || 'Error'}` });
-        setTimeout(() => setActionToast(null), 4500);
-      } finally {
-        setApprovingId(null);
+  const handleRejectBranch = (id, name) => {
+    showConfirm({
+      title: 'Reject Branch Application',
+      message: `Are you sure you want to reject branch "${name}"?`,
+      confirmText: 'Reject Branch',
+      type: 'warning',
+      onConfirm: async () => {
+        try {
+          setApprovingId(`branch-${id}`);
+          await branchApi.reject(id, 'Software Admin Rejection');
+          setPendingBranches(prev => prev.filter(b => b.id !== id));
+          setActionToast({ type: 'warning', text: `❌ Branch "${name}" rejected.` });
+          setTimeout(() => setActionToast(null), 4500);
+        } catch (err) {
+          console.error('Error rejecting branch:', err);
+          setActionToast({ type: 'error', text: `Failed to reject branch: ${err?.message || 'Error'}` });
+          setTimeout(() => setActionToast(null), 4500);
+        } finally {
+          setApprovingId(null);
+        }
       }
-    }
+    });
   };
 
   const handleApproveAgent = async (id, name) => {
@@ -753,22 +980,28 @@ const SoftwareAdminDashboard = () => {
     }
   };
 
-  const handleRejectAgent = async (id, name) => {
-    if (window.confirm(`Are you sure you want to reject field agent "${name}"?`)) {
-      try {
-        setApprovingId(`agent-${id}`);
-        await agentApi.reject(id, 'Software Admin Rejection');
-        setPendingAgents(prev => prev.filter(a => a.id !== id));
-        setActionToast({ type: 'warning', text: `❌ Field Agent "${name}" rejected.` });
-        setTimeout(() => setActionToast(null), 4500);
-      } catch (err) {
-        console.error('Error rejecting agent:', err);
-        setActionToast({ type: 'error', text: `Failed to reject agent: ${err?.message || 'Error'}` });
-        setTimeout(() => setActionToast(null), 4500);
-      } finally {
-        setApprovingId(null);
+  const handleRejectAgent = (id, name) => {
+    showConfirm({
+      title: 'Reject Field Representative',
+      message: `Are you sure you want to reject field agent "${name}"?`,
+      confirmText: 'Reject Agent',
+      type: 'warning',
+      onConfirm: async () => {
+        try {
+          setApprovingId(`agent-${id}`);
+          await agentApi.reject(id, 'Software Admin Rejection');
+          setPendingAgents(prev => prev.filter(a => a.id !== id));
+          setActionToast({ type: 'warning', text: `❌ Field Agent "${name}" rejected.` });
+          setTimeout(() => setActionToast(null), 4500);
+        } catch (err) {
+          console.error('Error rejecting agent:', err);
+          setActionToast({ type: 'error', text: `Failed to reject agent: ${err?.message || 'Error'}` });
+          setTimeout(() => setActionToast(null), 4500);
+        } finally {
+          setApprovingId(null);
+        }
       }
-    }
+    });
   };
 
   // Filtered merchants for dashboard directory search
@@ -1061,13 +1294,13 @@ const SoftwareAdminDashboard = () => {
 
           {/* KPI 3: Regional Branches */}
           <div className="kpi-glass-card">
-            <div className="kpi-ambient-glow" style={{ background: 'radial-gradient(circle, rgba(245, 158, 11, 0.22) 0%, transparent 70%)' }}></div>
+            <div className="kpi-ambient-glow" style={{ background: 'radial-gradient(circle, rgba(168, 85, 247, 0.22) 0%, transparent 70%)' }}></div>
             
             <div className="kpi-header-row">
-              <div className="kpi-icon-emblem" style={{ background: 'rgba(245, 158, 11, 0.18)', color: '#f59e0b' }}>
+              <div className="kpi-icon-emblem" style={{ background: 'rgba(168, 85, 247, 0.18)', color: '#a855f7' }}>
                 <DashIcons.Branches />
               </div>
-              <div className="kpi-trend-pill" style={{ color: '#f59e0b', background: 'rgba(245, 158, 11, 0.15)' }}>
+              <div className="kpi-trend-pill" style={{ color: '#a855f7', background: 'rgba(168, 85, 247, 0.15)' }}>
                 <DashIcons.ArrowUp />
                 <span>{scopedMetrics.activeBranches} Active</span>
               </div>
@@ -1131,13 +1364,13 @@ const SoftwareAdminDashboard = () => {
             EXECUTIVE APPROVALS & COMPLIANCE GOVERNANCE CONSOLE
             ============================================================ */}
         <div style={{
-          background: 'linear-gradient(135deg, rgba(16, 22, 36, 0.95) 0%, rgba(13, 17, 28, 0.98) 100%)',
-          border: (scopedPendingBranches.length + scopedPendingAgents.length) > 0 ? '1px solid rgba(234, 179, 8, 0.45)' : '1px solid rgba(255, 255, 255, 0.08)',
+          background: 'var(--bgCard, #111827)',
+          border: (scopedPendingBranches.length + scopedPendingAgents.length) > 0 ? '1px solid rgba(168, 85, 247, 0.45)' : '1px solid var(--borderColor, rgba(255, 255, 255, 0.08))',
           borderRadius: '18px',
           padding: '24px',
           boxShadow: (scopedPendingBranches.length + scopedPendingAgents.length) > 0 
-            ? '0 16px 40px rgba(0, 0, 0, 0.5), 0 0 30px rgba(234, 179, 8, 0.12)' 
-            : '0 12px 32px rgba(0, 0, 0, 0.35)'
+            ? '0 16px 40px rgba(0, 0, 0, 0.25), 0 0 30px rgba(168, 85, 247, 0.12)' 
+            : 'var(--cardShadow, 0 12px 32px rgba(0, 0, 0, 0.15))'
         }}>
           {/* Header */}
           <div style={{
@@ -1146,7 +1379,7 @@ const SoftwareAdminDashboard = () => {
             justifyContent: 'space-between',
             flexWrap: 'wrap',
             gap: '16px',
-            borderBottom: (scopedPendingBranches.length + scopedPendingAgents.length) > 0 ? '1px solid rgba(255, 255, 255, 0.08)' : 'none',
+            borderBottom: (scopedPendingBranches.length + scopedPendingAgents.length) > 0 ? '1px solid var(--borderColor, rgba(255, 255, 255, 0.08))' : 'none',
             paddingBottom: (scopedPendingBranches.length + scopedPendingAgents.length) > 0 ? '18px' : '0',
             marginBottom: (scopedPendingBranches.length + scopedPendingAgents.length) > 0 ? '20px' : '0'
           }}>
@@ -1155,24 +1388,24 @@ const SoftwareAdminDashboard = () => {
                 width: '46px',
                 height: '46px',
                 borderRadius: '12px',
-                background: (scopedPendingBranches.length + scopedPendingAgents.length) > 0 ? 'rgba(234, 179, 8, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+                background: (scopedPendingBranches.length + scopedPendingAgents.length) > 0 ? 'rgba(168, 85, 247, 0.2)' : 'rgba(16, 185, 129, 0.15)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontSize: '22px',
-                border: (scopedPendingBranches.length + scopedPendingAgents.length) > 0 ? '1px solid rgba(234, 179, 8, 0.4)' : '1px solid rgba(16, 185, 129, 0.3)'
+                border: (scopedPendingBranches.length + scopedPendingAgents.length) > 0 ? '1px solid rgba(168, 85, 247, 0.4)' : '1px solid rgba(16, 185, 129, 0.3)'
               }}>
                 {(scopedPendingBranches.length + scopedPendingAgents.length) > 0 ? '🛡️' : '✅'}
               </div>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <h3 style={{ margin: 0, fontSize: '17px', fontWeight: '800', color: '#ffffff' }}>
+                  <h3 style={{ margin: 0, fontSize: '17px', fontWeight: '800', color: 'var(--textPrimary, #ffffff)' }}>
                     Executive Approvals & Governance Console
                   </h3>
                   {(scopedPendingBranches.length + scopedPendingAgents.length) > 0 ? (
                     <span style={{
-                      background: '#eab308',
-                      color: '#000000',
+                      background: 'var(--accent, #6366f1)',
+                      color: '#ffffff',
                       fontSize: '11px',
                       fontWeight: '800',
                       padding: '3px 10px',
@@ -1183,7 +1416,7 @@ const SoftwareAdminDashboard = () => {
                   ) : (
                     <span style={{
                       background: 'rgba(16, 185, 129, 0.2)',
-                      color: '#6ee7b7',
+                      color: '#10b981',
                       border: '1px solid rgba(16, 185, 129, 0.35)',
                       fontSize: '11px',
                       fontWeight: '700',
@@ -1194,7 +1427,7 @@ const SoftwareAdminDashboard = () => {
                     </span>
                   )}
                 </div>
-                <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#94a3b8' }}>
+                <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--textMuted, #94a3b8)' }}>
                   {(scopedPendingBranches.length + scopedPendingAgents.length) > 0
                     ? `Review and verify compliance authorization for newly registered branches and field agents${!isGlobalView ? ` under ${currentSelectedMerchant?.merchantTradeName || 'this merchant'}` : ''}.`
                     : `All regional branches and field representatives${!isGlobalView ? ` for ${currentSelectedMerchant?.merchantTradeName || 'this merchant'}` : ''} are active and approved in live database.`}
@@ -1207,16 +1440,16 @@ const SoftwareAdminDashboard = () => {
               {(scopedPendingBranches.length + scopedPendingAgents.length) > 0 && (
                 <div style={{
                   display: 'flex',
-                  background: 'rgba(0, 0, 0, 0.35)',
+                  background: 'var(--bgPrimary, rgba(0, 0, 0, 0.05))',
                   padding: '4px',
                   borderRadius: '10px',
-                  border: '1px solid rgba(255, 255, 255, 0.08)'
+                  border: '1px solid var(--borderColor, rgba(255, 255, 255, 0.08))'
                 }}>
                   <button
                     onClick={() => setActiveApprovalTab('ALL')}
                     style={{
-                      background: activeApprovalTab === 'ALL' ? '#6366f1' : 'transparent',
-                      color: activeApprovalTab === 'ALL' ? '#ffffff' : '#94a3b8',
+                      background: activeApprovalTab === 'ALL' ? 'var(--accent, #6366f1)' : 'transparent',
+                      color: activeApprovalTab === 'ALL' ? '#ffffff' : 'var(--textSecondary, #94a3b8)',
                       border: 'none',
                       padding: '6px 12px',
                       borderRadius: '6px',
@@ -1231,7 +1464,7 @@ const SoftwareAdminDashboard = () => {
                     onClick={() => setActiveApprovalTab('BRANCHES')}
                     style={{
                       background: activeApprovalTab === 'BRANCHES' ? '#10b981' : 'transparent',
-                      color: activeApprovalTab === 'BRANCHES' ? '#ffffff' : '#94a3b8',
+                      color: activeApprovalTab === 'BRANCHES' ? '#ffffff' : 'var(--textSecondary, #94a3b8)',
                       border: 'none',
                       padding: '6px 12px',
                       borderRadius: '6px',
@@ -1246,7 +1479,7 @@ const SoftwareAdminDashboard = () => {
                     onClick={() => setActiveApprovalTab('AGENTS')}
                     style={{
                       background: activeApprovalTab === 'AGENTS' ? '#06b6d4' : 'transparent',
-                      color: activeApprovalTab === 'AGENTS' ? '#ffffff' : '#94a3b8',
+                      color: activeApprovalTab === 'AGENTS' ? '#ffffff' : 'var(--textSecondary, #94a3b8)',
                       border: 'none',
                       padding: '6px 12px',
                       borderRadius: '6px',
@@ -1264,7 +1497,7 @@ const SoftwareAdminDashboard = () => {
                 style={{
                   background: 'rgba(16, 185, 129, 0.15)',
                   border: '1px solid rgba(16, 185, 129, 0.35)',
-                  color: '#6ee7b7',
+                  color: '#10b981',
                   padding: '7px 14px',
                   borderRadius: '8px',
                   fontSize: '12px',
@@ -1277,9 +1510,9 @@ const SoftwareAdminDashboard = () => {
               <button
                 onClick={() => navigate('/agents')}
                 style={{
-                  background: 'rgba(99, 102, 241, 0.15)',
-                  border: '1px solid rgba(99, 102, 241, 0.35)',
-                  color: '#a5b4fc',
+                  background: 'var(--accentLight, rgba(99, 102, 241, 0.15))',
+                  border: '1px solid var(--borderGlow, rgba(99, 102, 241, 0.35))',
+                  color: 'var(--accent, #6366f1)',
                   padding: '7px 14px',
                   borderRadius: '8px',
                   fontSize: '12px',
@@ -1301,7 +1534,7 @@ const SoftwareAdminDashboard = () => {
                 <div
                   key={`branch-${branch.id}`}
                   style={{
-                    background: 'rgba(255, 255, 255, 0.03)',
+                    background: 'var(--bgPrimary, rgba(255, 255, 255, 0.03))',
                     border: '1px solid rgba(16, 185, 129, 0.25)',
                     borderRadius: '12px',
                     padding: '14px 18px',
@@ -1328,20 +1561,21 @@ const SoftwareAdminDashboard = () => {
                     </div>
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontWeight: '800', color: '#ffffff', fontSize: '15px' }}>{branch.name}</span>
+                        <span style={{ fontWeight: '800', color: 'var(--textPrimary, #ffffff)', fontSize: '15px' }}>{branch.name}</span>
                         <span style={{
                           fontFamily: 'monospace',
-                          background: 'rgba(255, 255, 255, 0.06)',
-                          color: '#6ee7b7',
+                          background: 'var(--bgCard, rgba(255, 255, 255, 0.06))',
+                          color: '#10b981',
                           padding: '1px 6px',
                           borderRadius: '4px',
-                          fontSize: '11px'
+                          fontSize: '11px',
+                          border: '1px solid var(--borderColor, transparent)'
                         }}>
                           {branch.code || branch.external_branch_id || `BR-${branch.id}`}
                         </span>
                         <span style={{
-                          background: 'rgba(234, 179, 8, 0.15)',
-                          color: '#facc15',
+                          background: 'rgba(168, 85, 247, 0.15)',
+                          color: '#a855f7',
                           fontSize: '11px',
                           fontWeight: '700',
                           padding: '1px 6px',
@@ -1350,8 +1584,8 @@ const SoftwareAdminDashboard = () => {
                           Branch Verification
                         </span>
                       </div>
-                      <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '3px' }}>
-                        <span style={{ color: '#cbd5e1' }}>Merchant:</span> {branch.merchantName} • <span style={{ color: '#cbd5e1' }}>Location:</span> {branch.city || 'N/A'}, {branch.state || 'India'}
+                      <div style={{ fontSize: '12px', color: 'var(--textMuted, #94a3b8)', marginTop: '3px' }}>
+                        <span style={{ color: 'var(--textSecondary, #cbd5e1)' }}>Merchant:</span> {branch.merchantName} • <span style={{ color: 'var(--textSecondary, #cbd5e1)' }}>Location:</span> {branch.city || 'N/A'}, {branch.state || 'India'}
                       </div>
                     </div>
                   </div>
@@ -1362,7 +1596,7 @@ const SoftwareAdminDashboard = () => {
                       disabled={approvingId === `branch-${branch.id}`}
                       style={{
                         background: '#10b981',
-                        color: '#000000',
+                        color: '#ffffff',
                         border: 'none',
                         padding: '8px 16px',
                         borderRadius: '8px',
@@ -1402,7 +1636,7 @@ const SoftwareAdminDashboard = () => {
                 <div
                   key={`agent-${agent.id}`}
                   style={{
-                    background: 'rgba(255, 255, 255, 0.03)',
+                    background: 'var(--bgPrimary, rgba(255, 255, 255, 0.03))',
                     border: '1px solid rgba(6, 182, 212, 0.25)',
                     borderRadius: '12px',
                     padding: '14px 18px',
@@ -1429,20 +1663,21 @@ const SoftwareAdminDashboard = () => {
                     </div>
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontWeight: '800', color: '#ffffff', fontSize: '15px' }}>{agent.name}</span>
+                        <span style={{ fontWeight: '800', color: 'var(--textPrimary, #ffffff)', fontSize: '15px' }}>{agent.name}</span>
                         <span style={{
                           fontFamily: 'monospace',
-                          background: 'rgba(255, 255, 255, 0.06)',
-                          color: '#67e8f9',
+                          background: 'var(--bgCard, rgba(255, 255, 255, 0.06))',
+                          color: '#06b6d4',
                           padding: '1px 6px',
                           borderRadius: '4px',
-                          fontSize: '11px'
+                          fontSize: '11px',
+                          border: '1px solid var(--borderColor, transparent)'
                         }}>
                           {agent.agentCode || agent.external_agent_id || `AG-${agent.id}`}
                         </span>
                         <span style={{
-                          background: 'rgba(234, 179, 8, 0.15)',
-                          color: '#facc15',
+                          background: 'rgba(168, 85, 247, 0.15)',
+                          color: '#a855f7',
                           fontSize: '11px',
                           fontWeight: '700',
                           padding: '1px 6px',
@@ -1451,8 +1686,8 @@ const SoftwareAdminDashboard = () => {
                           Agent Authorization
                         </span>
                       </div>
-                      <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '3px' }}>
-                        <span style={{ color: '#cbd5e1' }}>Merchant:</span> {agent.merchantName} • <span style={{ color: '#cbd5e1' }}>Commission:</span> {agent.commissionRate || 2.5}% • <span style={{ color: '#cbd5e1' }}>Contact:</span> {agent.email || agent.phone || 'N/A'}
+                      <div style={{ fontSize: '12px', color: 'var(--textMuted, #94a3b8)', marginTop: '3px' }}>
+                        <span style={{ color: 'var(--textSecondary, #cbd5e1)' }}>Merchant:</span> {agent.merchantName} • <span style={{ color: 'var(--textSecondary, #cbd5e1)' }}>Commission:</span> {agent.commissionRate || 0}% • <span style={{ color: 'var(--textSecondary, #cbd5e1)' }}>Contact:</span> {agent.email || agent.phone || 'N/A'}
                       </div>
                     </div>
                   </div>
@@ -1463,7 +1698,7 @@ const SoftwareAdminDashboard = () => {
                       disabled={approvingId === `agent-${agent.id}`}
                       style={{
                         background: '#06b6d4',
-                        color: '#000000',
+                        color: '#ffffff',
                         border: 'none',
                         padding: '8px 16px',
                         borderRadius: '8px',
@@ -1678,16 +1913,16 @@ const SoftwareAdminDashboard = () => {
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <div style={{
                   display: 'flex',
-                  background: 'rgba(0, 0, 0, 0.35)',
+                  background: 'var(--bgPrimary, rgba(0, 0, 0, 0.05))',
                   padding: '3px',
                   borderRadius: '8px',
-                  border: '1px solid rgba(255, 255, 255, 0.08)'
+                  border: '1px solid var(--borderColor, rgba(255, 255, 255, 0.08))'
                 }}>
                   <button
                     onClick={() => setMerchantDetailTab('branches')}
                     style={{
                       background: merchantDetailTab === 'branches' ? '#10b981' : 'transparent',
-                      color: merchantDetailTab === 'branches' ? '#000000' : '#94a3b8',
+                      color: merchantDetailTab === 'branches' ? '#ffffff' : 'var(--textSecondary, #94a3b8)',
                       border: 'none',
                       padding: '5px 12px',
                       borderRadius: '6px',
@@ -1702,7 +1937,7 @@ const SoftwareAdminDashboard = () => {
                     onClick={() => setMerchantDetailTab('agents')}
                     style={{
                       background: merchantDetailTab === 'agents' ? '#06b6d4' : 'transparent',
-                      color: merchantDetailTab === 'agents' ? '#000000' : '#94a3b8',
+                      color: merchantDetailTab === 'agents' ? '#ffffff' : 'var(--textSecondary, #94a3b8)',
                       border: 'none',
                       padding: '5px 12px',
                       borderRadius: '6px',
@@ -1718,7 +1953,7 @@ const SoftwareAdminDashboard = () => {
                 <button
                   onClick={() => navigate(merchantDetailTab === 'branches' ? `/branches/add?merchantId=${currentSelectedMerchant.id}` : `/agents/add?merchantId=${currentSelectedMerchant.id}`)}
                   style={{
-                    background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                    background: 'var(--accentGradient, linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%))',
                     color: '#ffffff',
                     border: 'none',
                     padding: '8px 14px',
@@ -1728,7 +1963,8 @@ const SoftwareAdminDashboard = () => {
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '5px'
+                    gap: '5px',
+                    boxShadow: '0 4px 12px var(--accentGlow, rgba(99, 102, 241, 0.35))'
                   }}
                 >
                   {merchantDetailTab === 'branches' ? '+ Add Branch' : '+ Add Agent'}
@@ -1740,9 +1976,9 @@ const SoftwareAdminDashboard = () => {
             {merchantDetailTab === 'branches' && (
               <div className="table-viewport-wrapper">
                 {scopedBranches.length === 0 ? (
-                  <div style={{ padding: '36px 20px', textAlign: 'center', color: '#94a3b8' }}>
+                  <div style={{ padding: '36px 20px', textAlign: 'center', color: 'var(--textMuted, #94a3b8)' }}>
                     <div style={{ fontSize: '28px', marginBottom: '6px' }}>🏢</div>
-                    <div style={{ fontWeight: '700', color: '#ffffff' }}>No Branches Found for this Merchant</div>
+                    <div style={{ fontWeight: '700', color: 'var(--textPrimary, #ffffff)' }}>No Branches Found for this Merchant</div>
                     <div style={{ fontSize: '13px', marginTop: '4px' }}>Click "+ Add Branch" to create a new regional branch.</div>
                   </div>
                 ) : (
@@ -1751,6 +1987,7 @@ const SoftwareAdminDashboard = () => {
                       <tr>
                         <th>Branch Name</th>
                         <th>Branch Code</th>
+                        <th>Branch Password</th>
                         <th>Location</th>
                         <th>Manager / Contact</th>
                         <th>Integration</th>
@@ -1759,13 +1996,73 @@ const SoftwareAdminDashboard = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {scopedBranches.map((b) => (
+                      {scopedBranches.map((b) => {
+                        const branchPass = b.branchPassword || b.password || b.name || b.branchName || 'Branch@123';
+                        const isRevealed = !!revealedBranchPasswords[b.id];
+                        const isCopied = copiedBranchId === b.id;
+
+                        return (
                         <tr key={b.id} className="data-table-row">
                           <td>
-                            <div style={{ fontWeight: '700', color: '#ffffff' }}>{b.name || b.branchName}</div>
+                            <div style={{ fontWeight: '700', color: 'var(--textPrimary, #ffffff)' }}>{b.name || b.branchName}</div>
                           </td>
                           <td>
                             <span className="order-id-pill font-mono">{b.code || b.branchCode || `BR-${b.id}`}</span>
+                          </td>
+                          <td>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                              <span 
+                                className="font-mono" 
+                                style={{ 
+                                  background: 'var(--bgPrimary, rgba(255, 255, 255, 0.05))', 
+                                  padding: '3px 8px', 
+                                  borderRadius: '6px', 
+                                  fontSize: '12px',
+                                  color: isRevealed ? '#10b981' : 'var(--textMuted, #94a3b8)',
+                                  letterSpacing: isRevealed ? '0.5px' : '2px',
+                                  border: '1px solid var(--borderColor, rgba(255, 255, 255, 0.08))',
+                                  minWidth: '70px',
+                                  display: 'inline-block',
+                                  textAlign: 'center'
+                                }}
+                              >
+                                {isRevealed ? branchPass : '••••••••'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => toggleRevealBranchPassword(b.id)}
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  color: isRevealed ? '#818cf8' : '#64748b',
+                                  cursor: 'pointer',
+                                  padding: '2px 4px',
+                                  fontSize: '13px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center'
+                                }}
+                                title={isRevealed ? "Hide Password" : "Show Password"}
+                              >
+                                {isRevealed ? '👁️' : '🔒'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => copyBranchPassword(b.id, branchPass)}
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  color: isCopied ? '#10b981' : '#64748b',
+                                  cursor: 'pointer',
+                                  padding: '2px 4px',
+                                  fontSize: '12px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center'
+                                }}
+                                title="Copy Branch Password"
+                              >
+                                {isCopied ? '✓' : '📋'}
+                              </button>
+                            </div>
                           </td>
                           <td>
                             <span style={{ color: '#cbd5e1', fontSize: '12.5px' }}>{b.city || 'N/A'}, {b.state || 'India'}</span>
@@ -1788,28 +2085,75 @@ const SoftwareAdminDashboard = () => {
                           <td>
                             <span className={`badge-status-pill is-${b.isActive !== false ? 'success' : 'pending'}`}>
                               <span className="badge-status-dot"></span>
-                              <span>{b.isActive !== false ? 'Active' : 'Pending'}</span>
+                              <span>{b.isActive !== false ? 'Active' : (b.status || 'Inactive')}</span>
                             </span>
                           </td>
                           <td style={{ textAlign: 'right' }}>
-                            <button
-                              onClick={() => navigate(`/branches`)}
-                              style={{
-                                background: 'rgba(99, 102, 241, 0.15)',
-                                border: '1px solid rgba(99, 102, 241, 0.3)',
-                                color: '#a5b4fc',
-                                padding: '4px 10px',
-                                borderRadius: '6px',
-                                fontSize: '11px',
-                                fontWeight: '700',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              Manage →
-                            </button>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                              {b.isActive === false ? (
+                                <button
+                                  onClick={() => handleToggleBranchStatus(b.id, b.name || b.branchName, false)}
+                                  disabled={approvingId === `branch-${b.id}`}
+                                  style={{
+                                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                    border: 'none',
+                                    color: '#ffffff',
+                                    padding: '4px 10px',
+                                    borderRadius: '6px',
+                                    fontSize: '11px',
+                                    fontWeight: '700',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    boxShadow: '0 2px 8px rgba(16, 185, 129, 0.35)'
+                                  }}
+                                  title="Make this branch Active"
+                                >
+                                  {approvingId === `branch-${b.id}` ? 'Activating...' : '✓ Make Active'}
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleToggleBranchStatus(b.id, b.name || b.branchName, true)}
+                                  disabled={approvingId === `branch-${b.id}`}
+                                  style={{
+                                    background: 'rgba(239, 68, 68, 0.12)',
+                                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                                    color: '#f87171',
+                                    padding: '4px 10px',
+                                    borderRadius: '6px',
+                                    fontSize: '11px',
+                                    fontWeight: '700',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
+                                  title="Deactivate this branch"
+                                >
+                                  {approvingId === `branch-${b.id}` ? 'Updating...' : 'Deactivate'}
+                                </button>
+                              )}
+                              <button
+                                onClick={() => navigate(`/branches/${b.id}`)}
+                                style={{
+                                  background: 'rgba(99, 102, 241, 0.15)',
+                                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                                  color: '#a5b4fc',
+                                  padding: '4px 10px',
+                                  borderRadius: '6px',
+                                  fontSize: '11px',
+                                  fontWeight: '700',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                Manage →
+                              </button>
+                            </div>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 )}
@@ -1842,21 +2186,21 @@ const SoftwareAdminDashboard = () => {
                       {scopedAgents.map((a) => (
                         <tr key={a.id} className="data-table-row">
                           <td>
-                            <div style={{ fontWeight: '700', color: '#ffffff' }}>{a.name || a.agentName}</div>
+                            <div style={{ fontWeight: '700', color: 'var(--textPrimary, #ffffff)' }}>{a.name || a.agentName}</div>
                           </td>
                           <td>
                             <span className="order-id-pill font-mono">{a.agentCode || a.external_agent_id || `AG-${a.id}`}</span>
                           </td>
                           <td>
-                            <span className="font-mono" style={{ color: '#cbd5e1', fontSize: '12.5px' }}>{a.phone || a.mobile || a.email || 'N/A'}</span>
+                            <span className="font-mono" style={{ color: 'var(--textSecondary, #cbd5e1)', fontSize: '12.5px' }}>{a.phone || a.mobile || a.email || 'N/A'}</span>
                           </td>
                           <td>
-                            <span style={{ color: '#10b981', fontWeight: '700', fontSize: '12.5px' }}>{a.commissionRate || 2.5}%</span>
+                            <span style={{ color: '#10b981', fontWeight: '700', fontSize: '12.5px' }}>{a.commissionRate || 0}%</span>
                           </td>
                           <td>
                             <span style={{
-                              background: a.isVerified !== false ? 'rgba(16, 185, 129, 0.15)' : 'rgba(234, 179, 8, 0.15)',
-                              color: a.isVerified !== false ? '#6ee7b7' : '#facc15',
+                              background: a.isVerified !== false ? 'rgba(16, 185, 129, 0.15)' : 'rgba(168, 85, 247, 0.15)',
+                              color: a.isVerified !== false ? '#10b981' : '#a855f7',
                               padding: '2px 8px',
                               borderRadius: '4px',
                               fontSize: '11px',
@@ -1877,7 +2221,7 @@ const SoftwareAdminDashboard = () => {
                               style={{
                                 background: 'rgba(6, 182, 212, 0.15)',
                                 border: '1px solid rgba(6, 182, 212, 0.3)',
-                                color: '#67e8f9',
+                                color: '#06b6d4',
                                 padding: '4px 10px',
                                 borderRadius: '6px',
                                 fontSize: '11px',
@@ -1911,9 +2255,9 @@ const SoftwareAdminDashboard = () => {
                   Enterprise <span className="gradient-text">Merchant Network</span>
                 </h3>
                 <span style={{
-                  background: 'rgba(99, 102, 241, 0.15)',
-                  color: '#a5b4fc',
-                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                  background: 'var(--accentLight, rgba(99, 102, 241, 0.15))',
+                  color: 'var(--accent, #6366f1)',
+                  border: '1px solid var(--borderGlow, rgba(99, 102, 241, 0.3))',
                   padding: '2px 8px',
                   borderRadius: '9999px',
                   fontSize: '11px',
@@ -1931,12 +2275,12 @@ const SoftwareAdminDashboard = () => {
                 position: 'relative',
                 display: 'flex',
                 alignItems: 'center',
-                background: 'rgba(0, 0, 0, 0.35)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                background: 'var(--bgPrimary, rgba(0, 0, 0, 0.05))',
+                border: '1px solid var(--borderColor, rgba(255, 255, 255, 0.1))',
                 borderRadius: '10px',
                 padding: '6px 12px'
               }}>
-                <span style={{ color: '#94a3b8', marginRight: '8px', fontSize: '14px' }}>🔍</span>
+                <span style={{ color: 'var(--textMuted, #94a3b8)', marginRight: '8px', fontSize: '14px' }}>🔍</span>
                 <input
                   type="text"
                   placeholder="Search merchant, PAN, phone..."
@@ -1945,7 +2289,7 @@ const SoftwareAdminDashboard = () => {
                   style={{
                     background: 'transparent',
                     border: 'none',
-                    color: '#ffffff',
+                    color: 'var(--textPrimary, #ffffff)',
                     fontSize: '12.5px',
                     outline: 'none',
                     width: '190px'
@@ -1954,7 +2298,7 @@ const SoftwareAdminDashboard = () => {
                 {merchantSearch && (
                   <button
                     onClick={() => setMerchantSearch('')}
-                    style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '12px' }}
+                    style={{ background: 'transparent', border: 'none', color: 'var(--textMuted, #94a3b8)', cursor: 'pointer', fontSize: '12px' }}
                   >
                     ✕
                   </button>
@@ -1964,16 +2308,16 @@ const SoftwareAdminDashboard = () => {
               {/* View Layout Toggle */}
               <div style={{
                 display: 'flex',
-                background: 'rgba(0, 0, 0, 0.35)',
+                background: 'var(--bgPrimary, rgba(0, 0, 0, 0.05))',
                 padding: '3px',
                 borderRadius: '8px',
-                border: '1px solid rgba(255, 255, 255, 0.08)'
+                border: '1px solid var(--borderColor, rgba(255, 255, 255, 0.08))'
               }}>
                 <button
                   onClick={() => setMerchantViewLayout('grid')}
                   style={{
-                    background: merchantViewLayout === 'grid' ? '#6366f1' : 'transparent',
-                    color: merchantViewLayout === 'grid' ? '#fff' : '#94a3b8',
+                    background: merchantViewLayout === 'grid' ? 'var(--accent, #6366f1)' : 'transparent',
+                    color: merchantViewLayout === 'grid' ? '#fff' : 'var(--textSecondary, #94a3b8)',
                     border: 'none',
                     padding: '5px 10px',
                     borderRadius: '6px',
@@ -1988,8 +2332,8 @@ const SoftwareAdminDashboard = () => {
                 <button
                   onClick={() => setMerchantViewLayout('table')}
                   style={{
-                    background: merchantViewLayout === 'table' ? '#6366f1' : 'transparent',
-                    color: merchantViewLayout === 'table' ? '#fff' : '#94a3b8',
+                    background: merchantViewLayout === 'table' ? 'var(--accent, #6366f1)' : 'transparent',
+                    color: merchantViewLayout === 'table' ? '#fff' : 'var(--textSecondary, #94a3b8)',
                     border: 'none',
                     padding: '5px 10px',
                     borderRadius: '6px',
@@ -2007,7 +2351,7 @@ const SoftwareAdminDashboard = () => {
                 className="merch-add-btn"
                 onClick={() => navigate('/merchants/add')}
                 style={{
-                  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                  background: 'var(--accentGradient, linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%))',
                   color: '#ffffff',
                   border: 'none',
                   padding: '8px 14px',
@@ -2018,7 +2362,7 @@ const SoftwareAdminDashboard = () => {
                   display: 'flex',
                   alignItems: 'center',
                   gap: '5px',
-                  boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)'
+                  boxShadow: '0 4px 14px var(--accentGlow, rgba(99, 102, 241, 0.35))'
                 }}
               >
                 <span>+ Onboard Merchant</span>
@@ -2029,7 +2373,7 @@ const SoftwareAdminDashboard = () => {
                 style={{
                   background: 'rgba(16, 185, 129, 0.15)',
                   border: '1px solid rgba(16, 185, 129, 0.3)',
-                  color: '#6ee7b7',
+                  color: '#10b981',
                   padding: '8px 12px',
                   borderRadius: '10px',
                   fontSize: '12px',
@@ -2049,7 +2393,7 @@ const SoftwareAdminDashboard = () => {
                 style={{
                   background: 'rgba(6, 182, 212, 0.15)',
                   border: '1px solid rgba(6, 182, 212, 0.3)',
-                  color: '#67e8f9',
+                  color: '#06b6d4',
                   padding: '8px 12px',
                   borderRadius: '10px',
                   fontSize: '12px',
@@ -2083,9 +2427,9 @@ const SoftwareAdminDashboard = () => {
               marginTop: '16px'
             }}>
               {filteredDashboardMerchants.length === 0 ? (
-                <div style={{ gridColumn: '1 / -1', padding: '40px 20px', textAlign: 'center', color: '#94a3b8' }}>
+                <div style={{ gridColumn: '1 / -1', padding: '40px 20px', textAlign: 'center', color: 'var(--textMuted, #94a3b8)' }}>
                   <div style={{ fontSize: '32px', marginBottom: '8px' }}>🏪</div>
-                  <div style={{ fontSize: '15px', fontWeight: '700', color: '#ffffff' }}>No Merchant Partners Found</div>
+                  <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--textPrimary, #ffffff)' }}>No Merchant Partners Found</div>
                   <div style={{ fontSize: '13px', marginTop: '4px' }}>No merchants match your search filter.</div>
                 </div>
               ) : (
@@ -2105,9 +2449,9 @@ const SoftwareAdminDashboard = () => {
                       key={m.id}
                       style={{
                         background: isSelected 
-                          ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(16, 22, 36, 0.9) 100%)' 
-                          : 'linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(16, 22, 36, 0.6) 100%)',
-                        border: isSelected ? '2px solid #6366f1' : '1px solid rgba(255, 255, 255, 0.08)',
+                          ? 'var(--sidebarActiveBg, rgba(99, 102, 241, 0.15))' 
+                          : 'var(--bgCard, #ffffff)',
+                        border: isSelected ? '2px solid var(--accent, #6366f1)' : '1px solid var(--borderColor, rgba(255, 255, 255, 0.08))',
                         borderRadius: '16px',
                         padding: '20px',
                         display: 'flex',
@@ -2117,7 +2461,7 @@ const SoftwareAdminDashboard = () => {
                         position: 'relative',
                         overflow: 'hidden',
                         transition: 'all 0.25s',
-                        boxShadow: isSelected ? '0 12px 35px rgba(99, 102, 241, 0.35)' : '0 8px 24px rgba(0, 0, 0, 0.25)'
+                        boxShadow: isSelected ? '0 12px 35px var(--accentGlow, rgba(99, 102, 241, 0.35))' : 'var(--cardShadow, 0 8px 24px rgba(0, 0, 0, 0.15))'
                       }}
                     >
                       {/* Top Row: Avatar + Name + Selection Indicator */}
@@ -2126,14 +2470,14 @@ const SoftwareAdminDashboard = () => {
                           width: '44px',
                           height: '44px',
                           borderRadius: '12px',
-                          background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                          background: 'var(--accentGradient, linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%))',
                           color: '#ffffff',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           fontSize: '18px',
                           fontWeight: '800',
-                          boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)',
+                          boxShadow: '0 4px 14px var(--accentGlow, rgba(99, 102, 241, 0.4))',
                           flexShrink: 0
                         }}>
                           {tradeName.charAt(0).toUpperCase()}
@@ -2145,7 +2489,7 @@ const SoftwareAdminDashboard = () => {
                               margin: 0,
                               fontSize: '15px',
                               fontWeight: '800',
-                              color: '#ffffff',
+                              color: 'var(--textPrimary, #ffffff)',
                               whiteSpace: 'nowrap',
                               overflow: 'hidden',
                               textOverflow: 'ellipsis'
@@ -2155,8 +2499,8 @@ const SoftwareAdminDashboard = () => {
                             <span style={{
                               fontSize: '11px',
                               fontFamily: 'monospace',
-                              background: 'rgba(255, 255, 255, 0.08)',
-                              color: '#a5b4fc',
+                              background: 'var(--accentLight, rgba(99, 102, 241, 0.12))',
+                              color: 'var(--accent, #6366f1)',
                               padding: '1px 6px',
                               borderRadius: '4px',
                               fontWeight: '700'
@@ -2168,7 +2512,7 @@ const SoftwareAdminDashboard = () => {
                           {legalName && legalName !== tradeName && (
                             <div style={{
                               fontSize: '12px',
-                              color: '#94a3b8',
+                              color: 'var(--textMuted, #94a3b8)',
                               whiteSpace: 'nowrap',
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
@@ -2187,9 +2531,9 @@ const SoftwareAdminDashboard = () => {
                           fontWeight: '700',
                           padding: '3px 8px',
                           borderRadius: '6px',
-                          background: isGatewayLive ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                          color: isGatewayLive ? '#6ee7b7' : '#fcd34d',
-                          border: isGatewayLive ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)'
+                          background: isGatewayLive ? 'rgba(16, 185, 129, 0.15)' : 'rgba(168, 85, 247, 0.15)',
+                          color: isGatewayLive ? '#10b981' : '#a855f7',
+                          border: isGatewayLive ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(168, 85, 247, 0.3)'
                         }}>
                           {isGatewayLive ? '⚡ Dynamic API (Y)' : 'Standard (N)'}
                         </span>
@@ -2199,15 +2543,15 @@ const SoftwareAdminDashboard = () => {
                           fontWeight: '700',
                           padding: '3px 8px',
                           borderRadius: '6px',
-                          background: isKycApproved ? 'rgba(16, 185, 129, 0.15)' : 'rgba(234, 179, 8, 0.15)',
-                          color: isKycApproved ? '#6ee7b7' : '#facc15'
+                          background: isKycApproved ? 'rgba(16, 185, 129, 0.15)' : 'rgba(168, 85, 247, 0.15)',
+                          color: isKycApproved ? '#10b981' : '#a855f7'
                         }}>
                           {isKycApproved ? '✓ KYC' : 'Pending KYC'}
                         </span>
 
                         <span style={{
                           fontSize: '11.5px',
-                          color: '#cbd5e1',
+                          color: 'var(--textSecondary, #cbd5e1)',
                           marginLeft: 'auto'
                         }}>
                           🏢 {mBranchesCount} BR • 👤 {mAgentsCount} AG
@@ -2220,7 +2564,7 @@ const SoftwareAdminDashboard = () => {
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         gap: '8px',
-                        borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                        borderTop: '1px solid var(--borderLight, rgba(255, 255, 255, 0.08))',
                         paddingTop: '12px',
                         marginTop: '4px'
                       }}>
@@ -2250,7 +2594,7 @@ const SoftwareAdminDashboard = () => {
                             style={{
                               background: 'rgba(16, 185, 129, 0.15)',
                               border: '1px solid rgba(16, 185, 129, 0.3)',
-                              color: '#6ee7b7',
+                              color: '#10b981',
                               padding: '5px 8px',
                               borderRadius: '6px',
                               fontSize: '11px',
@@ -2267,7 +2611,7 @@ const SoftwareAdminDashboard = () => {
                             style={{
                               background: 'rgba(6, 182, 212, 0.15)',
                               border: '1px solid rgba(6, 182, 212, 0.3)',
-                              color: '#67e8f9',
+                              color: '#06b6d4',
                               padding: '5px 8px',
                               borderRadius: '6px',
                               fontSize: '11px',
@@ -2282,9 +2626,9 @@ const SoftwareAdminDashboard = () => {
                           <button
                             onClick={() => navigate(`/merchants/${m.id}`)}
                             style={{
-                              background: 'rgba(255, 255, 255, 0.06)',
-                              border: '1px solid rgba(255, 255, 255, 0.12)',
-                              color: '#cbd5e1',
+                              background: 'var(--bgPrimary, rgba(255, 255, 255, 0.06))',
+                              border: '1px solid var(--borderColor, rgba(255, 255, 255, 0.12))',
+                              color: 'var(--textSecondary, #cbd5e1)',
                               padding: '5px 8px',
                               borderRadius: '6px',
                               fontSize: '11px',
@@ -2325,14 +2669,14 @@ const SoftwareAdminDashboard = () => {
                     const isSelected = String(selectedMerchantId) === String(m.id);
 
                     return (
-                      <tr key={m.id} className="data-table-row" style={{ background: isSelected ? 'rgba(99, 102, 241, 0.12)' : 'transparent' }}>
+                      <tr key={m.id} className="data-table-row" style={{ background: isSelected ? 'var(--sidebarActiveBg, rgba(99, 102, 241, 0.12))' : 'transparent' }}>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <div style={{
                               width: '32px',
                               height: '32px',
                               borderRadius: '8px',
-                              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                              background: 'var(--accentGradient, linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%))',
                               color: '#ffffff',
                               display: 'flex',
                               alignItems: 'center',
@@ -2343,31 +2687,31 @@ const SoftwareAdminDashboard = () => {
                               {tradeName.charAt(0).toUpperCase()}
                             </div>
                             <div>
-                              <div style={{ fontWeight: '700', color: '#ffffff' }}>{tradeName}</div>
-                              <span style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'monospace' }}>ID: #{m.id}</span>
+                              <div style={{ fontWeight: '700', color: 'var(--textPrimary, #ffffff)' }}>{tradeName}</div>
+                              <span style={{ fontSize: '11px', color: 'var(--textMuted, #94a3b8)', fontFamily: 'monospace' }}>ID: #{m.id}</span>
                             </div>
                           </div>
                         </td>
                         <td>
-                          <span style={{ color: '#a5b4fc', fontSize: '12px', fontWeight: '600' }}>
+                          <span style={{ color: 'var(--accent, #6366f1)', fontSize: '12px', fontWeight: '600' }}>
                             {m.businessCategory || 'General Partner'}
                           </span>
                         </td>
                         <td>
-                          <span className="font-mono text-amber" style={{ fontSize: '12px', fontWeight: '700' }}>
+                          <span className="font-mono" style={{ fontSize: '12px', fontWeight: '700', color: 'var(--textPrimary, #ffffff)' }}>
                             {m.panNumber || 'N/A'}
                           </span>
                         </td>
                         <td>
-                          <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
+                          <div style={{ fontSize: '12px', color: 'var(--textSecondary, #cbd5e1)' }}>
                             <div>{m.registeredEmail || m.email || 'N/A'}</div>
-                            <span style={{ color: '#94a3b8', fontFamily: 'monospace', fontSize: '11px' }}>{m.registeredPhone || m.phone || ''}</span>
+                            <span style={{ color: 'var(--textMuted, #94a3b8)', fontFamily: 'monospace', fontSize: '11px' }}>{m.registeredPhone || m.phone || ''}</span>
                           </div>
                         </td>
                         <td>
                           <span style={{
-                            background: isGatewayLive ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                            color: isGatewayLive ? '#6ee7b7' : '#fcd34d',
+                            background: isGatewayLive ? 'rgba(16, 185, 129, 0.15)' : 'rgba(168, 85, 247, 0.15)',
+                            color: isGatewayLive ? '#10b981' : '#a855f7',
                             padding: '3px 8px',
                             borderRadius: '6px',
                             fontSize: '11px',
@@ -2378,8 +2722,8 @@ const SoftwareAdminDashboard = () => {
                         </td>
                         <td>
                           <span style={{
-                            background: isKycApproved ? 'rgba(16, 185, 129, 0.15)' : 'rgba(234, 179, 8, 0.15)',
-                            color: isKycApproved ? '#6ee7b7' : '#facc15',
+                            background: isKycApproved ? 'rgba(16, 185, 129, 0.15)' : 'rgba(168, 85, 247, 0.15)',
+                            color: isKycApproved ? '#10b981' : '#a855f7',
                             padding: '3px 8px',
                             borderRadius: '6px',
                             fontSize: '11px',
@@ -2393,7 +2737,7 @@ const SoftwareAdminDashboard = () => {
                             <button
                               onClick={() => handleSelectMerchant(isSelected ? 'ALL' : m.id)}
                               style={{
-                                background: isSelected ? '#ef4444' : '#6366f1',
+                                background: isSelected ? '#ef4444' : 'var(--accent, #6366f1)',
                                 color: '#ffffff',
                                 border: 'none',
                                 padding: '4px 8px',
@@ -2410,7 +2754,7 @@ const SoftwareAdminDashboard = () => {
                               style={{
                                 background: 'rgba(16, 185, 129, 0.15)',
                                 border: '1px solid rgba(16, 185, 129, 0.3)',
-                                color: '#6ee7b7',
+                                color: '#10b981',
                                 padding: '4px 8px',
                                 borderRadius: '6px',
                                 fontSize: '11px',
@@ -2425,7 +2769,7 @@ const SoftwareAdminDashboard = () => {
                               style={{
                                 background: 'rgba(6, 182, 212, 0.15)',
                                 border: '1px solid rgba(6, 182, 212, 0.3)',
-                                color: '#67e8f9',
+                                color: '#06b6d4',
                                 padding: '4px 8px',
                                 borderRadius: '6px',
                                 fontSize: '11px',

@@ -28,15 +28,12 @@
 .standard-dialog-card {
   position: relative;
   width: 100%;
-  max-width: 480px;
-  background: linear-gradient(135deg, rgba(20, 28, 48, 0.95) 0%, rgba(13, 18, 30, 0.98) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  max-width: 490px;
+  background: var(--bgCard, #111827);
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.12));
   border-radius: 20px;
   padding: 28px 26px;
-  box-shadow: 
-    0 25px 50px -12px rgba(0, 0, 0, 0.7),
-    0 0 0 1px rgba(255, 255, 255, 0.05),
-    0 0 40px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--cardShadow, 0 25px 50px -12px rgba(0, 0, 0, 0.7));
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -56,19 +53,19 @@
 }
 
 .standard-dialog-card.is-success {
-  border-color: rgba(16, 185, 129, 0.3);
-  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.6), 0 0 35px rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.4), 0 0 35px rgba(16, 185, 129, 0.15);
 }
 
 .standard-dialog-card.is-error {
-  border-color: rgba(239, 68, 68, 0.3);
-  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.6), 0 0 35px rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.4), 0 0 35px rgba(239, 68, 68, 0.15);
 }
 
 .standard-dialog-card.is-warning,
 .standard-dialog-card.is-confirm {
-  border-color: rgba(245, 158, 11, 0.3);
-  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.6), 0 0 35px rgba(245, 158, 11, 0.15);
+  border-color: rgba(168, 85, 247, 0.4);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.4), 0 0 35px rgba(168, 85, 247, 0.15);
 }
 
 .dialog-ambient-glow {
@@ -88,7 +85,7 @@
 .standard-dialog-card.is-success .dialog-ambient-glow { background: #10b981; }
 .standard-dialog-card.is-error .dialog-ambient-glow { background: #ef4444; }
 .standard-dialog-card.is-warning .dialog-ambient-glow,
-.standard-dialog-card.is-confirm .dialog-ambient-glow { background: #f59e0b; }
+.standard-dialog-card.is-confirm .dialog-ambient-glow { background: #a855f7; }
 .standard-dialog-card.is-info .dialog-ambient-glow { background: #6366f1; }
 
 .dialog-close-btn {
@@ -98,9 +95,9 @@
   width: 32px;
   height: 32px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #94a3b8;
+  background: var(--bgHover, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.08));
+  color: var(--textSecondary, #94a3b8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -111,8 +108,8 @@
 }
 
 .dialog-close-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
+  background: var(--bgCardGlass, rgba(255, 255, 255, 0.12));
+  color: var(--textPrimary, #ffffff);
 }
 
 /* Dialog Body */
@@ -140,26 +137,26 @@
 
 .dialog-icon-wrapper.is-success {
   background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
+  color: #10b981;
   border: 1px solid rgba(16, 185, 129, 0.35);
 }
 
 .dialog-icon-wrapper.is-error {
   background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
+  color: #ef4444;
   border: 1px solid rgba(239, 68, 68, 0.35);
 }
 
 .dialog-icon-wrapper.is-warning,
 .dialog-icon-wrapper.is-confirm {
-  background: rgba(245, 158, 11, 0.15);
-  color: #fbbf24;
-  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(168, 85, 247, 0.15);
+  color: #a855f7;
+  border: 1px solid rgba(168, 85, 247, 0.35);
 }
 
 .dialog-icon-wrapper.is-info {
   background: rgba(99, 102, 241, 0.15);
-  color: #818cf8;
+  color: #6366f1;
   border: 1px solid rgba(99, 102, 241, 0.35);
 }
 
@@ -176,13 +173,13 @@
   font-size: 19px;
   font-weight: 800;
   letter-spacing: -0.4px;
-  color: #ffffff;
+  color: var(--textPrimary, #ffffff);
   line-height: 1.25;
 }
 
 .dialog-message {
   font-size: 14px;
-  color: #cbd5e1;
+  color: var(--textSecondary, #cbd5e1);
   line-height: 1.55;
   word-break: break-word;
 }
@@ -282,10 +279,10 @@
 
 .dialog-btn.is-confirm-btn.is-warning,
 .dialog-btn.is-confirm-btn.is-confirm {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35);
-  color: #000000;
-  font-weight: 800;
+  background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35);
+  color: #ffffff;
+  font-weight: 700;
 }
 
 .dialog-btn.is-confirm-btn.is-warning:hover,
@@ -328,9 +325,9 @@
   gap: 12px;
   padding: 14px 18px;
   border-radius: 14px;
-  background: linear-gradient(135deg, rgba(20, 28, 48, 0.96) 0%, rgba(13, 18, 30, 0.98) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 0, 0, 0.25);
+  background: var(--bgCard, #111827);
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.1));
+  box-shadow: var(--cardShadow, 0 12px 30px rgba(0, 0, 0, 0.5));
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   animation: toastSlideIn 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
@@ -347,10 +344,10 @@
   }
 }
 
-.toast-bubble.is-success { border-color: rgba(16, 185, 129, 0.35); }
-.toast-bubble.is-error { border-color: rgba(239, 68, 68, 0.35); }
-.toast-bubble.is-warning { border-color: rgba(245, 158, 11, 0.35); }
-.toast-bubble.is-info { border-color: rgba(99, 102, 241, 0.35); }
+.toast-bubble.is-success { border-color: rgba(16, 185, 129, 0.4); }
+.toast-bubble.is-error { border-color: rgba(239, 68, 68, 0.4); }
+.toast-bubble.is-warning { border-color: rgba(168, 85, 247, 0.4); }
+.toast-bubble.is-info { border-color: rgba(99, 102, 241, 0.4); }
 
 .toast-icon-chip {
   width: 32px;
@@ -363,10 +360,10 @@
   flex-shrink: 0;
 }
 
-.toast-bubble.is-success .toast-icon-chip { background: rgba(16, 185, 129, 0.2); color: #34d399; }
-.toast-bubble.is-error .toast-icon-chip { background: rgba(239, 68, 68, 0.2); color: #f87171; }
-.toast-bubble.is-warning .toast-icon-chip { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
-.toast-bubble.is-info .toast-icon-chip { background: rgba(99, 102, 241, 0.2); color: #818cf8; }
+.toast-bubble.is-success .toast-icon-chip { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+.toast-bubble.is-error .toast-icon-chip { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.toast-bubble.is-warning .toast-icon-chip { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+.toast-bubble.is-info .toast-icon-chip { background: rgba(99, 102, 241, 0.15); color: #6366f1; }
 
 .toast-content {
   flex: 1;
@@ -377,13 +374,13 @@
   margin: 0;
   font-size: 13.5px;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--textPrimary, #ffffff);
 }
 
 .toast-message {
   margin: 2px 0 0;
   font-size: 12.5px;
-  color: #cbd5e1;
+  color: var(--textSecondary, #cbd5e1);
   line-height: 1.4;
 }
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
+import { useDialog } from '../../context/DialogContext';
 import './Settings.css';
 
 // Precision SVG Icons
@@ -80,6 +81,7 @@ const SettingsIcons = {
 };
 
 const Settings = () => {
+  const { showSuccess, showError } = useDialog();
   const [activeTab, setActiveTab] = useState('profile');
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
@@ -461,7 +463,7 @@ const Settings = () => {
                     type="button" 
                     className="settings-action-btn"
                     onClick={() => {
-                      alert('Password credentials updated successfully!');
+                      showSuccess('Password credentials and authentication protocols updated successfully!', 'Security Updated');
                     }}
                   >
                     <SettingsIcons.Key />
@@ -547,7 +549,7 @@ const Settings = () => {
                   <button 
                     type="button" 
                     className="settings-action-btn"
-                    onClick={() => alert('Telemetry alert subscriptions updated!')}
+                    onClick={() => showSuccess('Telemetry alert subscriptions updated successfully.', 'Subscriptions Saved')}
                   >
                     <SettingsIcons.Save />
                     <span>Save Telemetry Rules</span>
@@ -598,7 +600,7 @@ const Settings = () => {
                   <button 
                     type="button" 
                     className="settings-action-btn"
-                    onClick={() => alert('Portal formatting saved successfully!')}
+                    onClick={() => showSuccess('Regional preferences and portal formatting applied.', 'Preferences Saved')}
                   >
                     <SettingsIcons.Save />
                     <span>Apply Preferences</span>

@@ -16,8 +16,9 @@ import {
 
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
+import { useMerchantContext } from '../../context/MerchantContext';
+import { useDialog } from '../../context/DialogContext';
 import { 
-  reportsApi, 
   transactionApi, 
   merchantApi, 
   settlementApi, 
@@ -38,6 +39,38 @@ ChartJS.register(
   ArcElement,
   Filler
 );
+
+// Helper: Extract Date Object Safely
+const getTxDate = (t) => {
+  if (!t) return null;
+  const raw = t.createdAt || t.CreatedAt || t.created_at || t.createdDate || t.CreatedDate || t.date || t.Date || t.transactionDate || t.TransactionDate || t.timestamp;
+  if (!raw) return null;
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : d;
+};
+
+// Helper: Format Date in Local Timezone (YYYY-MM-DD)
+const formatLocalDate = (date) => {
+  if (!date || !(date instanceof Date) || isNaN(date.getTime())) return '';
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+// Helper: Generate Page Numbers with Ellipsis for Pagination
+const getPageNumbers = (current, total) => {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  if (current <= 4) {
+    return [1, 2, 3, 4, 5, '...', total];
+  }
+  if (current >= total - 3) {
+    return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
+  }
+  return [1, '...', current - 1, current, current + 1, '...', total];
+};
 
 // Crisp SVG Icons
 const ReportIcons = {
@@ -105,7 +138,7 @@ const ReportIcons = {
       <polyline points="14 2 14 8 20 8" />
       <line x1="16" y1="13" x2="8" y2="13" />
       <line x1="16" y1="17" x2="8" y2="17" />
-      <polyline points="10 9 9 9 8 9" />
+      <line x1="10" y1="9" x2="8" y2="9" />
     </svg>
   ),
   ArrowUp: () => (
@@ -117,16 +150,74 @@ const ReportIcons = {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
     </svg>
+  ),
+  Search: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  ),
+  Copy: () => (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  ),
+  CheckMark: () => (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  ),
+  Refresh: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 4 23 10 17 10" />
+      <polyline points="1 20 1 14 7 14" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+    </svg>
   )
 };
 
 const Reports = () => {
   const [loading, setLoading] = useState(true);
-  const [activePeriod, setActivePeriod] = useState('MONTH'); // 'TODAY' | 'WEEK' | 'MONTH' | 'QUARTER' | 'YEAR'
-  const [selectedMerchantId, setSelectedMerchantId] = useState('ALL');
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState('ledger'); // 'ledger' | 'merchants'
+  const [copiedId, setCopiedId] = useState(null);
+  const { showWarning } = useDialog();
+
+  // Global Merchant Scoping from MerchantContext
+  const { selectedMerchantId, setSelectedMerchantId, isSoftwareAdmin } = useMerchantContext();
+
+  const authUser = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
+    } catch {
+      return {};
+    }
+  })();
+
+  const rawRole = (localStorage.getItem('user_role') || localStorage.getItem('role') || authUser?.role || '').toLowerCase().trim();
+  const isMerchantUser = rawRole.includes('merchant');
+  const isBranchUser = rawRole.includes('branch') && !rawRole.includes('merchant');
+  const branchSelfId = authUser?.branchId || authUser?.BranchId || authUser?.branch_id || localStorage.getItem('branchId');
+  const merchantSelfId = authUser?.merchantId || authUser?.MerchantId || (isMerchantUser ? (authUser?.merchantId || authUser?.MerchantId || authUser?.id) : null);
+  const activeMerchantId = isSoftwareAdmin ? (selectedMerchantId === 'ALL' ? null : selectedMerchantId) : (isBranchUser ? null : merchantSelfId);
+
+  // Filter States
+  const [activePeriod, setActivePeriod] = useState('ALL'); // 'ALL' | 'TODAY' | 'WEEK' | 'MONTH' | 'QUARTER' | 'YEAR'
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [activeTab, setActiveTab] = useState('ledger'); // 'ledger' | 'merchants'
+  const [searchQuery, setSearchQuery] = useState('');
+  const [branchFilter, setBranchFilter] = useState(isBranchUser && branchSelfId ? branchSelfId : 'ALL');
+  const [agentFilter, setAgentFilter] = useState('ALL');
+  const [modeFilter, setModeFilter] = useState('ALL'); // 'ALL' | 'CASH' | 'UPI'
+  const [collectionTypeFilter, setCollectionTypeFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'SUCCESS' | 'PENDING' | 'FAILED'
+
+  // Pagination States
+  const [ledgerPage, setLedgerPage] = useState(1);
+  const [ledgerPageSize, setLedgerPageSize] = useState(10);
+  const [merchantPage, setMerchantPage] = useState(1);
+  const [merchantPageSize, setMerchantPageSize] = useState(10);
 
   // Live Backend Data Repositories
   const [transactions, setTransactions] = useState([]);
@@ -134,6 +225,35 @@ const Reports = () => {
   const [settlements, setSettlements] = useState([]);
   const [branches, setBranches] = useState([]);
   const [agents, setAgents] = useState([]);
+
+  // Copy helper
+  const handleCopy = (text, id) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  // Reset page to 1 when filters change
+  const handleFilterChange = (setter, value) => {
+    setter(value);
+    setLedgerPage(1);
+    setMerchantPage(1);
+  };
+
+  // Reset all filters
+  const handleResetFilters = () => {
+    setActivePeriod('ALL');
+    setStartDate('');
+    setEndDate('');
+    setSearchQuery('');
+    setBranchFilter('ALL');
+    setAgentFilter('ALL');
+    setModeFilter('ALL');
+    setCollectionTypeFilter('ALL');
+    setStatusFilter('ALL');
+    setLedgerPage(1);
+    setMerchantPage(1);
+  };
 
   // ============================================================
   // LOAD LIVE DATA DIRECTLY FROM BACKEND TABLES
@@ -148,12 +268,11 @@ const Reports = () => {
         branchesRes,
         agentsRes
       ] = await Promise.allSettled([
-        transactionApi.getHistory({ count: 500 }),
+        transactionApi.getHistory({ count: 500, pageSize: 500 }),
         merchantApi.getAll(),
         settlementApi.getAll(),
         branchApi.getAll(),
-        agentApi.getAll(),
-        reportsApi.getOverview()
+        agentApi.getAll()
       ]);
 
       // 1. Process Merchants
@@ -181,16 +300,30 @@ const Reports = () => {
       // 5. Process Transactions
       const rawTx = txRes.status === 'fulfilled' ? (txRes.value?.data?.data || txRes.value?.data || []) : [];
       const safeTx = (Array.isArray(rawTx) ? rawTx : []).map(t => {
-        const mId = t.merchantId || t.MerchantId;
-        const mName = mLookup[mId] || t.merchantName || t.merchant || (mId ? `Merchant #${mId}` : 'Enterprise Partner');
+        const mId = t.merchantId ?? t.MerchantId ?? null;
+        const mName = mLookup[mId] || t.merchantName || t.MerchantName || t.merchant || (mId ? `Merchant #${mId}` : 'Enterprise Partner');
+        const dObj = getTxDate(t) || new Date();
+        
         return {
           ...t,
+          id: t.id ?? t.Id ?? t.transactionId ?? t.TransactionId,
+          orderId: t.orderId ?? t.OrderId ?? '',
+          transactionId: t.transactionId ?? t.TransactionId ?? t.paymentGatewayTransactionId ?? '',
           merchantId: mId,
           merchantName: mName,
-          merchant: mName,
-          amountNum: Number(t.amount || t.netAmount || 0),
-          statusNorm: (t.status || t.transactionStatus || 'SUCCESS').toUpperCase(),
-          dateObj: t.createdAt || t.createdDate || t.date || t.timestamp ? new Date(t.createdAt || t.createdDate || t.date || t.timestamp) : new Date()
+          branchId: t.branchId ?? t.BranchId ?? t.branch_id ?? null,
+          branchName: t.branchName || t.BranchName || t.branch || t.Branch || '',
+          branchCode: t.branchCode || t.BranchCode || '',
+          agentId: t.agentId ?? t.AgentId ?? t.agent_id ?? null,
+          agentName: t.agentName || t.AgentName || t.agent || t.Agent || '',
+          agentCode: t.agentCode || t.AgentCode || '',
+          customer: t.customerName || t.CustomerName || t.customer || 'Direct Payer',
+          amountNum: Number(t.amount ?? t.Amount ?? t.netAmount ?? 0),
+          paymentMode: (t.paymentMode || t.PaymentMode || t.paymentMethod || t.PaymentMethod || t.mode || 'UPI').toUpperCase(),
+          collectionType: (t.collectionType || t.CollectionType || t.udf5 || t.Udf5 || 'RD').toUpperCase(),
+          statusNorm: (t.status || t.Status || t.transactionStatus || 'SUCCESS').toUpperCase(),
+          utr: t.utr || t.Utr || t.rrn || t.Rrn || t.paymentGatewayTransactionId || '',
+          dateObj: dObj
         };
       });
       setTransactions(safeTx);
@@ -206,51 +339,161 @@ const Reports = () => {
     loadReportData();
   }, [loadReportData]);
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadReportData();
+    setRefreshing(false);
+  };
+
+  // Dynamic Collection Types
+  const availableCollectionTypes = useMemo(() => {
+    const set = new Set();
+    transactions.forEach(t => {
+      if (t.collectionType) set.add(t.collectionType.toUpperCase());
+    });
+    if (set.size === 0) {
+      ['RD', 'RDCL', 'LOAN', 'SAVINGS', 'PIGMY', 'FD'].forEach(t => set.add(t));
+    }
+    return Array.from(set);
+  }, [transactions]);
+
+  // Branches scoped to active merchant
+  const availableBranches = useMemo(() => {
+    if (!activeMerchantId) return branches;
+    return branches.filter(b => String(b.merchantId) === String(activeMerchantId));
+  }, [branches, activeMerchantId]);
+
+  // Agents scoped to active merchant or branch
+  const availableAgents = useMemo(() => {
+    let list = agents;
+    if (activeMerchantId) {
+      list = list.filter(a => String(a.merchantId) === String(activeMerchantId));
+    }
+    if (branchFilter && branchFilter !== 'ALL') {
+      list = list.filter(a => String(a.branchId) === String(branchFilter));
+    }
+    return list;
+  }, [agents, activeMerchantId, branchFilter]);
+
   // ============================================================
-  // SCOPE & PERIOD FILTERING (100% Dynamic from Backend)
+  // SCOPE & MULTI-DIMENSIONAL FILTERING (100% Dynamic from Backend)
   // ============================================================
   const filteredTransactions = useMemo(() => {
     const now = new Date();
 
     return transactions.filter(t => {
       // 1. Merchant Filter
-      if (selectedMerchantId !== 'ALL' && String(t.merchantId) !== String(selectedMerchantId)) {
+      if (activeMerchantId && String(t.merchantId) !== String(activeMerchantId)) {
         return false;
       }
 
-      // 2. Custom Date Range
+      // 2. Branch Filter
+      if (branchFilter && branchFilter !== 'ALL') {
+        const matchesB = String(t.branchId) === String(branchFilter) ||
+          (t.branchName && availableBranches.find(b => String(b.id) === String(branchFilter))?.name?.toLowerCase() === t.branchName.toLowerCase());
+        if (!matchesB) return false;
+      }
+
+      // 3. Agent Filter
+      if (agentFilter && agentFilter !== 'ALL') {
+        const matchesA = String(t.agentId) === String(agentFilter) ||
+          (t.agentName && availableAgents.find(a => String(a.id) === String(agentFilter))?.name?.toLowerCase() === t.agentName.toLowerCase());
+        if (!matchesA) return false;
+      }
+
+      // 4. Payment Mode Filter
+      if (modeFilter && modeFilter !== 'ALL') {
+        const mode = (t.paymentMode || 'UPI').toUpperCase();
+        if (modeFilter === 'CASH' && !mode.includes('CASH')) return false;
+        if (modeFilter === 'UPI' && mode.includes('CASH')) return false;
+      }
+
+      // 5. Collection Type Filter
+      if (collectionTypeFilter && collectionTypeFilter !== 'ALL') {
+        if ((t.collectionType || '').toUpperCase() !== collectionTypeFilter.toUpperCase()) return false;
+      }
+
+      // 6. Status Filter
+      if (statusFilter && statusFilter !== 'ALL') {
+        const st = (t.statusNorm || 'SUCCESS').toUpperCase();
+        if (statusFilter === 'SUCCESS' && !(st.includes('SUCCESS') || st.includes('COMPLETED') || st.includes('SETTLED'))) return false;
+        if (statusFilter === 'PENDING' && !st.includes('PEND')) return false;
+        if (statusFilter === 'FAILED' && !st.includes('FAIL')) return false;
+      }
+
+      // 7. Search Query
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchesQ =
+          (t.id || '').toString().toLowerCase().includes(q) ||
+          (t.orderId || '').toLowerCase().includes(q) ||
+          (t.transactionId || '').toLowerCase().includes(q) ||
+          (t.utr || '').toLowerCase().includes(q) ||
+          (t.merchantName || '').toLowerCase().includes(q) ||
+          (t.branchName || '').toLowerCase().includes(q) ||
+          (t.agentName || '').toLowerCase().includes(q) ||
+          (t.customer || '').toLowerCase().includes(q);
+        if (!matchesQ) return false;
+      }
+
+      // 8. Custom Calendar Date Range
       if (startDate) {
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
-        if (t.dateObj < start) return false;
+        const [sYear, sMonth, sDay] = startDate.split('-').map(Number);
+        const startOfDay = new Date(sYear, sMonth - 1, sDay, 0, 0, 0, 0);
+        if (t.dateObj < startOfDay) return false;
       }
       if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        if (t.dateObj > end) return false;
+        const [eYear, eMonth, eDay] = endDate.split('-').map(Number);
+        const endOfDay = new Date(eYear, eMonth - 1, eDay, 23, 59, 59, 999);
+        if (t.dateObj > endOfDay) return false;
       }
 
-      // If custom date range is active, skip predefined period logic
+      // If custom date range is set, skip predefined period logic
       if (startDate || endDate) return true;
 
-      // 3. Predefined Periods
-      const diffMs = now - t.dateObj;
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      // 9. Predefined Periods using local date bounds
+      const txLocalStr = formatLocalDate(t.dateObj);
+      const todayStr = formatLocalDate(now);
 
       if (activePeriod === 'TODAY') {
-        return diffDays === 0;
+        return txLocalStr === todayStr;
       } else if (activePeriod === 'WEEK') {
-        return diffDays <= 7;
+        const weekAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0);
+        return t.dateObj >= weekAgo;
       } else if (activePeriod === 'MONTH') {
-        return diffDays <= 30;
+        const monthAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30, 0, 0, 0, 0);
+        return t.dateObj >= monthAgo;
       } else if (activePeriod === 'QUARTER') {
-        return diffDays <= 90;
+        const quarterAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 90, 0, 0, 0, 0);
+        return t.dateObj >= quarterAgo;
       } else if (activePeriod === 'YEAR') {
-        return diffDays <= 365;
+        const yearStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+        return t.dateObj >= yearStart;
       }
       return true;
     });
-  }, [transactions, selectedMerchantId, activePeriod, startDate, endDate]);
+  }, [
+    transactions,
+    activeMerchantId,
+    branchFilter,
+    agentFilter,
+    modeFilter,
+    collectionTypeFilter,
+    statusFilter,
+    searchQuery,
+    startDate,
+    endDate,
+    activePeriod,
+    availableBranches,
+    availableAgents
+  ]);
+
+  // Paginated Slices
+  const totalLedgerPages = Math.max(1, Math.ceil(filteredTransactions.length / ledgerPageSize));
+  const paginatedLedgerTransactions = useMemo(() => {
+    const start = (ledgerPage - 1) * ledgerPageSize;
+    return filteredTransactions.slice(start, start + ledgerPageSize);
+  }, [filteredTransactions, ledgerPage, ledgerPageSize]);
 
   // Dynamic KPI Metrics
   const metrics = useMemo(() => {
@@ -286,7 +529,7 @@ const Reports = () => {
     let labels = [];
     let dataPoints = [];
 
-    if (activePeriod === 'TODAY') {
+    if (activePeriod === 'TODAY' || (startDate && startDate === endDate)) {
       labels = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '23:59'];
       const buckets = [0, 0, 0, 0, 0, 0, 0];
       filteredTransactions.forEach(t => {
@@ -333,7 +576,7 @@ const Reports = () => {
       const buckets = [0, 0, 0, 0];
       filteredTransactions.forEach(t => {
         const qIdx = Math.floor(t.dateObj.getMonth() / 3);
-        buckets[qIdx] += t.amountNum || 0;
+        if (qIdx >= 0 && qIdx < 4) buckets[qIdx] += t.amountNum || 0;
       });
       dataPoints = buckets;
     } else {
@@ -341,7 +584,7 @@ const Reports = () => {
       const buckets = new Array(12).fill(0);
       filteredTransactions.forEach(t => {
         const mIdx = t.dateObj.getMonth();
-        buckets[mIdx] += t.amountNum || 0;
+        if (mIdx >= 0 && mIdx < 12) buckets[mIdx] += t.amountNum || 0;
       });
       dataPoints = buckets;
     }
@@ -357,29 +600,27 @@ const Reports = () => {
         barPercentage: 0.55,
       }]
     };
-  }, [filteredTransactions, activePeriod]);
+  }, [filteredTransactions, activePeriod, startDate, endDate]);
 
-  // 2. Channel Share Doughnut Chart
+  // 2. Channel Share Doughnut Chart (UPI vs CASH)
   const channelShareData = useMemo(() => {
-    const counts = { 'UPI Intent': 0, 'Cards': 0, 'Net Banking': 0, 'QR Code': 0, 'Cash / POS': 0 };
+    const counts = { 'UPI': 0, 'CASH': 0 };
 
     filteredTransactions.forEach(t => {
-      const mode = (t.paymentMode || t.paymentMethod || t.mode || 'UPI').toUpperCase();
-      if (mode.includes('UPI')) counts['UPI Intent']++;
-      else if (mode.includes('CARD')) counts['Cards']++;
-      else if (mode.includes('NET') || mode.includes('BANK')) counts['Net Banking']++;
-      else if (mode.includes('QR')) counts['QR Code']++;
-      else counts['Cash / POS']++;
+      const mode = (t.paymentMode || 'UPI').toUpperCase();
+      if (mode.includes('CASH')) counts['CASH'] += (t.amountNum || 1);
+      else counts['UPI'] += (t.amountNum || 1);
     });
 
-    const labels = Object.keys(counts).filter(k => filteredTransactions.length === 0 || counts[k] > 0);
-    const data = labels.map(k => counts[k]);
+    const labels = ['UPI', 'CASH'];
+    const data = [counts['UPI'], counts['CASH']];
+    const hasData = data.some(v => v > 0);
 
     return {
-      labels: labels.length > 0 ? labels : ['UPI Intent', 'Cards', 'Net Banking'],
+      labels,
       datasets: [{
-        data: data.length > 0 ? data : [60, 25, 15],
-        backgroundColor: ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ec4899'],
+        data: hasData ? data : [0, 0],
+        backgroundColor: ['#6366f1', '#10b981'],
         borderColor: '#111827',
         borderWidth: 3,
         hoverOffset: 8,
@@ -394,7 +635,7 @@ const Reports = () => {
 
     filteredTransactions.forEach(t => {
       const mIdx = t.dateObj.getMonth();
-      buckets[mIdx]++;
+      if (mIdx >= 0 && mIdx < 12) buckets[mIdx]++;
     });
 
     return {
@@ -417,22 +658,20 @@ const Reports = () => {
 
   // 4. Fulfillment Health Breakdown Doughnut Chart
   const fulfillmentHealthData = useMemo(() => {
-    const counts = { Success: 0, Pending: 0, Failed: 0, Refunded: 0 };
+    const counts = { Success: 0, Pending: 0, Failed: 0 };
 
     filteredTransactions.forEach(t => {
       const st = t.statusNorm;
       if (st.includes('SUCCESS') || st.includes('COMPLETED') || st.includes('SETTLED')) counts.Success++;
       else if (st.includes('PEND') || st.includes('PROCESS')) counts.Pending++;
-      else if (st.includes('FAIL') || st.includes('DECLINE')) counts.Failed++;
-      else if (st.includes('REFUND')) counts.Refunded++;
-      else counts.Success++;
+      else counts.Failed++;
     });
 
     return {
-      labels: ['Success', 'Pending', 'Failed', 'Refunded'],
+      labels: ['Success', 'Pending', 'Failed'],
       datasets: [{
-        data: [counts.Success, counts.Pending, counts.Failed, counts.Refunded],
-        backgroundColor: ['#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
+        data: [counts.Success, counts.Pending, counts.Failed],
+        backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
         borderColor: '#111827',
         borderWidth: 3,
         hoverOffset: 8,
@@ -441,10 +680,21 @@ const Reports = () => {
   }, [filteredTransactions]);
 
   // ============================================================
-  // MERCHANT-WISE SUMMARY BREAKDOWN TABLE
+  // MERCHANT-WISE SUMMARY BREAKDOWN TABLE & PAGINATION
   // ============================================================
   const merchantSummaries = useMemo(() => {
-    return merchants.map(m => {
+    const filteredM = merchants.filter(m => {
+      if (activeMerchantId && String(m.id) !== String(activeMerchantId)) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase().trim();
+        const name = (m.merchantTradeName || m.companyLegalName || m.name || '').toLowerCase();
+        const id = String(m.id || '');
+        if (!name.includes(q) && !id.includes(q)) return false;
+      }
+      return true;
+    });
+
+    return filteredM.map(m => {
       const mTx = transactions.filter(t => String(t.merchantId) === String(m.id));
       const mSuccessTx = mTx.filter(t => t.statusNorm === 'SUCCESS' || t.statusNorm === 'COMPLETED' || t.statusNorm === 'SETTLED');
       const mVolume = mSuccessTx.reduce((sum, t) => sum + (t.amountNum || 0), 0);
@@ -463,14 +713,20 @@ const Reports = () => {
         kycStatus: m.isApproved !== false ? 'Approved' : 'Pending'
       };
     });
-  }, [merchants, transactions, branches, agents]);
+  }, [merchants, transactions, branches, agents, activeMerchantId, searchQuery]);
+
+  const totalMerchantPages = Math.max(1, Math.ceil(merchantSummaries.length / merchantPageSize));
+  const paginatedMerchantSummaries = useMemo(() => {
+    const start = (merchantPage - 1) * merchantPageSize;
+    return merchantSummaries.slice(start, start + merchantPageSize);
+  }, [merchantSummaries, merchantPage, merchantPageSize]);
 
   // ============================================================
-  // CSV EXPORT GENERATOR (100% Real Live Data)
+  // CSV EXPORT GENERATOR
   // ============================================================
   const exportToCSV = (filename, rows) => {
     if (!rows || !rows.length) {
-      alert('No records available to export for current filter.');
+      showWarning('No records available to export for current filter criteria.', 'Export Notice');
       return;
     }
     const separator = ',';
@@ -504,13 +760,18 @@ const Reports = () => {
 
   const handleExportMasterCSV = () => {
     const exportRows = filteredTransactions.map(t => ({
-      OrderId: t.id || t.transactionId || t.referenceNo,
-      Merchant: t.merchantName || t.merchant,
+      Id: t.id || t.transactionId,
+      OrderId: t.orderId || '',
+      Merchant: t.merchantName,
       MerchantId: t.merchantId || '',
+      Branch: t.branchName,
+      Agent: t.agentName,
+      CollectionType: t.collectionType,
       AmountINR: t.amountNum || 0,
-      PaymentMode: t.paymentMode || t.paymentMethod || 'UPI',
+      PaymentMode: t.paymentMode,
       Status: t.statusNorm,
-      Date: t.dateObj.toLocaleDateString('en-US'),
+      UTR: t.utr || '',
+      Date: t.dateObj.toLocaleDateString('en-GB'),
       Time: t.dateObj.toLocaleTimeString('en-US')
     }));
     exportToCSV(`Ecollect_Transaction_Audit_${activePeriod}_${new Date().toISOString().slice(0,10)}.csv`, exportRows);
@@ -538,7 +799,7 @@ const Reports = () => {
       AmountINR: s.amount || s.netSettlementAmount || 0,
       UTR: s.utrNumber || s.referenceNo || 'N/A',
       Status: s.status || 'Completed',
-      Date: s.settlementDate || s.createdAt || new Date().toLocaleDateString('en-US')
+      Date: s.settlementDate || s.createdAt || new Date().toLocaleDateString('en-GB')
     }));
     exportToCSV(`Ecollect_Settlements_Reconciliation_${new Date().toISOString().slice(0,10)}.csv`, exportRows);
   };
@@ -563,51 +824,47 @@ const Reports = () => {
               Analytics & <span className="gradient-text">Reports Center</span>
             </h1>
             <p className="reports-page-subtitle">
-              Live audit clearance trajectories, payment rail shares, and statutory tax reconciliation ledgers computed directly from database tables.
+              Live audit clearance trajectories, payment rail shares, and statutory tax reconciliation ledgers computed directly from backend database tables.
             </p>
           </div>
 
           <div className="reports-header-actions">
-            {/* Merchant Scope Selector */}
-            <div className="reports-scope-selector-box">
-              <span className="reports-filter-icon"><ReportIcons.Filter /></span>
-              <select
-                className="reports-scope-select"
-                value={selectedMerchantId}
-                onChange={(e) => setSelectedMerchantId(e.target.value)}
-              >
-                <option value="ALL">🌐 All Merchants (Global Platform View)</option>
-                {merchants.map(m => (
-                  <option key={m.id} value={m.id}>
-                    🏢 {m.merchantTradeName || m.name} (#{m.id})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Period Switcher */}
-            <div className="period-segmented-pill">
-              {['TODAY', 'WEEK', 'MONTH', 'QUARTER', 'YEAR'].map((period) => (
-                <button 
-                  key={period}
-                  className={`period-btn ${activePeriod === period ? 'is-active' : ''}`}
-                  onClick={() => {
-                    setActivePeriod(period);
-                    setStartDate('');
-                    setEndDate('');
-                  }}
+            {/* Merchant Scope Selector (Software Admin Only) */}
+            {isSoftwareAdmin && (
+              <div className="reports-scope-selector-box">
+                <span className="reports-filter-icon"><ReportIcons.Filter /></span>
+                <select
+                  className="reports-scope-select"
+                  value={selectedMerchantId || 'ALL'}
+                  onChange={(e) => handleFilterChange(setSelectedMerchantId, e.target.value)}
                 >
-                  {period === 'TODAY' ? 'Today' : period === 'WEEK' ? '7 Days' : period === 'MONTH' ? 'Month' : period === 'QUARTER' ? 'Quarter' : 'YTD'}
-                </button>
-              ))}
-            </div>
+                  <option value="ALL">🌐 All Merchants (Global Platform)</option>
+                  {merchants.map(m => (
+                    <option key={m.id} value={m.id}>
+                      🏢 {m.merchantTradeName || m.name} (#{m.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
-            {/* Actions */}
+            {/* Refresh Button */}
+            <button 
+              className={`reports-print-btn ${refreshing ? 'is-spinning' : ''}`}
+              onClick={handleRefresh}
+              title="Refresh Data"
+            >
+              <ReportIcons.Refresh />
+              <span>{refreshing ? 'Syncing...' : 'Sync'}</span>
+            </button>
+
+            {/* Print Dossier */}
             <button className="reports-print-btn" onClick={() => window.print()}>
               <ReportIcons.Print />
               <span>Print Dossier</span>
             </button>
             
+            {/* Export Master CSV */}
             <button className="reports-export-btn" onClick={handleExportMasterCSV}>
               <ReportIcons.Download />
               <span>Export Master CSV</span>
@@ -615,40 +872,228 @@ const Reports = () => {
           </div>
         </div>
 
-        {/* Date Filter Bar */}
-        <div className="reports-custom-date-bar">
-          <div className="date-input-group">
-            <span className="date-label">From:</span>
-            <input 
-              type="date" 
-              className="reports-date-picker"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
+        {/* ============================================================
+            COMPREHENSIVE FILTER TOOLBAR (Date, Search, Branch, Agent, Mode, Collection, Status)
+            ============================================================ */}
+        <div className="reports-comprehensive-filter-card">
+          
+          {/* Row 1: Search & Date Presets & Custom Calendar */}
+          <div className="reports-filter-top-row">
+            
+            {/* Search Box */}
+            <div className="reports-search-box">
+              <ReportIcons.Search />
+              <input
+                type="text"
+                placeholder="Search ID, UTR, merchant, branch, agent, customer..."
+                value={searchQuery}
+                onChange={(e) => handleFilterChange(setSearchQuery, e.target.value)}
+                className="reports-search-input"
+              />
+              {searchQuery && (
+                <button className="clear-search-mini-btn" onClick={() => handleFilterChange(setSearchQuery, '')}>✕</button>
+              )}
+            </div>
+
+            {/* Date Period Presets */}
+            <div className="period-segmented-pill">
+              {[
+                { key: 'ALL', label: 'All Time' },
+                { key: 'TODAY', label: 'Today' },
+                { key: 'WEEK', label: 'Last 7 Days' },
+                { key: 'MONTH', label: 'Last 30 Days' },
+                { key: 'QUARTER', label: 'Quarter' },
+                { key: 'YEAR', label: 'YTD' },
+              ].map((period) => (
+                <button 
+                  key={period.key}
+                  className={`period-btn ${activePeriod === period.key && !startDate && !endDate ? 'is-active' : ''}`}
+                  onClick={() => {
+                    setActivePeriod(period.key);
+                    setStartDate('');
+                    setEndDate('');
+                    setLedgerPage(1);
+                    setMerchantPage(1);
+                  }}
+                >
+                  {period.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Custom Date Pickers */}
+            <div className="reports-custom-calendar-box">
+              <div 
+                className="date-picker-wrap"
+                title="Select From Date"
+                onClick={(e) => {
+                  const inp = e.currentTarget.querySelector('input');
+                  if (inp && typeof inp.showPicker === 'function') {
+                    try { inp.showPicker(); } catch (err) {}
+                  }
+                }}
+              >
+                <ReportIcons.Calendar />
+                <span className="date-input-label">From:</span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onClick={(e) => {
+                    if (typeof e.target.showPicker === 'function') {
+                      try { e.target.showPicker(); } catch (err) {}
+                    }
+                  }}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setLedgerPage(1);
+                    setMerchantPage(1);
+                  }}
+                  className="reports-date-picker-input"
+                />
+                {startDate && (
+                  <button 
+                    className="clear-date-mini-btn" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setStartDate('');
+                      setLedgerPage(1);
+                    }}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              <span className="date-range-divider">to</span>
+
+              <div 
+                className="date-picker-wrap"
+                title="Select To Date"
+                onClick={(e) => {
+                  const inp = e.currentTarget.querySelector('input');
+                  if (inp && typeof inp.showPicker === 'function') {
+                    try { inp.showPicker(); } catch (err) {}
+                  }
+                }}
+              >
+                <ReportIcons.Calendar />
+                <span className="date-input-label">To:</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onClick={(e) => {
+                    if (typeof e.target.showPicker === 'function') {
+                      try { e.target.showPicker(); } catch (err) {}
+                    }
+                  }}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    setLedgerPage(1);
+                    setMerchantPage(1);
+                  }}
+                  className="reports-date-picker-input"
+                />
+                {endDate && (
+                  <button 
+                    className="clear-date-mini-btn" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEndDate('');
+                      setLedgerPage(1);
+                    }}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+
           </div>
 
-          <div className="date-input-group">
-            <span className="date-label">To:</span>
-            <input 
-              type="date" 
-              className="reports-date-picker"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
-          </div>
-
-          {(startDate || endDate) && (
-            <button 
-              className="btn-clear-date-filter"
-              onClick={() => { setStartDate(''); setEndDate(''); }}
+          {/* Row 2: Dimensional Filter Dropdowns */}
+          <div className="reports-filter-bottom-row">
+            
+            {/* Branch Filter */}
+            <select
+              value={branchFilter}
+              onChange={(e) => handleFilterChange(setBranchFilter, e.target.value)}
+              className="reports-select-pill"
             >
-              ✕ Clear Dates
-            </button>
-          )}
+              <option value="ALL">🏢 All Branches ({availableBranches.length})</option>
+              {availableBranches.map(b => (
+                <option key={b.id} value={b.id}>
+                  {b.name || b.branchName} {b.code ? `(${b.code})` : ''}
+                </option>
+              ))}
+            </select>
 
-          <div className="reports-record-count-indicator font-mono">
-            <span>Showing <strong>{filteredTransactions.length}</strong> live transaction records</span>
+            {/* Agent Filter */}
+            <select
+              value={agentFilter}
+              onChange={(e) => handleFilterChange(setAgentFilter, e.target.value)}
+              className="reports-select-pill"
+            >
+              <option value="ALL">👤 All Field Agents ({availableAgents.length})</option>
+              {availableAgents.map(a => (
+                <option key={a.id} value={a.id}>
+                  {a.name || a.agentName} {a.agentCode ? `(${a.agentCode})` : ''}
+                </option>
+              ))}
+            </select>
+
+            {/* Payment Mode Filter (CASH / UPI) */}
+            <select
+              value={modeFilter}
+              onChange={(e) => handleFilterChange(setModeFilter, e.target.value)}
+              className="reports-select-pill"
+            >
+              <option value="ALL">💳 All Payment Modes</option>
+              <option value="UPI">⚡ UPI</option>
+              <option value="CASH">💵 CASH</option>
+            </select>
+
+            {/* Collection Type Filter */}
+            <select
+              value={collectionTypeFilter}
+              onChange={(e) => handleFilterChange(setCollectionTypeFilter, e.target.value)}
+              className="reports-select-pill"
+            >
+              <option value="ALL">📁 All Collection Types</option>
+              {availableCollectionTypes.map(c => (
+                <option key={c} value={c}>
+                  📂 {c}
+                </option>
+              ))}
+            </select>
+
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={(e) => handleFilterChange(setStatusFilter, e.target.value)}
+              className="reports-select-pill"
+            >
+              <option value="ALL">🎯 All Statuses</option>
+              <option value="SUCCESS">✓ Successful</option>
+              <option value="PENDING">⏳ Pending</option>
+              <option value="FAILED">✕ Failed</option>
+            </select>
+
+            {/* Reset Filters */}
+            <button 
+              className="reports-reset-btn"
+              onClick={handleResetFilters}
+              title="Reset all filters"
+            >
+              ✕ Reset All
+            </button>
+
+            {/* Record Count Badge */}
+            <div className="reports-match-count-badge font-mono">
+              <span>Matching: <strong>{filteredTransactions.length}</strong> Records</span>
+            </div>
+
           </div>
+
         </div>
 
         {/* ============================================================
@@ -780,7 +1225,7 @@ const Reports = () => {
             <div className="panel-header-zone">
               <div>
                 <h3 className="panel-title">Payment Channel Share</h3>
-                <span className="panel-subtitle">Payment rails volume ratio</span>
+                <span className="panel-subtitle">UPI vs CASH volume ratio</span>
               </div>
             </div>
             <div className="panel-canvas-box doughnut-wrap">
@@ -803,7 +1248,7 @@ const Reports = () => {
                     },
                     tooltip: {
                       callbacks: {
-                        label: (ctx) => ` ${ctx.label}: ${ctx.raw} Txns`
+                        label: (ctx) => ` ${ctx.label}: ₹${Number(ctx.raw || 0).toLocaleString('en-IN')}`
                       }
                     }
                   }
@@ -858,7 +1303,7 @@ const Reports = () => {
             <div className="panel-header-zone">
               <div>
                 <h3 className="panel-title">Fulfillment Health Breakdown</h3>
-                <span className="panel-subtitle">Success, reversal, and failure ratios</span>
+                <span className="panel-subtitle">Success, pending, and failure ratios</span>
               </div>
               <span className="panel-metric-chip is-green font-mono">{metrics.successRate}% Success</span>
             </div>
@@ -890,7 +1335,7 @@ const Reports = () => {
               />
               <div className="doughnut-center-info">
                 <span className="center-bold font-mono">{metrics.successRate}%</span>
-                <span className="center-tag">Direct Auth</span>
+                <span className="center-tag">Success Rate</span>
               </div>
             </div>
           </div>
@@ -898,7 +1343,7 @@ const Reports = () => {
         </div>
 
         {/* ============================================================
-            LIVE REPORTS DATA TABLES (Transactions & Merchant Summary)
+            LIVE REPORTS DATA TABLES (Transactions & Merchant Summary with Full Pagination)
             ============================================================ */}
         <div className="report-templates-card">
           <div className="templates-header-row" style={{ flexWrap: 'wrap', gap: '16px' }}>
@@ -937,161 +1382,386 @@ const Reports = () => {
             </div>
           </div>
 
-          {/* Tab 1: Live Transactions Table */}
+          {/* Tab 1: Live Transactions Table with Full Pagination */}
           {activeTab === 'ledger' && (
-            <div className="table-viewport-wrapper">
-              {filteredTransactions.length === 0 ? (
-                <div style={{ padding: '40px 20px', textAlign: 'center', color: '#94a3b8' }}>
-                  <div style={{ fontSize: '32px', marginBottom: '8px' }}>💳</div>
-                  <div style={{ fontSize: '15px', fontWeight: '700', color: '#ffffff' }}>No Transaction Records Found</div>
-                  <div style={{ fontSize: '13px', marginTop: '4px' }}>No transactions match your current merchant and date filter.</div>
-                </div>
-              ) : (
-                <table className="reports-ultra-table">
-                  <thead>
-                    <tr>
-                      <th>Order Reference</th>
-                      <th>Merchant Partner</th>
-                      <th>Gross Amount</th>
-                      <th>Payment Rail</th>
-                      <th>Status</th>
-                      <th>Timestamp</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredTransactions.slice(0, 15).map((tx, i) => (
-                      <tr key={tx.id || i} className="reports-table-row">
-                        <td>
-                          <span className="order-id-pill font-mono">{tx.id || tx.transactionId || tx.referenceNo || `TXN-${i + 1}`}</span>
-                        </td>
-                        <td>
-                          <div style={{ fontWeight: '700', color: '#ffffff' }}>{tx.merchantName || tx.merchant}</div>
-                        </td>
-                        <td>
-                          <span className="amount-cell-text font-mono">
-                            ₹{Number(tx.amountNum || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </span>
-                        </td>
-                        <td>
-                          <span style={{
-                            background: 'rgba(255, 255, 255, 0.05)',
-                            color: '#a5b4fc',
-                            padding: '2px 8px',
-                            borderRadius: '4px',
-                            fontSize: '11px',
-                            fontWeight: '700',
-                            fontFamily: 'monospace'
-                          }}>
-                            {tx.paymentMode || tx.paymentMethod || 'UPI'}
-                          </span>
-                        </td>
-                        <td>
-                          <span className={`badge-status-pill is-${(tx.statusNorm || 'success').toLowerCase()}`}>
-                            <span className="badge-status-dot"></span>
-                            <span>{tx.statusNorm}</span>
-                          </span>
-                        </td>
-                        <td>
-                          <div className="timestamp-cell">
-                            <span className="timestamp-date">{tx.dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                            <span className="timestamp-time font-mono">{tx.dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
-                          </div>
-                        </td>
+            <>
+              <div className="table-viewport-wrapper">
+                {filteredTransactions.length === 0 ? (
+                  <div style={{ padding: '40px 20px', textAlign: 'center', color: '#94a3b8' }}>
+                    <div style={{ fontSize: '32px', marginBottom: '8px' }}>💳</div>
+                    <div style={{ fontSize: '15px', fontWeight: '700', color: '#ffffff' }}>No Transaction Records Found</div>
+                    <div style={{ fontSize: '13px', marginTop: '4px' }}>No transactions match your current filter parameters. Try adjusting your filters.</div>
+                  </div>
+                ) : (
+                  <table className="reports-ultra-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: '45px' }}>#</th>
+                        <th>Order / Txn ID</th>
+                        {isSoftwareAdmin && <th>Merchant Partner</th>}
+                        <th>Branch Outlet</th>
+                        <th>Field Agent</th>
+                        <th>Customer</th>
+                        <th>Collection</th>
+                        <th>Gross Amount</th>
+                        <th>Payment Rail</th>
+                        <th>Status</th>
+                        <th>Timestamp</th>
                       </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedLedgerTransactions.map((tx, i) => {
+                        const absoluteIndex = (ledgerPage - 1) * ledgerPageSize + i + 1;
+                        const isCopied = copiedId === (tx.id || tx.transactionId);
+
+                        return (
+                          <tr key={tx.id || i} className="reports-table-row">
+                            <td className="row-index font-mono" style={{ color: '#64748b', fontSize: '11.5px' }}>
+                              {String(absoluteIndex).padStart(2, '0')}
+                            </td>
+                            <td>
+                              <div className="tx-id-cell">
+                                <span className="order-id-pill font-mono">
+                                  #{tx.id || tx.transactionId || `TXN-${absoluteIndex}`}
+                                  <button 
+                                    className="mini-copy-btn" 
+                                    onClick={() => handleCopy(tx.id || tx.transactionId, tx.id || tx.transactionId)} 
+                                    title="Copy ID"
+                                  >
+                                    {isCopied ? <ReportIcons.CheckMark /> : <ReportIcons.Copy />}
+                                  </button>
+                                </span>
+                                {tx.utr && <span className="tx-utr-sub font-mono">{tx.utr}</span>}
+                              </div>
+                            </td>
+
+                            {isSoftwareAdmin && (
+                              <td>
+                                <div style={{ fontWeight: '700', color: '#ffffff' }}>{tx.merchantName || tx.merchant}</div>
+                              </td>
+                            )}
+
+                            <td>
+                              <div className="table-branch-stack">
+                                <span className="table-main-text">{tx.branchName || 'Main Branch'}</span>
+                                {tx.branchCode && <span className="table-sub-code font-mono">{tx.branchCode}</span>}
+                              </div>
+                            </td>
+
+                            <td>
+                              <div className="table-agent-stack">
+                                <span className="table-main-text">{tx.agentName || 'Direct Gateway'}</span>
+                                {tx.agentCode && <span className="table-sub-code font-mono">{tx.agentCode}</span>}
+                              </div>
+                            </td>
+
+                            <td>
+                              <span className="customer-cell-text">{tx.customer}</span>
+                            </td>
+
+                            <td>
+                              <span className="collection-type-pill font-mono">
+                                {tx.collectionType || 'RD'}
+                              </span>
+                            </td>
+
+                            <td>
+                              <span className="amount-cell-text font-mono">
+                                ₹{Number(tx.amountNum || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </span>
+                            </td>
+
+                            <td>
+                              <span className="payment-rail-chip font-mono">
+                                {tx.paymentMode || 'UPI'}
+                              </span>
+                            </td>
+
+                            <td>
+                              <span className={`badge-status-pill is-${(tx.statusNorm || 'success').toLowerCase()}`}>
+                                <span className="badge-status-dot"></span>
+                                <span>{tx.statusNorm}</span>
+                              </span>
+                            </td>
+
+                            <td>
+                              <div className="timestamp-cell">
+                                <span className="timestamp-date">{tx.dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                                <span className="timestamp-time font-mono">{tx.dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              {/* Table Pagination Footer for Transaction Ledger */}
+              <div className="reports-table-footer">
+                <div className="reports-pagination-info font-mono">
+                  Showing <strong>{filteredTransactions.length === 0 ? 0 : (ledgerPage - 1) * ledgerPageSize + 1}</strong> to{' '}
+                  <strong>{Math.min(ledgerPage * ledgerPageSize, filteredTransactions.length)}</strong> of{' '}
+                  <strong>{filteredTransactions.length}</strong> entries
+                </div>
+
+                <div className="reports-pagination-controls">
+                  <div className="reports-page-size-picker">
+                    <span>Show:</span>
+                    <select
+                      value={ledgerPageSize}
+                      onChange={(e) => {
+                        setLedgerPageSize(Number(e.target.value));
+                        setLedgerPage(1);
+                      }}
+                      className="reports-page-size-select font-mono"
+                    >
+                      <option value={5}>5 / page</option>
+                      <option value={10}>10 / page</option>
+                      <option value={25}>25 / page</option>
+                      <option value={50}>50 / page</option>
+                      <option value={100}>100 / page</option>
+                    </select>
+                  </div>
+
+                  <div className="reports-page-buttons">
+                    <button
+                      className="reports-page-nav-btn"
+                      disabled={ledgerPage <= 1}
+                      onClick={() => setLedgerPage(1)}
+                      title="First Page"
+                    >
+                      «
+                    </button>
+                    <button
+                      className="reports-page-nav-btn"
+                      disabled={ledgerPage <= 1}
+                      onClick={() => setLedgerPage(prev => Math.max(1, prev - 1))}
+                      title="Previous Page"
+                    >
+                      ‹
+                    </button>
+
+                    {getPageNumbers(ledgerPage, totalLedgerPages).map((p, idx) => (
+                      p === '...' ? (
+                        <span key={`ellipsis-${idx}`} className="reports-page-ellipsis">…</span>
+                      ) : (
+                        <button
+                          key={`page-${p}`}
+                          className={`reports-page-num-btn font-mono ${ledgerPage === p ? 'is-active' : ''}`}
+                          onClick={() => setLedgerPage(p)}
+                        >
+                          {p}
+                        </button>
+                      )
                     ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+
+                    <button
+                      className="reports-page-nav-btn"
+                      disabled={ledgerPage >= totalLedgerPages}
+                      onClick={() => setLedgerPage(prev => Math.min(totalLedgerPages, prev + 1))}
+                      title="Next Page"
+                    >
+                      ›
+                    </button>
+                    <button
+                      className="reports-page-nav-btn"
+                      disabled={ledgerPage >= totalLedgerPages}
+                      onClick={() => setLedgerPage(totalLedgerPages)}
+                      title="Last Page"
+                    >
+                      »
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>
           )}
 
-          {/* Tab 2: Merchant Performance Summary Table */}
+          {/* Tab 2: Merchant Performance Summary Table with Pagination */}
           {activeTab === 'merchants' && (
-            <div className="table-viewport-wrapper">
-              <table className="reports-ultra-table">
-                <thead>
-                  <tr>
-                    <th>Merchant Entity</th>
-                    <th>Business Category</th>
-                    <th>Integration Mode</th>
-                    <th>Processed Txns</th>
-                    <th>Gross Volume (₹)</th>
-                    <th>Branch Network</th>
-                    <th>Field Agents</th>
-                    <th>KYC State</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {merchantSummaries.map((m) => (
-                    <tr key={m.id} className="reports-table-row">
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <div style={{
-                            width: '28px',
-                            height: '28px',
-                            borderRadius: '8px',
-                            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                            color: '#ffffff',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '12px',
-                            fontWeight: '800'
-                          }}>
-                            {m.name.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: '700', color: '#ffffff' }}>{m.name}</div>
-                            <span style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'monospace' }}>ID: #{m.id}</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <span style={{ color: '#a5b4fc', fontSize: '12px' }}>{m.category}</span>
-                      </td>
-                      <td>
-                        <span style={{
-                          background: m.integration.includes('(Y)') ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                          color: m.integration.includes('(Y)') ? '#6ee7b7' : '#fcd34d',
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                          fontSize: '11px',
-                          fontWeight: '700'
-                        }}>
-                          {m.integration}
-                        </span>
-                      </td>
-                      <td>
-                        <span className="font-mono" style={{ fontWeight: '700', color: '#ffffff' }}>{m.totalTxCount}</span>
-                      </td>
-                      <td>
-                        <span className="font-mono text-green" style={{ fontWeight: '700' }}>
-                          ₹{m.grossVolume.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </span>
-                      </td>
-                      <td>
-                        <span style={{ color: '#cbd5e1', fontSize: '12px' }}>🏢 {m.branchesCount} Branches</span>
-                      </td>
-                      <td>
-                        <span style={{ color: '#cbd5e1', fontSize: '12px' }}>👤 {m.agentsCount} Agents</span>
-                      </td>
-                      <td>
-                        <span style={{
-                          background: m.kycStatus === 'Approved' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(234, 179, 8, 0.15)',
-                          color: m.kycStatus === 'Approved' ? '#6ee7b7' : '#facc15',
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                          fontSize: '11px',
-                          fontWeight: '700'
-                        }}>
-                          {m.kycStatus === 'Approved' ? '✓ Approved' : 'Pending'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <div className="table-viewport-wrapper">
+                {merchantSummaries.length === 0 ? (
+                  <div style={{ padding: '40px 20px', textAlign: 'center', color: '#94a3b8' }}>
+                    <div style={{ fontSize: '32px', marginBottom: '8px' }}>🏪</div>
+                    <div style={{ fontSize: '15px', fontWeight: '700', color: '#ffffff' }}>No Merchant Partners Found</div>
+                    <div style={{ fontSize: '13px', marginTop: '4px' }}>No merchants match your current filter parameters.</div>
+                  </div>
+                ) : (
+                  <table className="reports-ultra-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: '45px' }}>#</th>
+                        <th>Merchant Entity</th>
+                        <th>Business Category</th>
+                        <th>Integration Mode</th>
+                        <th>Processed Txns</th>
+                        <th>Gross Volume (₹)</th>
+                        <th>Branch Network</th>
+                        <th>Field Agents</th>
+                        <th>KYC State</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedMerchantSummaries.map((m, i) => {
+                        const absoluteIndex = (merchantPage - 1) * merchantPageSize + i + 1;
+
+                        return (
+                          <tr key={m.id} className="reports-table-row">
+                            <td className="row-index font-mono" style={{ color: '#64748b', fontSize: '11.5px' }}>
+                              {String(absoluteIndex).padStart(2, '0')}
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{
+                                  width: '28px',
+                                  height: '28px',
+                                  borderRadius: '8px',
+                                  background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                                  color: '#ffffff',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '12px',
+                                  fontWeight: '800'
+                                }}>
+                                  {m.name.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                  <div style={{ fontWeight: '700', color: '#ffffff' }}>{m.name}</div>
+                                  <span style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'monospace' }}>ID: #{m.id}</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <span style={{ color: '#a5b4fc', fontSize: '12px' }}>{m.category}</span>
+                            </td>
+                            <td>
+                              <span style={{
+                                background: m.integration.includes('(Y)') ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                                color: m.integration.includes('(Y)') ? '#6ee7b7' : '#fcd34d',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                fontSize: '11px',
+                                fontWeight: '700'
+                              }}>
+                                {m.integration}
+                              </span>
+                            </td>
+                            <td>
+                              <span className="font-mono" style={{ fontWeight: '700', color: '#ffffff' }}>{m.totalTxCount}</span>
+                            </td>
+                            <td>
+                              <span className="font-mono text-green" style={{ fontWeight: '700' }}>
+                                ₹{m.grossVolume.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </span>
+                            </td>
+                            <td>
+                              <span style={{ color: '#cbd5e1', fontSize: '12px' }}>🏢 {m.branchesCount} Branches</span>
+                            </td>
+                            <td>
+                              <span style={{ color: '#cbd5e1', fontSize: '12px' }}>👤 {m.agentsCount} Agents</span>
+                            </td>
+                            <td>
+                              <span style={{
+                                background: m.kycStatus === 'Approved' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(234, 179, 8, 0.15)',
+                                color: m.kycStatus === 'Approved' ? '#6ee7b7' : '#facc15',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                fontSize: '11px',
+                                fontWeight: '700'
+                              }}>
+                                {m.kycStatus === 'Approved' ? '✓ Approved' : 'Pending'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              {/* Table Pagination Footer for Merchants */}
+              <div className="reports-table-footer">
+                <div className="reports-pagination-info font-mono">
+                  Showing <strong>{merchantSummaries.length === 0 ? 0 : (merchantPage - 1) * merchantPageSize + 1}</strong> to{' '}
+                  <strong>{Math.min(merchantPage * merchantPageSize, merchantSummaries.length)}</strong> of{' '}
+                  <strong>{merchantSummaries.length}</strong> partners
+                </div>
+
+                <div className="reports-pagination-controls">
+                  <div className="reports-page-size-picker">
+                    <span>Show:</span>
+                    <select
+                      value={merchantPageSize}
+                      onChange={(e) => {
+                        setMerchantPageSize(Number(e.target.value));
+                        setMerchantPage(1);
+                      }}
+                      className="reports-page-size-select font-mono"
+                    >
+                      <option value={5}>5 / page</option>
+                      <option value={10}>10 / page</option>
+                      <option value={25}>25 / page</option>
+                      <option value={50}>50 / page</option>
+                    </select>
+                  </div>
+
+                  <div className="reports-page-buttons">
+                    <button
+                      className="reports-page-nav-btn"
+                      disabled={merchantPage <= 1}
+                      onClick={() => setMerchantPage(1)}
+                      title="First Page"
+                    >
+                      «
+                    </button>
+                    <button
+                      className="reports-page-nav-btn"
+                      disabled={merchantPage <= 1}
+                      onClick={() => setMerchantPage(prev => Math.max(1, prev - 1))}
+                      title="Previous Page"
+                    >
+                      ‹
+                    </button>
+
+                    {getPageNumbers(merchantPage, totalMerchantPages).map((p, idx) => (
+                      p === '...' ? (
+                        <span key={`ellipsis-m-${idx}`} className="reports-page-ellipsis">…</span>
+                      ) : (
+                        <button
+                          key={`page-m-${p}`}
+                          className={`reports-page-num-btn font-mono ${merchantPage === p ? 'is-active' : ''}`}
+                          onClick={() => setMerchantPage(p)}
+                        >
+                          {p}
+                        </button>
+                      )
+                    ))}
+
+                    <button
+                      className="reports-page-nav-btn"
+                      disabled={merchantPage >= totalMerchantPages}
+                      onClick={() => setMerchantPage(prev => Math.min(totalMerchantPages, prev + 1))}
+                      title="Next Page"
+                    >
+                      ›
+                    </button>
+                    <button
+                      className="reports-page-nav-btn"
+                      disabled={merchantPage >= totalMerchantPages}
+                      onClick={() => setMerchantPage(totalMerchantPages)}
+                      title="Last Page"
+                    >
+                      »
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>
           )}
 
         </div>

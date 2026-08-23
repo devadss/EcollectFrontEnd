@@ -134,6 +134,10 @@ const Logout = () => {
     localStorage.removeItem('menus');
     localStorage.removeItem('merchantId');
     localStorage.removeItem('branchId');
+    localStorage.removeItem('branchName');
+    localStorage.removeItem('branchCode');
+    localStorage.removeItem('agentId');
+    localStorage.removeItem('admin_selected_merchant_id');
     localStorage.removeItem('integrationStatus');
     sessionStorage.clear();
 
@@ -174,16 +178,8 @@ const Logout = () => {
       </div>
 
       {/* Top Brand Emblem */}
-      <div className="logout-top-branding" onClick={() => navigate('/dashboard')}>
-        <div className="branding-logo-box">
-          <LogoutIcons.Logo />
-        </div>
-        <div className="branding-text-block">
-          <span className="branding-title">
-            Ecollect<span className="gradient-text">PG</span>
-          </span>
-          <span className="branding-sub">Enterprise Gateway</span>
-        </div>
+      <div className="logout-top-branding" onClick={() => navigate('/dashboard')} title="eCollect • Smart Payment Solutions">
+        <img src="/ecollect-logo.png" alt="eCollect - Smart Payment Solutions" className="logout-brand-logo-img" />
       </div>
 
       {/* Main Glass Card Container */}
@@ -194,15 +190,15 @@ const Logout = () => {
             ============================================================ */}
         {status === 'confirm' && (
           <div className="logout-glass-card">
-            <div className="card-ambient-glow is-amber"></div>
+            <div className="card-ambient-glow is-violet"></div>
 
             {/* Glowing Icon Header */}
-            <div className="logout-icon-bubble is-amber">
+            <div className="logout-icon-bubble is-violet">
               <LogoutIcons.ShieldAlert />
             </div>
 
             <div className="logout-card-titles">
-              <div className="logout-security-pill is-amber">
+              <div className="logout-security-pill is-violet">
                 <span className="pulse-dot"></span>
                 <span>Session Termination Request</span>
               </div>

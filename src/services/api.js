@@ -80,13 +80,13 @@ export const dashboardApi = {
     console.log('📡 dashboardApi.getStats called with params:', params);
     return api.get('/Dashboard/stats', { params: typeof params === 'object' ? params : undefined });
   },
-  getMerchantDashboard: (merchantId) => {
-    console.log('📡 dashboardApi.getMerchantDashboard called for merchantId:', merchantId);
-    return api.get(`/Dashboard/merchant/${merchantId}`);
+  getMerchantDashboard: (merchantId, params) => {
+    console.log('📡 dashboardApi.getMerchantDashboard called for merchantId:', merchantId, params);
+    return api.get(`/Dashboard/merchant/${merchantId}`, { params: typeof params === 'object' ? params : undefined });
   },
-  getBranchDashboard: (branchId) => {
-    console.log('📡 dashboardApi.getBranchDashboard called for branchId:', branchId);
-    return api.get(`/Dashboard/branch/${branchId}`);
+  getBranchDashboard: (branchId, params) => {
+    console.log('📡 dashboardApi.getBranchDashboard called for branchId:', branchId, params);
+    return api.get(`/Dashboard/branch/${branchId}`, { params: typeof params === 'object' ? params : undefined });
   },
   getRevenueChart: (rangeOrParams = 'Week') => {
     const params = typeof rangeOrParams === 'object' ? rangeOrParams : { range: rangeOrParams };
@@ -115,23 +115,56 @@ export const dashboardApi = {
 // ============================================================
 // TRANSACTION API
 // ============================================================
+const formatTxFilterParams = (params = {}) => {
+  const p = typeof params === 'object' && params !== null ? params : {};
+  const user = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
+    } catch {
+      return {};
+    }
+  })();
+
+  const rawSearch = (p.Search && p.Search.trim() !== '') ? p.Search.trim() : ((p.search && p.search.trim() !== '') ? p.search.trim() : 'ALL');
+  const rawStatus = (p.Status && p.Status !== '') ? p.Status : ((p.status && p.status !== '') ? p.status : ((p.statusTab && p.statusTab !== '') ? p.statusTab : 'ALL'));
+  const rawBankCode = p.BankCode || p.bankCode || p.branchCode || user.branchCode || localStorage.getItem('branchCode') || 'ALL';
+  const rawPaymentMode = p.PaymentMode || p.paymentMode || p.mode || 'ALL';
+
+  return {
+    Search: rawSearch,
+    Status: rawStatus,
+    BankCode: rawBankCode,
+    PaymentMode: rawPaymentMode,
+    search: rawSearch,
+    status: rawStatus,
+    bankCode: rawBankCode,
+    paymentMode: rawPaymentMode,
+    ...p
+  };
+};
+
 export const transactionApi = {
   // Get all transactions with filters
-  getAll: (params) => {
+  getAll: (params = {}) => {
     console.log('📡 transactionApi.getAll called with params:', params);
-    return api.get('/Transaction', { params });
+    const safeParams = formatTxFilterParams(params);
+    return api.get('/Transaction', { params: safeParams })
+      .catch((err) => {
+        if (err?.response?.status === 400) {
+          console.warn('⚠️ /Transaction 400 with default params, trying /Transaction/history with safeParams:', err?.response?.data);
+          return api.get('/Transaction/history', { params: safeParams });
+        }
+        return api.get('/Transaction/history', { params: safeParams });
+      });
   },
 
-  getTransactions: (params) => {
-    console.log('📡 transactionApi.getTransactions called with params:', params);
-    return api.get('/Transaction', { params });
+  getTransactions: (params = {}) => {
+    return transactionApi.getAll(params);
   },
   
-  // Get transaction history (alias for getTransactions)
-  getHistory: (params) => {
-    console.log('📡 transactionApi.getHistory called');
-    return api.get('/Transaction/history', { params })
-      .catch(() => api.get('/Transaction', { params }));
+  // Get transaction history
+  getHistory: (params = {}) => {
+    return transactionApi.getAll(params);
   },
   
   // Get single transaction by ID
@@ -186,9 +219,10 @@ export const transactionApi = {
 // MERCHANT API
 // ============================================================
 export const merchantApi = {
-  getAll: () => {
+  getAll: (params) => {
     console.log('📡 merchantApi.getAll called');
-    return api.get('/Merchant/get-all');
+    return api.get('/Merchant/get-all', { params: typeof params === 'object' ? params : undefined })
+      .catch(() => api.get('/Merchant', { params: typeof params === 'object' ? params : undefined }));
   },
   getById: (id) => {
     console.log('📡 merchantApi.getById called for id:', id);
@@ -244,9 +278,10 @@ export const merchantApi = {
 // AGENT API
 // ============================================================
 export const agentApi = {
-  getAll: () => {
-    console.log('📡 agentApi.getAll called');
-    return api.get('/Agent/get-all');
+  getAll: (params) => {
+    console.log('📡 agentApi.getAll called with params:', params);
+    return api.get('/Agent/get-all', { params: typeof params === 'object' ? params : undefined })
+      .catch(() => api.get('/Agent', { params: typeof params === 'object' ? params : undefined }));
   },
   getById: (id) => {
     console.log('📡 agentApi.getById called for id:', id);
@@ -286,9 +321,10 @@ export const agentApi = {
 // BRANCH API
 // ============================================================
 export const branchApi = {
-  getAll: () => {
-    console.log('📡 branchApi.getAll called');
-    return api.get('/Branch/get-all');
+  getAll: (params) => {
+    console.log('📡 branchApi.getAll called with params:', params);
+    return api.get('/Branch/get-all', { params: typeof params === 'object' ? params : undefined })
+      .catch(() => api.get('/Branch', { params: typeof params === 'object' ? params : undefined }));
   },
   getById: (id) => {
     console.log('📡 branchApi.getById called for id:', id);
@@ -335,18 +371,38 @@ export const branchApi = {
 export const accountApi = {
   getAll: (params) => {
     console.log('📡 accountApi.getAll called with params:', params);
+    const prod = (params?.productType || params?.ProductType || 'RD').toString().toUpperCase();
+    
+    if (prod === 'LOAN') {
+      return api.get('/Branch/fetch-loan-customers', { params })
+        .catch(() => api.get('/Branch/fetch-rd-customers', { params: { ...params, productType: 'LOAN', ProductType: 'LOAN' } }))
+        .catch(() => api.get('/Branch/fetch-account-list', { params: { ...params, productType: 'LOAN' } }))
+        .catch(() => api.get('/Customer/fetch-rd-customers', { params: { ...params, productType: 'LOAN' } }))
+        .catch(() => api.get('/Account/get-all', { params }))
+        .catch(() => api.get('/Account', { params }));
+    }
+
+    if (prod === 'FD') {
+      return api.get('/Branch/fetch-fd-customers', { params })
+        .catch(() => api.get('/Branch/fetch-rd-customers', { params: { ...params, productType: 'FD', ProductType: 'FD' } }))
+        .catch(() => api.get('/Branch/fetch-account-list', { params: { ...params, productType: 'FD' } }))
+        .catch(() => api.get('/Account/get-all', { params }))
+        .catch(() => api.get('/Account', { params }));
+    }
+
     return api.get('/Branch/fetch-rd-customers', { params })
+      .catch(() => api.get('/Branch/fetch-account-list', { params }))
+      .catch(() => api.get('/Customer/fetch-rd-customers', { params }))
       .catch(() => api.get('/Account/get-all', { params }))
       .catch(() => api.get('/Account', { params }));
   },
   getBranchAccounts: (params) => {
     console.log('📡 accountApi.getBranchAccounts called with params:', params);
-    return api.get('/Branch/fetch-rd-customers', { params })
-      .catch(() => api.get('/Branch/fetch-account-list', { params }));
+    return accountApi.getAll(params);
   },
   getAccounts: (params) => {
     console.log('📡 accountApi.getAccounts called with params:', params);
-    return api.get('/Branch/fetch-rd-customers', { params }).catch(() => api.get('/Account', { params }));
+    return accountApi.getAll(params);
   },
   getById: (id) => {
     console.log('📡 accountApi.getById called for id:', id);
@@ -374,6 +430,28 @@ export const accountApi = {
 // PAYMENT API
 // ============================================================
 export const paymentApi = {
+  processPaymentLink: (data) => {
+    console.log('📡 paymentApi.processPaymentLink called with data:', data);
+    return api.post('/Payment/PaymentLink', data)
+      .catch(() => api.post('/Payment/payment-link', data))
+      .catch(() => api.post('/payment/paymentlink', data))
+      .catch(() => api.post('/PaymentLink', data));
+  },
+  getPaymentLink: (data) => {
+    console.log('📡 paymentApi.getPaymentLink called with data:', data);
+    return api.post('/Payment/PaymentLink', data)
+      .catch(() => api.post('/Payment/payment-link', data))
+      .catch(() => api.post('/payment/paymentlink', data))
+      .catch(() => api.post('/PaymentLink', data));
+  },
+  getUpiIntent: (data) => {
+    console.log('📡 paymentApi.getUpiIntent called with data:', data);
+    return api.post('/Payment/UpiIntent', data);
+  },
+  upiIntent: (data) => {
+    console.log('📡 paymentApi.upiIntent called with data:', data);
+    return api.post('/Payment/UpiIntent', data);
+  },
   create: (data) => {
     console.log('📡 paymentApi.create called with data:', data);
     return api.post('/payment/process', data);
@@ -388,11 +466,11 @@ export const paymentApi = {
   },
   getStatus: (orderId) => {
     console.log('📡 paymentApi.getStatus called for orderId:', orderId);
-    return api.get(`/payment/status?orderId=${orderId}`);
+    return api.get(`/payment/status?orderId=${orderId}`).catch(() => api.get(`/Payment/status?orderId=${orderId}`));
   },
   generateLink: (data) => {
     console.log('📡 paymentApi.generateLink called with data:', data);
-    return api.post('/payment/generate-link', data);
+    return api.post('/Payment/PaymentLink', data).catch(() => api.post('/payment/generate-link', data));
   },
   getRecent: () => {
     console.log('📡 paymentApi.getRecent called');
@@ -448,9 +526,11 @@ export const customerApi = {
 // SETTLEMENT API
 // ============================================================
 export const settlementApi = {
-  getAll: () => {
+  getAll: (params) => {
     console.log('📡 settlementApi.getAll called');
-    return api.get('/settlement');
+    return api.get('/Settlement/get-all', { params: typeof params === 'object' ? params : undefined })
+      .catch(() => api.get('/Settlement', { params: typeof params === 'object' ? params : undefined }))
+      .catch(() => api.get('/settlement', { params: typeof params === 'object' ? params : undefined }));
   },
   getById: (id) => {
     console.log('📡 settlementApi.getById called for id:', id);
@@ -603,13 +683,40 @@ export const authApi = {
     console.log('📝 authApi.register called');
     return api.post('/Auth/register', data);
   },
-  forgotPassword: (emailOrPhone) => {
-    console.log('🔑 authApi.forgotPassword called for:', emailOrPhone);
-    return api.post('/Auth/forgot-password', { EmailOrPhone: emailOrPhone });
+  forgotPassword: (data) => {
+    console.log('🔑 authApi.forgotPassword called for:', data);
+    const identifier = typeof data === 'string' ? data : (data?.emailOrPhone || data?.EmailOrPhone || data?.email || data?.username || '');
+    const payload = {
+      EmailOrPhone: identifier,
+      emailOrPhone: identifier,
+      Email: identifier,
+      email: identifier,
+      Username: identifier,
+      username: identifier,
+      ...(typeof data === 'object' ? data : {})
+    };
+    return api.post('/Auth/forgot-password', payload)
+      .catch(() => api.post('/Auth/forgotpassword', payload))
+      .catch(() => api.post('/Auth/send-reset-otp', payload));
   },
   resetPassword: (data) => {
-    console.log('🔑 authApi.resetPassword called');
-    return api.post('/Auth/reset-password', data);
+    console.log('🔑 authApi.resetPassword called with data:', data);
+    const payload = {
+      EmailOrPhone: data?.emailOrPhone || data?.EmailOrPhone || data?.email || '',
+      emailOrPhone: data?.emailOrPhone || data?.EmailOrPhone || data?.email || '',
+      Otp: data?.otp || data?.Otp || data?.token || data?.Token || '',
+      otp: data?.otp || data?.Otp || data?.token || data?.Token || '',
+      Token: data?.otp || data?.Otp || data?.token || data?.Token || '',
+      token: data?.otp || data?.Otp || data?.token || data?.Token || '',
+      NewPassword: data?.newPassword || data?.NewPassword || data?.password || '',
+      newPassword: data?.newPassword || data?.NewPassword || data?.password || '',
+      ConfirmPassword: data?.confirmPassword || data?.ConfirmPassword || data?.newPassword || '',
+      confirmPassword: data?.confirmPassword || data?.ConfirmPassword || data?.newPassword || '',
+      ...data
+    };
+    return api.post('/Auth/reset-password', payload)
+      .catch(() => api.post('/Auth/resetpassword', payload))
+      .catch(() => api.post('/Auth/verify-reset-password', payload));
   },
   changePassword: (data) => {
     console.log('🔑 authApi.changePassword called');

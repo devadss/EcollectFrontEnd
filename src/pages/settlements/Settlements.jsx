@@ -15,6 +15,7 @@ import {
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
 import { settlementApi } from '../../services/api';
+import { useMerchantContext } from '../../context/MerchantContext';
 import './Settlements.css';
 
 ChartJS.register(
@@ -102,6 +103,16 @@ const SettleIcons = {
 
 const Settlements = () => {
   const navigate = useNavigate();
+
+  // Global Merchant Scoping
+  const { 
+    merchants, 
+    selectedMerchantId, 
+    selectedMerchant, 
+    setSelectedMerchantId, 
+    isSoftwareAdmin 
+  } = useMerchantContext();
+
   const [settlements, setSettlements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -120,13 +131,16 @@ const Settlements = () => {
 
   useEffect(() => {
     loadSettlements();
-  }, []);
+  }, [selectedMerchantId]);
 
   const loadSettlements = async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await settlementApi.getAll();
+      const queryParams = selectedMerchantId && selectedMerchantId !== 'ALL' 
+        ? { merchantId: selectedMerchantId } 
+        : {};
+      const res = await settlementApi.getAll(queryParams);
       const data = res?.data?.data || res?.data || [];
       const safeData = Array.isArray(data) ? data : [];
 
@@ -274,9 +288,15 @@ const Settlements = () => {
         (s.bankRef || '').toLowerCase().includes(searchStr);
       
       const matchesStatus = !filter.status || (s.status || '').toLowerCase() === filter.status.toLowerCase();
-      return matchesSearch && matchesStatus;
+
+      const matchesMerchant = !selectedMerchantId || selectedMerchantId === 'ALL'
+        ? true
+        : (String(s.merchantId || s.MerchantId) === String(selectedMerchantId) ||
+           (s.merchant && selectedMerchant && s.merchant.toLowerCase().includes((selectedMerchant.merchantName || selectedMerchant.businessName || '').toLowerCase())));
+
+      return matchesSearch && matchesStatus && matchesMerchant;
     });
-  }, [settlements, filter]);
+  }, [settlements, filter, selectedMerchantId, selectedMerchant]);
 
   const handleExport = () => {
     try {
@@ -448,6 +468,22 @@ const Settlements = () => {
             </div>
 
             <div className="filter-controls-group">
+              {merchants.length > 0 && isSoftwareAdmin && (
+                <select
+                  value={selectedMerchantId || 'ALL'}
+                  onChange={(e) => setSelectedMerchantId(e.target.value)}
+                  className="filter-select-dropdown"
+                  style={{ minWidth: '170px' }}
+                >
+                  <option value="ALL">🏢 All Merchants Scope</option>
+                  {merchants.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      🏢 {m.merchantName || m.businessName || `Merchant #${m.id}`}
+                    </option>
+                  ))}
+                </select>
+              )}
+
               <select
                 value={filter.status}
                 onChange={(e) => setFilter({ ...filter, status: e.target.value })}

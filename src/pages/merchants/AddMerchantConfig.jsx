@@ -1,7 +1,8 @@
-import React, { useState,useEffect  } from 'react';
-import { useNavigate,useParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import DashboardLayout from '../../components/layouts/DashboardLayout'; 
 import { merchantApi } from '../../services/api'; 
+import { useDialog } from '../../context/DialogContext';
 import './AddMerchantConfig.css';
 
 const AddMerchantConfig = () => {
@@ -9,6 +10,7 @@ const AddMerchantConfig = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEdit = !!id;
+  const { showSuccess, showError } = useDialog();
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [formData, setFormData] = useState({
@@ -188,38 +190,20 @@ const AddMerchantConfig = () => {
 
     try {
       let response;
-      console.log(formData);
-      if(isEdit){
-        //Update API
+      if (isEdit) {
         response = await merchantApi.updateMerchantConfig(id, formData);
+        showSuccess(response?.data?.message || 'Merchant API Configuration updated successfully.', 'Configuration Updated');
       } else {
-        //Create API
         response = await merchantApi.configMerchant(formData);
-      }
-      if(response.data.success === true) {
-        alert(response.data.message);
-      } else {
-        alert("Failed to save");
+        showSuccess(response?.data?.message || 'Merchant API Configuration registered and provisioned successfully.', 'Configuration Created');
       }
       navigate('/merchants/merchantconfig');
-
-      // if (isEdit) {
-      //   await agentApi.update(id, formData);
-      // } else {
-      //   await agentApi.create(formData);
-      // }
-      // navigate('/agents');
-      
-
     } catch (error) {
-      console.error('Error creating merchant:', error);
-      alert('Failed to create merchant. Please try again.');
-
-      // console.log("Status:", error.response?.status);
-      // console.log("Response:", error.response?.data);
-      // console.log("Headers:", error.response?.headers);
-
-      alert(JSON.stringify(error.response?.data));
+      console.error('Error saving merchant config:', error);
+      showError(
+        error.response?.data?.message || error.response?.data?.title || error.message || 'Failed to save merchant configuration. Please verify all fields.', 
+        'Configuration Save Failed'
+      );
     } finally {
       setLoading(false);
     }

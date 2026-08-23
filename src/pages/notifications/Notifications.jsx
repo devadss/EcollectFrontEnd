@@ -68,7 +68,7 @@ const getCategoryMeta = (category = '') => {
     case 'AGENTS':
       return { icon: '👤', label: 'Field Agents', bg: 'rgba(6, 182, 212, 0.15)', color: '#38bdf8' };
     case 'SECURITY':
-      return { icon: '🔒', label: 'Security & Access', bg: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24' };
+      return { icon: '🔒', label: 'Security & Access', bg: 'rgba(168, 85, 247, 0.15)', color: '#c084fc' };
     case 'SYSTEM':
     default:
       return { icon: '⚡', label: 'System & Core API', bg: 'rgba(139, 92, 246, 0.15)', color: '#a78bfa' };

@@ -189,7 +189,7 @@
 
 .refunds-kpi-icon.is-indigo { background: rgba(99, 102, 241, 0.15); color: #6366f1; }
 .refunds-kpi-icon.is-green { background: rgba(16, 185, 129, 0.15); color: #10b981; }
-.refunds-kpi-icon.is-amber { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+.refunds-kpi-icon.is-amber { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
 .refunds-kpi-icon.is-red { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
 
 .refunds-kpi-value {
@@ -223,7 +223,7 @@
 }
 
 .refunds-trend-tag.is-up { background: rgba(16, 185, 129, 0.12); color: #10b981; }
-.refunds-trend-tag.is-down { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
+.refunds-trend-tag.is-down { background: rgba(244, 63, 94, 0.12); color: #f43f5e; }
 
 /* Directory Card */
 .refunds-directory-card {
@@ -394,12 +394,12 @@
 
 .refund-status-pill.is-processing,
 .refund-status-pill.is-pending {
-  background: rgba(245, 158, 11, 0.12);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.25);
+  background: rgba(168, 85, 247, 0.12);
+  color: #a855f7;
+  border: 1px solid rgba(168, 85, 247, 0.25);
 }
 .refund-status-pill.is-processing .status-dot,
-.refund-status-pill.is-pending .status-dot { background: #f59e0b; }
+.refund-status-pill.is-pending .status-dot { background: #a855f7; }
 
 .refund-status-pill.is-failed {
   background: rgba(239, 68, 68, 0.12);

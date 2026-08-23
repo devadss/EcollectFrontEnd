@@ -4,12 +4,14 @@ import DashboardLayout from '../../components/layouts/DashboardLayout';
 import { branchApi, merchantApi } from '../../services/api';  
 import StateDistrictSelect from '../../components/common/StateDistrictSelect';
 import { lookupLocationByPincode } from '../../services/locationService';
+import { useDialog } from '../../context/DialogContext';
 import './AddBranch.css';
 
 const AddBranch = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEdit = !!id;
+  const { showSuccess, showError, showWarning } = useDialog();
   const [loading, setLoading] = useState(false);
   const [fetchingBranches, setFetchingBranches] = useState(false);
   const [branchOptions, setBranchOptions] = useState([]);
@@ -20,11 +22,6 @@ const AddBranch = () => {
   const isFetchingRef = useRef(false);
   const fetchedMerchantIdRef = useRef(null);
 
-  const rawRole = localStorage.getItem('user_role') || localStorage.getItem('role') || 'softwareadmin';
-  const normRole = rawRole.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const isMerchantUser = normRole.includes('merchant');
-  const isSoftwareAdmin = normRole.includes('softwareadmin') || normRole.includes('admin') || normRole.includes('superadmin');
-
   const authUser = (() => {
     try {
       return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
@@ -33,7 +30,12 @@ const AddBranch = () => {
     }
   })();
 
-  const currentMerchantId = authUser?.merchantId || localStorage.getItem('merchantId') || (isMerchantUser ? authUser?.id : null);
+  const rawRole = (localStorage.getItem('user_role') || localStorage.getItem('role') || authUser?.role || '').toLowerCase().trim();
+  const normRole = rawRole.replace(/[^a-z0-9]/g, '');
+  const isMerchantUser = normRole.includes('merchant');
+  const isSoftwareAdmin = (normRole.includes('software') || normRole.includes('superadmin') || normRole === 'admin') && !normRole.includes('merchant') && !normRole.includes('branch') && !normRole.includes('agent');
+
+  const currentMerchantId = authUser?.merchantId || authUser?.MerchantId || localStorage.getItem('merchantId') || (isMerchantUser ? (authUser?.merchantId || authUser?.MerchantId || authUser?.id) : null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -118,16 +120,40 @@ const AddBranch = () => {
       }
 
       if (isEdit && !isSoftwareAdmin) {
-        alert('Modification of Branch records is restricted to the Software Admin portal.');
+        showWarning('Modification of Branch records is restricted to the Software Admin portal.', 'Access Restricted');
         navigate('/branches');
         return;
       }
 
       try {
         // 1. Load merchants
-        const mRes = await merchantApi.getAll();
-        const mList = mRes?.data?.data || mRes?.data || [];
-        const safeList = Array.isArray(mList) ? mList : [];
+        let safeList = [];
+        try {
+          const mRes = await merchantApi.getAll();
+          const mList = mRes?.data?.data || mRes?.data || [];
+          safeList = Array.isArray(mList) ? mList : [];
+        } catch (e) {
+          console.warn('Could not load all merchants list:', e);
+        }
+
+        // If pre-selected merchant ID exists (merchant login or query param)
+        const targetMid = initialMid;
+        let selectedMerchant = safeList.find(m => String(m.id) === String(targetMid));
+
+        // Fallback: If not in safeList, fetch single merchant directly
+        if (!selectedMerchant && targetMid) {
+          try {
+            const singleMRes = await merchantApi.getById(targetMid);
+            const singleM = singleMRes?.data?.data || singleMRes?.data;
+            if (singleM && (singleM.id || singleM.merchantName)) {
+              selectedMerchant = singleM;
+              safeList = [singleM, ...safeList.filter(m => String(m.id) !== String(targetMid))];
+            }
+          } catch (e) {
+            console.warn('Could not load single merchant details:', e);
+          }
+        }
+
         if (isMounted) setMerchants(safeList);
 
         // 2. If editing, load branch
@@ -141,21 +167,21 @@ const AddBranch = () => {
               merchantId: bData.merchantId ? String(bData.merchantId) : prev.merchantId
             }));
 
-            const finalMid = bData.merchantId || initialMid;
-            const selectedMerchant = safeList.find(m => String(m.id) === String(finalMid));
-            if (selectedMerchant) {
-              const status = selectedMerchant.integrationStatus || selectedMerchant.IntegrationStatus || 'No';
+            const finalMid = bData.merchantId || targetMid;
+            let mObj = safeList.find(m => String(m.id) === String(finalMid)) || selectedMerchant;
+            if (mObj) {
+              const status = mObj.integrationStatus || mObj.IntegrationStatus || 'No';
               setIntegrationStatus(status);
             }
           }
-        } else if (initialMid && safeList.length > 0) {
+        } else if (targetMid && isMounted) {
           // 3. New branch with pre-selected merchant
-          const selectedMerchant = safeList.find(m => String(m.id) === String(initialMid));
-          if (selectedMerchant && isMounted) {
+          if (selectedMerchant) {
             const status = selectedMerchant.integrationStatus || selectedMerchant.IntegrationStatus || 'No';
             setIntegrationStatus(status);
-            if (status === 'Y' || status === 'Yes') {
-              fetchBranchList(initialMid, false);
+            const isLive = String(status).toUpperCase() === 'Y' || String(status).toUpperCase() === 'YES' || status === true;
+            if (isLive) {
+              fetchBranchList(targetMid, true);
             }
           }
         }
@@ -223,7 +249,18 @@ const AddBranch = () => {
   };
 
   const handleChange = async (e) => {
-    const { name, value, type, checked } = e.target;
+    let { name, value, type, checked } = e.target;
+
+    // Strict sanitization for mobile phone: numeric only, max 10 digits
+    if (name === 'phone') {
+      value = value.replace(/\D/g, '').slice(0, 10);
+    }
+
+    // Strict sanitization for zipCode / pincode: numeric only, max 6 digits
+    if (name === 'zipCode') {
+      value = value.replace(/\D/g, '').slice(0, 6);
+    }
+
     setFormData(prev => {
       const updated = {
         ...prev,
@@ -261,16 +298,38 @@ const AddBranch = () => {
     if (isSoftwareAdmin && !formData.merchantId) {
       tempErrors.merchantId = "Please select the respective merchant partner first";
     }
-    if (!formData.name) tempErrors.name = "Branch name is required";
-    if (!formData.code) tempErrors.code = "Branch code is required";
-    if (!formData.address) tempErrors.address = "Address is required";
-    if (!formData.city) tempErrors.city = "City is required";
-    if (!formData.state) tempErrors.state = "State is required";
-    if (!formData.zipCode) tempErrors.zipCode = "Zip code is required";
-    if (!formData.country) tempErrors.country = "Country is required";
-    if (!formData.phone) tempErrors.phone = "Phone is required";
-    if (!formData.email) tempErrors.email = "Email is required";
-    if (!formData.description) tempErrors.description = "Description is required";
+    if (!formData.name?.trim()) tempErrors.name = "Branch Name is required";
+    if (!formData.code?.trim()) tempErrors.code = "Branch Code is required";
+    if (!formData.address?.trim()) tempErrors.address = "Operating Street Address is required";
+    if (!formData.city?.trim()) tempErrors.city = "City / District is required";
+    if (!formData.state?.trim()) tempErrors.state = "State jurisdiction is required";
+    
+    // Strict Zipcode validation (6 numeric digits)
+    if (!formData.zipCode?.trim()) {
+      tempErrors.zipCode = "Postal PIN code is required";
+    } else if (formData.zipCode.trim().length !== 6 || !/^\d{6}$/.test(formData.zipCode.trim())) {
+      tempErrors.zipCode = "PIN Code must be exactly 6 numeric digits";
+    }
+
+    if (!formData.country?.trim()) tempErrors.country = "Country is required";
+    
+    // Strict Phone Number validation (10 numeric digits starting with 6, 7, 8, or 9)
+    if (!formData.phone?.trim()) {
+      tempErrors.phone = "Official Phone Number is required";
+    } else if (formData.phone.trim().length !== 10) {
+      tempErrors.phone = "Phone number must be exactly 10 numeric digits";
+    } else if (!/^[6-9]\d{9}$/.test(formData.phone.trim())) {
+      tempErrors.phone = "Invalid Indian mobile number. Must start with 6, 7, 8, or 9";
+    }
+
+    // Strict Email validation
+    if (!formData.email?.trim()) {
+      tempErrors.email = "Official Branch Email is required";
+    } else if (!/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(formData.email.trim())) {
+      tempErrors.email = "Enter a valid email address (e.g. branch@partner.in)";
+    }
+
+    if (!formData.description?.trim()) tempErrors.description = "Operational description is required";
 
     setErrors(tempErrors);
     return Object.keys(tempErrors).length === 0;
@@ -301,22 +360,25 @@ const AddBranch = () => {
     try {
       if (isEdit) {
         await branchApi.update(id, submitPayload);
+        showSuccess("Branch operational parameters updated successfully.", "Branch Updated");
       } else {
         await branchApi.create(submitPayload);
-      }
-      if (!isSoftwareAdmin) {
-        alert('✅ Branch registered successfully! Submitted for Software Admin review & approval.');
+        if (!isSoftwareAdmin) {
+          showSuccess('Branch registered successfully! Submitted for Software Admin review & approval.', 'Branch Registered');
+        } else {
+          showSuccess('Enterprise Branch provisioned and registered successfully.', 'Branch Registered');
+        }
       }
       navigate('/branches');
     } catch (error) {
       console.error('Error saving branch:', error);
-      alert(error?.response?.data?.message || 'Failed to save branch. Please try again.');
+      showError(error?.response?.data?.message || 'Failed to save branch. Please check and verify all entries.', 'Branch Save Failed');
     } finally {
       setLoading(false);
     }
   };
 
-  const isIntegrationActive = integrationStatus === 'Y' || integrationStatus === 'Yes';
+  const isIntegrationActive = String(integrationStatus).toUpperCase() === 'Y' || String(integrationStatus).toUpperCase() === 'YES' || integrationStatus === true;
   const selectedMerchantObj = merchants.find(m => String(m.id) === String(formData.merchantId));
 
   return (

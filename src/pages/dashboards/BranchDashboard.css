@@ -216,7 +216,7 @@
 .branch-kpi-icon.is-green { background: rgba(16, 185, 129, 0.15); color: #10b981; }
 .branch-kpi-icon.is-indigo { background: rgba(99, 102, 241, 0.15); color: #6366f1; }
 .branch-kpi-icon.is-cyan { background: rgba(6, 182, 212, 0.15); color: #06b6d4; }
-.branch-kpi-icon.is-amber { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+.branch-kpi-icon.is-amber { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
 
 .branch-kpi-value {
   position: relative;
@@ -530,10 +530,10 @@
 .feed-status-pill.is-success .status-dot { background: #10b981; }
 
 .feed-status-pill.is-pending {
-  background: rgba(245, 158, 11, 0.12);
-  color: #f59e0b;
+  background: rgba(168, 85, 247, 0.12);
+  color: #a855f7;
 }
-.feed-status-pill.is-pending .status-dot { background: #f59e0b; }
+.feed-status-pill.is-pending .status-dot { background: #a855f7; }
 
 /* Responsive */
 @media (max-width: 1200px) {

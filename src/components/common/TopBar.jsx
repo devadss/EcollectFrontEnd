@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, NavLink } from 'react-router-dom';
 import { useTheme, themes } from '../../context/ThemeContext';
 import { useNotifications } from '../../context/NotificationContext';
+import { useMerchantContext } from '../../context/MerchantContext';
+import { branchApi } from '../../services/api';
 import './TopBar.css';
 
 // SVG Icons
@@ -151,10 +153,22 @@ const TopBar = ({
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showMerchantMenu, setShowMerchantMenu] = useState(false);
+  const [merchantSearch, setMerchantSearch] = useState('');
 
   const themeMenuRef = useRef(null);
   const profileMenuRef = useRef(null);
   const notificationMenuRef = useRef(null);
+  const merchantMenuRef = useRef(null);
+
+  // Global Merchant Scoping Context
+  const {
+    merchants,
+    selectedMerchantId,
+    selectedMerchant,
+    setSelectedMerchantId,
+    isSoftwareAdmin
+  } = useMerchantContext();
 
   const getUserData = () => {
     try {
@@ -183,11 +197,57 @@ const TopBar = ({
   const themeLabels = {
     dark: 'Midnight Slate (Dark)',
     light: 'Enterprise Clean (Light)',
+    lightPlatinum: 'Stripe Platinum Luxe (Light)',
+    titanium: 'Titanium Obsidian (Neo-Fintech)',
+    sovereign: 'Sovereign Sapphire (Private Banking)',
+    aurora: 'Nordic Aurora (Neo-Bank)',
+    bloomberg: 'Bloomberg Quantum (Trading Desk)',
+    green: 'Fintech Emerald (Green)',
+    gold: 'Wealth Management (Gold)',
+    roseGold: 'Rose Gold Prestige (Private Client)',
+    mercury: 'Mercury Silicon Luxe (Matte Slate)',
     blue: 'Corporate Banking (Blue)',
     charcoal: 'Graphite Slate (Neutral)',
-    green: 'Fintech Emerald (Green)',
-    gold: 'Wealth Management (Gold)'
   };
+
+  const [branchName, setBranchName] = useState(
+    user?.branchName || user?.branch || localStorage.getItem('branchName') || ''
+  );
+
+  const effectiveBranchId = user?.branchId || user?.branch_id || localStorage.getItem('branchId');
+  const isBranchUser = role === 'branchadmin' || role === 'bankadmin' || role.includes('branch');
+
+  useEffect(() => {
+    let isMounted = true;
+    if ((isBranchUser || effectiveBranchId) && (!branchName || branchName === 'Mumbai Central Regional Branch')) {
+      if (effectiveBranchId) {
+        branchApi.getById(effectiveBranchId)
+          .then(res => {
+            if (!isMounted) return;
+            const bData = res?.data?.data || res?.data;
+            const fetchedName = bData?.name || bData?.branchName || bData?.BranchName || bData?.branch_Name;
+            if (fetchedName) {
+              setBranchName(fetchedName);
+              try {
+                const u = JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user') || '{}');
+                u.branchName = fetchedName;
+                u.branch = fetchedName;
+                localStorage.setItem('auth_user', JSON.stringify(u));
+                localStorage.setItem('user', JSON.stringify(u));
+                localStorage.setItem('branchName', fetchedName);
+              } catch (e) {}
+            }
+          })
+          .catch(() => {
+            if (!isMounted) return;
+            if (!branchName || branchName === 'Mumbai Central Regional Branch') {
+              setBranchName(user?.branchName || user?.branch || (effectiveBranchId ? `Branch #${effectiveBranchId}` : 'Branch Operations'));
+            }
+          });
+      }
+    }
+    return () => { isMounted = false; };
+  }, [isBranchUser, effectiveBranchId, branchName, user?.branchName, user?.branch]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -200,11 +260,26 @@ const TopBar = ({
       if (notificationMenuRef.current && !notificationMenuRef.current.contains(event.target)) {
         setShowNotifications(false);
       }
+      if (merchantMenuRef.current && !merchantMenuRef.current.contains(event.target)) {
+        setShowMerchantMenu(false);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Filtered merchants for dropdown search
+  const filteredMerchantList = (merchants || []).filter(m => {
+    if (!merchantSearch.trim()) return true;
+    const q = merchantSearch.toLowerCase().trim();
+    return (
+      (m.merchantName || '').toLowerCase().includes(q) ||
+      (m.businessName || '').toLowerCase().includes(q) ||
+      (m.merchantCode || '').toLowerCase().includes(q) ||
+      String(m.id || '').includes(q)
+    );
+  });
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -222,6 +297,12 @@ const TopBar = ({
       navigate('/notifications');
     }
   };
+
+  const displayBranchTitle = 
+    branchName || 
+    user?.branchName || 
+    user?.branch || 
+    (effectiveBranchId ? `Branch #${effectiveBranchId}` : (isBranchUser ? 'Branch Operations Hub' : null));
 
   return (
     <header className="ultra-topbar">
@@ -244,20 +325,125 @@ const TopBar = ({
           <span className="breadcrumb-slash">/</span>
           <span className="breadcrumb-active-title">{pageTitle}</span>
 
-          {user?.branchName || user?.branch || (role === 'branchadmin' || role === 'bankadmin' ? 'Mumbai Central Regional Branch' : null) ? (
+          {!isSoftwareAdmin && isBranchUser && displayBranchTitle ? (
             <div className="topbar-branch-emblem-badge">
               <TopIcons.Building />
               <span className="branch-emblem-prefix">Branch:</span>
               <strong className="branch-emblem-bold-name">
-                {user?.branchName || user?.branch || 'Mumbai Central Regional Branch'}
+                {displayBranchTitle}
               </strong>
             </div>
           ) : null}
         </div>
       </div>
 
-      {/* Right: Search & Actions */}
+      {/* Right: Search, Global Merchant Selector & Actions */}
       <div className="topbar-right-zone">
+        
+        {/* GLOBAL MERCHANT SELECTOR (SoftwareAdmin Only) */}
+        {isSoftwareAdmin && (
+          <div className="topbar-action-item merchant-selector-container" ref={merchantMenuRef}>
+            <button
+              className={`merchant-selector-trigger ${showMerchantMenu ? 'active' : ''}`}
+              onClick={() => {
+                setShowMerchantMenu(!showMerchantMenu);
+                setShowThemeMenu(false);
+                setShowNotifications(false);
+                setShowProfileMenu(false);
+              }}
+              title="Filter entire platform by Merchant"
+            >
+              <span className="merchant-selector-icon">🏢</span>
+              <div className="merchant-selector-info">
+                <span className="merchant-selector-label">Merchant Scope</span>
+                <span className="merchant-selector-name">
+                  {selectedMerchant 
+                    ? (selectedMerchant.merchantName || selectedMerchant.businessName || `Merchant #${selectedMerchantId}`) 
+                    : 'All Merchants'}
+                </span>
+              </div>
+              <span className="merchant-selector-arrow">{showMerchantMenu ? '▲' : '▼'}</span>
+            </button>
+
+            {showMerchantMenu && (
+              <div className="floating-popover merchant-popover">
+                <div className="popover-heading merchant-popover-heading">
+                  <div className="merchant-heading-left">
+                    <span>Select Active Merchant</span>
+                    <span className="merchant-count-pill">{merchants.length} Merchants</span>
+                  </div>
+                </div>
+
+                {/* Quick Search */}
+                <div className="merchant-search-wrapper">
+                  <input
+                    type="text"
+                    placeholder="Search merchant by name/ID..."
+                    value={merchantSearch}
+                    onChange={(e) => setMerchantSearch(e.target.value)}
+                    className="merchant-search-input"
+                    autoFocus
+                  />
+                </div>
+
+                <div className="merchant-dropdown-list">
+                  {/* Option: ALL MERCHANTS */}
+                  <button
+                    className={`merchant-dropdown-item ${selectedMerchantId === 'ALL' ? 'is-selected' : ''}`}
+                    onClick={() => {
+                      setSelectedMerchantId('ALL');
+                      setShowMerchantMenu(false);
+                    }}
+                  >
+                    <div className="merchant-item-left">
+                      <span className="merchant-item-icon">🌐</span>
+                      <div className="merchant-item-text">
+                        <span className="merchant-item-title">All Merchants</span>
+                        <span className="merchant-item-sub">Consolidated multi-merchant telemetry</span>
+                      </div>
+                    </div>
+                    {selectedMerchantId === 'ALL' && <span className="swatch-check">✓</span>}
+                  </button>
+
+                  {/* Options: INDIVIDUAL MERCHANTS */}
+                  {filteredMerchantList.map((m) => {
+                    const mId = String(m.id || m.merchantId);
+                    const isSelected = String(selectedMerchantId) === mId;
+                    return (
+                      <button
+                        key={mId}
+                        className={`merchant-dropdown-item ${isSelected ? 'is-selected' : ''}`}
+                        onClick={() => {
+                          setSelectedMerchantId(mId);
+                          setShowMerchantMenu(false);
+                        }}
+                      >
+                        <div className="merchant-item-left">
+                          <span className="merchant-item-icon">🏢</span>
+                          <div className="merchant-item-text">
+                            <span className="merchant-item-title">
+                              {m.merchantName || m.businessName || `Merchant #${mId}`}
+                            </span>
+                            <span className="merchant-item-sub">
+                              ID: #{mId} {m.merchantCode ? `• ${m.merchantCode}` : ''} {m.city ? `• ${m.city}` : ''}
+                            </span>
+                          </div>
+                        </div>
+                        {isSelected && <span className="swatch-check">✓</span>}
+                      </button>
+                    );
+                  })}
+
+                  {filteredMerchantList.length === 0 && (
+                    <div className="merchant-dropdown-empty">
+                      No merchants matching "{merchantSearch}"
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         
         {/* Search Field */}
         <form className="topbar-search-box" onSubmit={handleSearch}>

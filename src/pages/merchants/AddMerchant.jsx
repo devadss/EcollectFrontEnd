@@ -91,6 +91,13 @@ const FormIcons = {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
     </svg>
+  ),
+  Percent: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="19" y1="5" x2="5" y2="19" />
+      <circle cx="6.5" cy="6.5" r="2.5" />
+      <circle cx="17.5" cy="17.5" r="2.5" />
+    </svg>
   )
 };
 
@@ -119,6 +126,9 @@ const AddMerchant = () => {
     monthlyExpectedTransactionCount: '',
     averageTicketSize: '',
     IntegrationStatus: 'Y',
+    pgVendorPercentage: 0.15,
+    platformPercentage: 0.50,
+    settlementPercentage: 0.65,
     contactPerson: { name: '', emailAddress: '', phoneNumber: '' },
     authorizedSignatory: { name: '', panNumber: '', phone: '', email: '', designation: '' },
     settlementAccounts: [
@@ -154,6 +164,9 @@ const AddMerchant = () => {
           registeredPhone: sanitizeMobileNumber(data.registeredPhone || data.phone || ''),
           entityType: data.entityType || 'Pvt Ltd',
           IntegrationStatus: data.integrationStatus || data.IntegrationStatus || 'Y',
+          pgVendorPercentage: data.pgVendorPercentage !== undefined ? data.pgVendorPercentage : 0.15,
+          platformPercentage: data.platformPercentage !== undefined ? data.platformPercentage : 0.50,
+          settlementPercentage: data.settlementPercentage !== undefined ? data.settlementPercentage : 0.65,
           settlementAccounts: rawAccounts
         });
 
@@ -211,6 +224,21 @@ const AddMerchant = () => {
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: null }));
     }
+  };
+
+  // Handle UPI Settlement & Commission Percentage changes
+  const handlePercentageChange = (field, val) => {
+    const rawVal = val === '' ? '' : Math.max(0, parseFloat(val) || 0);
+    setFormData(prev => {
+      const nextVendor = field === 'pgVendorPercentage' ? (val === '' ? 0 : rawVal) : (parseFloat(prev.pgVendorPercentage) || 0);
+      const nextPlatform = field === 'platformPercentage' ? (val === '' ? 0 : rawVal) : (parseFloat(prev.platformPercentage) || 0);
+      const nextSettlement = Number((nextVendor + nextPlatform).toFixed(2));
+      return {
+        ...prev,
+        [field]: val,
+        settlementPercentage: nextSettlement
+      };
+    });
   };
 
   // Trigger IFSC API Lookup
@@ -772,7 +800,126 @@ const AddMerchant = () => {
             </div>
           </div>
 
-          {/* Section 4: Settlement Banking & Escrow Accounts with Common IFSC API */}
+          {/* Section 4: UPI Settlement & Commission Percentages (TDR Rates) */}
+          <div className="onboard-section-card">
+            <div className="section-card-glow" style={{ background: 'radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%)' }}></div>
+            <div className="section-card-header">
+              <div className="section-icon-box is-indigo" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8' }}>
+                <FormIcons.Percent />
+              </div>
+              <div>
+                <h3 className="section-title">UPI Settlement & Commission Rates (TDR Configuration)</h3>
+                <p className="section-desc">Customizable settlement deduction rates per merchant (Only applies to UPI transactions)</p>
+              </div>
+            </div>
+
+            <div className="onboard-grid">
+              <div className="onboard-field">
+                <label>PG Vendor Cut / Rate (%) <span className="req-star">*</span></label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  name="pgVendorPercentage"
+                  placeholder="e.g. 0.15"
+                  value={formData.pgVendorPercentage !== undefined ? formData.pgVendorPercentage : ''}
+                  onChange={(e) => handlePercentageChange('pgVendorPercentage', e.target.value)}
+                  className="font-mono"
+                />
+                <span className="field-char-count" style={{ marginTop: '4px', display: 'block', color: '#94a3b8' }}>
+                  Gateway vendor processing surcharge (e.g., 0.15%)
+                </span>
+              </div>
+
+              <div className="onboard-field">
+                <label>Our Platform Commission Margin (%) <span className="req-star">*</span></label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  name="platformPercentage"
+                  placeholder="e.g. 0.50"
+                  value={formData.platformPercentage !== undefined ? formData.platformPercentage : ''}
+                  onChange={(e) => handlePercentageChange('platformPercentage', e.target.value)}
+                  className="font-mono"
+                />
+                <span className="field-char-count" style={{ marginTop: '4px', display: 'block', color: '#94a3b8' }}>
+                  Platform net profit retained from collection (e.g., 0.50%)
+                </span>
+              </div>
+
+              <div className="onboard-field">
+                <label>Total Merchant Settlement TDR (%)</label>
+                <input
+                  type="text"
+                  readOnly
+                  disabled
+                  value={`${formData.settlementPercentage || '0.65'}%`}
+                  className="font-mono"
+                  style={{ background: 'rgba(255, 255, 255, 0.04)', color: '#10b981', fontWeight: '700', cursor: 'not-allowed' }}
+                />
+                <span className="field-char-count" style={{ marginTop: '4px', display: 'block', color: '#10b981' }}>
+                  Auto-calculated total deduction (Vendor + Platform)
+                </span>
+              </div>
+
+              {/* Real-time TDR Calculation Simulator */}
+              <div className="onboard-field full-row" style={{ marginTop: '4px' }}>
+                <div style={{
+                  background: 'rgba(15, 23, 42, 0.75)',
+                  border: '1px solid rgba(99, 102, 241, 0.25)',
+                  borderRadius: '12px',
+                  padding: '14px 18px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: '700', color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      ⚡ Live UPI Settlement Breakdown Simulator (Sample ₹10,000 Collection)
+                    </span>
+                    <span style={{ fontSize: '11px', color: '#818cf8', fontWeight: '700', background: 'rgba(99, 102, 241, 0.15)', padding: '2px 8px', borderRadius: '6px' }}>
+                      UPI Rail Only
+                    </span>
+                  </div>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+                    <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                      <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block' }}>PG Vendor Fee ({formData.pgVendorPercentage || 0}%)</span>
+                      <strong style={{ fontSize: '14px', color: '#a855f7', fontFamily: 'monospace' }}>
+                        ₹{((10000 * (parseFloat(formData.pgVendorPercentage) || 0)) / 100).toFixed(2)}
+                      </strong>
+                    </div>
+
+                    <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                      <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block' }}>Our Platform Margin ({formData.platformPercentage || 0}%)</span>
+                      <strong style={{ fontSize: '14px', color: '#818cf8', fontFamily: 'monospace' }}>
+                        ₹{((10000 * (parseFloat(formData.platformPercentage) || 0)) / 100).toFixed(2)}
+                      </strong>
+                    </div>
+
+                    <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                      <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block' }}>Total TDR Deducted ({formData.settlementPercentage || 0}%)</span>
+                      <strong style={{ fontSize: '14px', color: '#ef4444', fontFamily: 'monospace' }}>
+                        -₹{((10000 * (parseFloat(formData.settlementPercentage) || 0)) / 100).toFixed(2)}
+                      </strong>
+                    </div>
+
+                    <div style={{ background: 'rgba(16, 185, 129, 0.08)', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
+                      <span style={{ fontSize: '11px', color: '#6ee7b7', display: 'block' }}>Net Merchant Settlement Payout</span>
+                      <strong style={{ fontSize: '15px', color: '#10b981', fontFamily: 'monospace' }}>
+                        ₹{(10000 - ((10000 * (parseFloat(formData.settlementPercentage) || 0)) / 100)).toFixed(2)}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 5: Settlement Banking & Escrow Accounts with Common IFSC API */}
           <div className="onboard-section-card">
             <div className="section-card-glow" style={{ background: 'radial-gradient(circle, rgba(6, 182, 212, 0.15) 0%, transparent 70%)' }}></div>
             <div className="section-card-header" style={{ justifyContent: 'space-between' }}>
