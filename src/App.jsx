@@ -6,6 +6,7 @@ import { NotificationProvider } from './context/NotificationContext';
 import { MerchantProvider } from './context/MerchantContext';
 import './App.css';
 import LoadingAnimation from './components/common/LoadingAnimation';
+import GlobalReminderWorker from './components/common/GlobalReminderWorker';
 
 // DASHBOARDS
 import SoftwareAdminDashboard from './pages/dashboards/SoftwareAdminDashboard';
@@ -135,6 +136,7 @@ function App() {
         <DialogProvider>
           <NotificationProvider>
             <MerchantProvider>
+              <GlobalReminderWorker />
               <Routes>
           {/* ============================================================
               AUTH ROUTES

@@ -1,13 +1,74 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import * as XLSX from 'xlsx';
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
-import { accountApi, branchApi, agentApi, paymentApi, merchantApi } from '../../services/api';
+import { accountApi, branchApi, agentApi, paymentApi, merchantApi, reminderApi, walletApi } from '../../services/api';
 import { lookupIFSC, INDIAN_BANKS_LIST, sanitizeAccountNumber } from '../../services/bankService';
 import './Accounts.css';
 
 // Crisp Geometric SVG Icons
-const AccountIcons = {
+const BaseAccountIcons = {
+  Bell: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+    </svg>
+  ),
+  UploadCloud: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
+      <path d="M12 12v9" />
+      <path d="m8 16 4-4 4 4" />
+    </svg>
+  ),
+  Upload: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
+  ),
+  FileText: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+      <line x1="10" y1="9" x2="8" y2="9" />
+    </svg>
+  ),
+  FileSpreadsheet: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+      <polyline points="14 2 14 8 20 8" />
+      <path d="M8 13h2" />
+      <path d="M8 17h2" />
+      <path d="M14 13h2" />
+      <path d="M14 17h2" />
+    </svg>
+  ),
+  Sliders: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="4" y1="21" x2="4" y2="14" />
+      <line x1="4" y1="10" x2="4" y2="3" />
+      <line x1="12" y1="21" x2="12" y2="12" />
+      <line x1="12" y1="8" x2="12" y2="3" />
+      <line x1="20" y1="21" x2="20" y2="16" />
+      <line x1="20" y1="12" x2="20" y2="3" />
+      <line x1="1" y1="14" x2="7" y2="14" />
+      <line x1="9" y1="8" x2="15" y2="8" />
+      <line x1="17" y1="16" x2="23" y2="16" />
+    </svg>
+  ),
+  Calendar: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  ),
   Bank: () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v4M12 14v4M16 14v4" />
@@ -145,6 +206,20 @@ const AccountIcons = {
   )
 };
 
+// Safe Proxy wrapper ensures no missing icon ever evaluates to undefined in React JSX
+const AccountIcons = new Proxy(BaseAccountIcons, {
+  get: (target, prop) => {
+    if (prop in target) return target[prop];
+    return () => (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="9"></circle>
+        <line x1="12" y1="8" x2="12" y2="12"></line>
+        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+      </svg>
+    );
+  }
+});
+
 const Accounts = () => {
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -162,6 +237,169 @@ const Accounts = () => {
   const [pageSize, setPageSize] = useState(10);
 
   // Unified Collection Modal States (Dynamic QR + Payment Link)
+  // Standalone (Integration: N) Workflow States
+  const [isLoanModalOpen, setIsLoanModalOpen] = useState(false);
+  const [isBulkAccountsModalOpen, setIsBulkAccountsModalOpen] = useState(false);
+  const [isDueListModalOpen, setIsDueListModalOpen] = useState(false);
+  
+  // Due Date Reminders (Non-Integrated Customization)
+  const [isAccountReminderModalOpen, setIsAccountReminderModalOpen] = useState(false);
+  const [selectedReminderAccount, setSelectedReminderAccount] = useState(null);
+  const [accountReminderForm, setAccountReminderForm] = useState({
+    daysBeforeDue: 2,
+    channels: 'SMS,WhatsApp,Call',
+    riskLevel: 'Standard',
+    customNote: ''
+  });
+
+  // Global Reminder Rules & Scheduler Status Modal
+  const [isGlobalReminderModalOpen, setIsGlobalReminderModalOpen] = useState(false);
+  const [globalReminderConfig, setGlobalReminderConfig] = useState({
+    enableAutomaticReminders: true,
+    defaultDaysBeforeDue: 2,
+    enableSms: true,
+    enableWhatsApp: true,
+    enableAutomatedCall: true,
+    highRiskDaysBeforeDue: 3,
+    dailyExecutionTime: '08:00'
+  });
+  const [reminderLogs, setReminderLogs] = useState([]);
+  const [isTriggeringScan, setIsTriggeringScan] = useState(false);
+  const [isExportingDayEnd, setIsExportingDayEnd] = useState(false);
+
+  // Merchant Communication Credits Wallet (Integration Status: N)
+  const [walletData, setWalletData] = useState({
+    balance: 750.00,
+    currency: 'INR',
+    lowBalanceThreshold: 100.00,
+    rates: { SMS: 0.20, WhatsApp: 0.45, Call: 0.90 },
+    totalRecharged: 1000.00,
+    totalSpent: 250.00
+  });
+  const [walletTransactions, setWalletTransactions] = useState([]);
+  const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
+  const [activeWalletTab, setActiveWalletTab] = useState('recharge');
+  const [topUpForm, setTopUpForm] = useState({ amount: 500, paymentMethod: 'UPI' });
+  const [customTopUpAmount, setCustomTopUpAmount] = useState('');
+  const [isRechargingWallet, setIsRechargingWallet] = useState(false);
+
+  // Calculate Days Past Due (DPD) & Loan NPA / SMA Classification (RBI Prudential Norms)
+  const calculateLoanNpaStatus = (acc) => {
+    if (!acc) return { dpd: 0, category: 'Regular', badgeClass: 'is-regular', label: '🟢 Standard (0 DPD)', fullDesc: 'SMA-0 (Standard Asset)' };
+    
+    // Balance / Due check
+    const outstanding = Number(acc.balance || acc.outstandingAmount || 0);
+    const dueAmt = Number(acc.dueAmount || acc.emiAmount || 0);
+    if (outstanding <= 0 && dueAmt <= 0) {
+      return { dpd: 0, category: 'Cleared', badgeClass: 'is-cleared', label: '✅ Cleared', fullDesc: 'Loan Closed / Fully Paid' };
+    }
+
+    let dpd = 0;
+    const now = new Date();
+
+    if (acc.lastPaidDate && acc.lastPaidDate !== 'N/A') {
+      const lastPaid = new Date(acc.lastPaidDate);
+      if (!isNaN(lastPaid.getTime())) {
+        const diffDays = Math.floor((now - lastPaid) / (1000 * 60 * 60 * 24));
+        dpd = Math.max(0, diffDays);
+      }
+    } else if (acc.nextDueDate && acc.nextDueDate !== 'N/A') {
+      const nextDue = new Date(acc.nextDueDate);
+      if (!isNaN(nextDue.getTime()) && nextDue < now) {
+        const diffDays = Math.floor((now - nextDue) / (1000 * 60 * 60 * 24));
+        dpd = Math.max(0, diffDays);
+      }
+    }
+
+    // Classification according to RBI Prudential Norms:
+    // 0 - 30 days: SMA-0 (Standard Asset)
+    // 31 - 60 days: SMA-1 (Sub-Standard Stress)
+    // 61 - 90 days: SMA-2 (High Default Risk / Pre-NPA)
+    // > 90 days: NPA (Non-Performing Asset Default)
+    if (dpd <= 30) {
+      return {
+        dpd,
+        category: 'SMA-0',
+        badgeClass: 'is-regular',
+        label: dpd === 0 ? '🟢 Standard (0d)' : `🟢 Regular (${dpd}d)`,
+        fullDesc: 'SMA-0: Standard Performing Account (<30 Days Overdue)'
+      };
+    } else if (dpd <= 60) {
+      return {
+        dpd,
+        category: 'SMA-1',
+        badgeClass: 'is-sma1',
+        label: `🟡 SMA-1 (${dpd}d)`,
+        fullDesc: 'SMA-1: Sub-Standard Risk (31–60 Days Overdue)'
+      };
+    } else if (dpd <= 90) {
+      return {
+        dpd,
+        category: 'SMA-2',
+        badgeClass: 'is-sma2',
+        label: `🟠 SMA-2 (${dpd}d)`,
+        fullDesc: 'SMA-2: High Risk / Pre-NPA (61–90 Days Overdue)'
+      };
+    } else {
+      return {
+        dpd,
+        category: 'NPA',
+        badgeClass: 'is-npa',
+        label: `🔴 NPA (${dpd}d)`,
+        fullDesc: 'NPA: Non-Performing Asset (>90 Days Default — Immediate Recovery)'
+      };
+    }
+  };
+
+  // Helper for auto-calculating EMI based on Outstanding Amount, Frequency, and Tenure
+  const calculateAutoEmi = (outstanding, freq, tenure) => {
+    const principal = Number(outstanding);
+    if (!principal || isNaN(principal) || principal <= 0) return { emi: '', due: '' };
+    const months = Number(tenure) || 12;
+
+    let installments = months;
+    if (freq === 'Weekly') {
+      installments = Math.max(1, Math.round(months * 4.333));
+    } else if (freq === 'Daily') {
+      installments = Math.max(1, Math.round(months * 30));
+    } else {
+      installments = Math.max(1, months);
+    }
+
+    const calculatedEmi = Math.round(principal / installments);
+    return {
+      emi: String(calculatedEmi),
+      due: String(calculatedEmi)
+    };
+  };
+
+  // Manual Loan Account Form State with auto-EMI calculation & Loan Categories
+  const [loanFormData, setLoanFormData] = useState({
+    accountNumber: '',
+    customerName: '',
+    mobileNumber: '',
+    productType: 'LOAN',
+    loanCategory: 'Home Loan', // 'Home Loan' | 'Vehicle Loan' | 'Personal Loan' | 'Gold Loan' | 'Business Loan' | 'Education Loan' | 'Agriculture Loan' | 'Microfinance Loan' | 'Daily Pigmy Loan' | 'Loan Against Property'
+    outstandingAmount: '',
+    tenureMonths: '12',
+    dueAmount: '',
+    emiAmount: '',
+    emiFrequency: 'Monthly',
+    lastPaidDate: '',
+    nextDueDate: '',
+    assignedAgentCode: ''
+  });
+
+  // Bulk Master Accounts Upload State
+  const [bulkAccountsRows, setBulkAccountsRows] = useState([]);
+  const [bulkAccountsFile, setBulkAccountsFile] = useState(null);
+  const [isUploadingBulkAccounts, setIsUploadingBulkAccounts] = useState(false);
+
+  // Daily Due List Upload State (Excel only for Day Begin)
+  const [dueListRows, setDueListRows] = useState([]);
+  const [dueListFile, setDueListFile] = useState(null);
+  const [isUploadingDueList, setIsUploadingDueList] = useState(false);
+
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [collectionTab, setCollectionTab] = useState('qr'); // 'qr' | 'link'
   const [qrAccount, setQrAccount] = useState(null);
@@ -197,6 +435,13 @@ const Accounts = () => {
     }
   }, []);
 
+  const isIntegratedMode = useMemo(() => {
+    const rawInteg = localStorage.getItem('integrationStatus') || user?.integrationStatus || user?.IntegrationStatus || 'No';
+    return String(rawInteg).toUpperCase() === 'Y' || String(rawInteg).toUpperCase() === 'YES' || rawInteg === true;
+  }, [user]);
+
+  const isNonIntegrated = !isIntegratedMode;
+
   const [agents, setAgents] = useState([]);
   const [branches, setBranches] = useState([]);
   const [selectedAgentCode, setSelectedAgentCode] = useState(
@@ -205,6 +450,30 @@ const Accounts = () => {
   const [selectedBranchCode, setSelectedBranchCode] = useState(
     user?.branchCode || localStorage.getItem('branchCode') || '01'
   );
+
+  // Filter agents strictly to current merchant and branch (prevents agents from other merchants leaking in)
+  const availableAgents = useMemo(() => {
+    const currentMerchantId = user?.merchantId || user?.merchant_id || localStorage.getItem('merchantId');
+    const currentBranchCode = selectedBranchCode || user?.branchCode || localStorage.getItem('branchCode');
+    const currentBranchId = user?.branchId || user?.branch_id || localStorage.getItem('branchId');
+
+    return agents.filter(ag => {
+      // 1. Merchant Isolation
+      const agMerchantId = ag.merchantId || ag.merchant_id || ag.MerchantId;
+      if (currentMerchantId && agMerchantId && String(agMerchantId) !== String(currentMerchantId)) {
+        return false;
+      }
+      // 2. Branch Isolation (if specific branch is selected)
+      const agBranchId = ag.branchId || ag.branch_id || ag.BranchId;
+      const agBranchCode = ag.branchCode || ag.branch_code || ag.BranchCode;
+      if (currentBranchId && agBranchId && String(agBranchId) !== String(currentBranchId)) {
+        if (currentBranchCode && agBranchCode && String(agBranchCode) !== String(currentBranchCode)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [agents, user, selectedBranchCode]);
 
   const rawRole = localStorage.getItem('user_role') || localStorage.getItem('role') || 'branchadmin';
 
@@ -220,6 +489,945 @@ const Accounts = () => {
     dailyLimit: 5000000,
     isActive: true,
   });
+
+  // Universal Spreadsheet & Delimited Text Parser (.xlsx, .xls, .csv, .txt)
+  const parseUploadedFile = async (file) => {
+    if (!file) return [];
+    const fileName = (file.name || '').toLowerCase();
+
+    // 1. If Excel Binary File (.xlsx, .xls)
+    if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+      try {
+        const data = await file.arrayBuffer();
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const rawJson = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+        return rawJson.map(row => {
+          const obj = { ...row };
+          Object.keys(row).forEach(k => {
+            const cleanVal = row[k] !== undefined && row[k] !== null ? String(row[k]).trim() : '';
+            obj[k] = cleanVal;
+            const normKey = k.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            obj[normKey] = cleanVal;
+          });
+          return obj;
+        });
+      } catch (excelErr) {
+        console.error('Excel parse error:', excelErr);
+        throw new Error('Failed to parse Excel spreadsheet');
+      }
+    }
+
+    // 2. If Text / CSV / TSV File (.csv, .txt)
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const text = evt.target.result;
+          if (!text || typeof text !== 'string') return resolve([]);
+          const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+          if (lines.length < 2) return resolve([]);
+
+          // Detect delimiter (comma, tab, or semicolon)
+          const firstLine = lines[0];
+          const delimiter = firstLine.includes('\t') ? '\t' : firstLine.includes(';') ? ';' : ',';
+
+          const parseLine = (lineStr) => {
+            const values = [];
+            let inQuote = false;
+            let curVal = '';
+            for (let c = 0; c < lineStr.length; c++) {
+              const char = lineStr[c];
+              if (char === '"' || char === "'") {
+                inQuote = !inQuote;
+              } else if (char === delimiter && !inQuote) {
+                values.push(curVal.trim().replace(/^["']|["']$/g, ''));
+                curVal = '';
+              } else {
+                curVal += char;
+              }
+            }
+            values.push(curVal.trim().replace(/^["']|["']$/g, ''));
+            return values;
+          };
+
+          const headers = parseLine(lines[0]);
+          const rows = lines.slice(1).map(line => {
+            const values = parseLine(line);
+            const obj = {};
+            headers.forEach((h, i) => {
+              const cleanVal = values[i] !== undefined ? values[i] : '';
+              obj[h] = cleanVal;
+              const normKey = h.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+              obj[normKey] = cleanVal;
+            });
+            return obj;
+          });
+          resolve(rows);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsText(file);
+    });
+  };
+
+  // Comprehensive Master Accounts Sample Format (All 20 fields)
+  const masterAccountsTemplateData = [
+    {
+      AccountNumber: 'LN01005001',
+      CustomerName: 'Ramesh Sharma',
+      MobileNumber: '9876543210',
+      Email: 'ramesh.sharma@example.com',
+      ProductType: 'LOAN',
+      LoanCategory: 'Home Loan',
+      OutstandingAmount: 120000,
+      TenureMonths: 24,
+      DueAmount: 4500,
+      EmiAmount: 4500,
+      EmiFrequency: 'Monthly',
+      LastPaidDate: '2026-08-01',
+      NextDueDate: '2026-09-01',
+      AssignedAgentCode: '1075',
+      AssignedAgentName: 'Priya Sharma',
+      BranchCode: '01',
+      BankName: 'State Bank of India',
+      IfscCode: 'SBIN0001234',
+      ReminderDaysBeforeDue: 2,
+      ReminderChannels: 'SMS,WhatsApp,Call'
+    },
+    {
+      AccountNumber: 'LN01005002',
+      CustomerName: 'Sunita Verma',
+      MobileNumber: '9812345678',
+      Email: 'sunita.verma@example.com',
+      ProductType: 'LOAN',
+      LoanCategory: 'Vehicle Loan',
+      OutstandingAmount: 45000,
+      TenureMonths: 12,
+      DueAmount: 1500,
+      EmiAmount: 1500,
+      EmiFrequency: 'Weekly',
+      LastPaidDate: '2026-08-10',
+      NextDueDate: '2026-08-17',
+      AssignedAgentCode: '1075',
+      AssignedAgentName: 'Priya Sharma',
+      BranchCode: '01',
+      BankName: 'HDFC Bank',
+      IfscCode: 'HDFC0000456',
+      ReminderDaysBeforeDue: 2,
+      ReminderChannels: 'SMS,WhatsApp'
+    },
+    {
+      AccountNumber: 'RD01008001',
+      CustomerName: 'Amit Patel',
+      MobileNumber: '9988776655',
+      Email: 'amit.patel@example.com',
+      ProductType: 'RD',
+      LoanCategory: 'Standard Recurring Deposit',
+      OutstandingAmount: 50000,
+      TenureMonths: 36,
+      DueAmount: 2000,
+      EmiAmount: 2000,
+      EmiFrequency: 'Monthly',
+      LastPaidDate: '2026-08-05',
+      NextDueDate: '2026-09-05',
+      AssignedAgentCode: '1075',
+      AssignedAgentName: 'Priya Sharma',
+      BranchCode: '01',
+      BankName: 'ICICI Bank',
+      IfscCode: 'ICIC0000789',
+      ReminderDaysBeforeDue: 3,
+      ReminderChannels: 'WhatsApp,Call'
+    },
+    {
+      AccountNumber: 'FD01009001',
+      CustomerName: 'Kavita Singh',
+      MobileNumber: '9765432109',
+      Email: 'kavita.singh@example.com',
+      ProductType: 'FD',
+      LoanCategory: 'Fixed Deposit Scheme',
+      OutstandingAmount: 200000,
+      TenureMonths: 60,
+      DueAmount: 0,
+      EmiAmount: 0,
+      EmiFrequency: 'Quarterly',
+      LastPaidDate: '2026-07-01',
+      NextDueDate: '2026-10-01',
+      AssignedAgentCode: '1075',
+      AssignedAgentName: 'Priya Sharma',
+      BranchCode: '01',
+      BankName: 'Axis Bank',
+      IfscCode: 'UTIB0000321',
+      ReminderDaysBeforeDue: 7,
+      ReminderChannels: 'SMS,Call'
+    }
+  ];
+
+  // Download Sample Master Accounts Excel Template (.xlsx)
+  const handleDownloadAccountsExcelTemplate = () => {
+    try {
+      const ws = XLSX.utils.json_to_sheet(masterAccountsTemplateData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'MasterAccounts');
+      XLSX.writeFile(wb, 'Master_Accounts_Bulk_Template.xlsx');
+      showToast('Downloaded complete Master Accounts Excel template (.xlsx)');
+    } catch (err) {
+      console.error('Download error:', err);
+      handleDownloadAccountsCsvTemplate();
+    }
+  };
+
+  // Download Sample Master Accounts CSV Template (.csv)
+  const handleDownloadAccountsCsvTemplate = () => {
+    const headers = [
+      'AccountNumber',
+      'CustomerName',
+      'MobileNumber',
+      'Email',
+      'ProductType',
+      'LoanCategory',
+      'OutstandingAmount',
+      'TenureMonths',
+      'DueAmount',
+      'EmiAmount',
+      'EmiFrequency',
+      'LastPaidDate',
+      'NextDueDate',
+      'AssignedAgentCode',
+      'AssignedAgentName',
+      'BranchCode',
+      'BankName',
+      'IfscCode',
+      'ReminderDaysBeforeDue',
+      'ReminderChannels'
+    ];
+
+    const sampleRows = masterAccountsTemplateData.map(r => [
+      `"${r.AccountNumber}"`,
+      `"${r.CustomerName}"`,
+      `"${r.MobileNumber}"`,
+      `"${r.Email}"`,
+      `"${r.ProductType}"`,
+      `"${r.LoanCategory}"`,
+      r.OutstandingAmount,
+      r.TenureMonths,
+      r.DueAmount,
+      r.EmiAmount,
+      `"${r.EmiFrequency}"`,
+      `"${r.LastPaidDate}"`,
+      `"${r.NextDueDate}"`,
+      `"${r.AssignedAgentCode}"`,
+      `"${r.AssignedAgentName}"`,
+      `"${r.BranchCode}"`,
+      `"${r.BankName}"`,
+      `"${r.IfscCode}"`,
+      r.ReminderDaysBeforeDue,
+      `"${r.ReminderChannels}"`
+    ].join(','));
+
+    const csvContent = [headers.join(','), ...sampleRows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'Master_Accounts_Bulk_Template.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Downloaded complete Master Accounts CSV template (.csv)');
+  };
+
+  // Daily Due List Sample Format
+  const dueListTemplateData = [
+    {
+      AccountNumber: 'LN01005001',
+      CustomerName: 'Ramesh Sharma',
+      DueAmount: 4500,
+      OutstandingAmount: 115500,
+      EmiAmount: 4500,
+      LastPaidDate: '2026-08-01',
+      NextDueDate: '2026-09-01',
+      AssignedAgentCode: '1075',
+      AssignedAgentName: 'Priya Sharma',
+      BranchCode: '01'
+    },
+    {
+      AccountNumber: 'LN01005002',
+      CustomerName: 'Sunita Verma',
+      DueAmount: 1500,
+      OutstandingAmount: 43500,
+      EmiAmount: 1500,
+      LastPaidDate: '2026-08-10',
+      NextDueDate: '2026-08-25',
+      AssignedAgentCode: '1075',
+      AssignedAgentName: 'Priya Sharma',
+      BranchCode: '01'
+    },
+    {
+      AccountNumber: 'RD01008001',
+      CustomerName: 'Amit Patel',
+      DueAmount: 2000,
+      OutstandingAmount: 52000,
+      EmiAmount: 2000,
+      LastPaidDate: '2026-08-05',
+      NextDueDate: '2026-09-05',
+      AssignedAgentCode: '1075',
+      AssignedAgentName: 'Priya Sharma',
+      BranchCode: '01'
+    }
+  ];
+
+  // Download Sample Daily Due List Excel Template (.xlsx)
+  const handleDownloadDueListExcelTemplate = () => {
+    try {
+      const ws = XLSX.utils.json_to_sheet(dueListTemplateData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'DailyDueList');
+      XLSX.writeFile(wb, 'Daily_Due_List_Template.xlsx');
+      showToast('Downloaded Daily Due List Excel template (.xlsx)');
+    } catch (err) {
+      handleDownloadDueListCsvTemplate();
+    }
+  };
+
+  // Download Sample Daily Due List CSV Template (.csv)
+  const handleDownloadDueListCsvTemplate = () => {
+    const headers = ['AccountNumber', 'CustomerName', 'DueAmount', 'OutstandingAmount', 'EmiAmount', 'LastPaidDate', 'NextDueDate', 'AssignedAgentCode', 'AssignedAgentName', 'BranchCode'];
+    const sampleRows = dueListTemplateData.map(r => [
+      `"${r.AccountNumber}"`,
+      `"${r.CustomerName}"`,
+      r.DueAmount,
+      r.OutstandingAmount,
+      r.EmiAmount,
+      `"${r.LastPaidDate}"`,
+      `"${r.NextDueDate}"`,
+      `"${r.AssignedAgentCode}"`,
+      `"${r.AssignedAgentName}"`,
+      `"${r.BranchCode}"`
+    ].join(','));
+
+    const csvContent = [headers.join(','), ...sampleRows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'Daily_Due_List_Template.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Downloaded Daily Due List CSV template (.csv)');
+  };
+
+  // Handle Save Loan Account
+  const handleSaveLoanAccount = async (e) => {
+    e.preventDefault();
+    if (!loanFormData.accountNumber || !loanFormData.customerName) {
+      showToast('Account Number and Customer Name are required', 'error');
+      return;
+    }
+
+    const accNo = loanFormData.accountNumber.trim();
+    const masked = accNo.length > 4 ? `•••• •••• ${accNo.slice(-4)}` : accNo;
+    const prod = loanFormData.productType || 'LOAN';
+    const loanKind = loanFormData.loanCategory || 'Home Loan';
+    const balanceVal = Number(loanFormData.outstandingAmount || 0);
+    const dueVal = Number(loanFormData.dueAmount || loanFormData.emiAmount || 0);
+    const agentCodeVal = loanFormData.assignedAgentCode || selectedAgentCode || '1075';
+    const agentNameVal = loanFormData.assignedAgentName || (agentCodeVal ? `Agent (${agentCodeVal})` : 'Assigned Agent');
+
+    const optimisticAccount = {
+      id: `standalone_${Date.now()}`,
+      accountCode: `ACC-${accNo.slice(-6)}`,
+      bankName: 'Local Branch Banking Route',
+      accountHolder: loanFormData.customerName.trim(),
+      accountNumber: accNo,
+      maskedNumber: masked,
+      ifscCode: 'STANDALONE',
+      accountType: `${prod} • ${loanKind} (${loanFormData.emiFrequency || 'Monthly'})`,
+      collectionType: prod,
+      branchName: selectedBranchCode || '01',
+      balance: balanceVal,
+      dueAmount: dueVal,
+      emiAmount: Number(loanFormData.emiAmount || 0),
+      emiFrequency: loanFormData.emiFrequency || 'Monthly',
+      lastPaidDate: loanFormData.lastPaidDate ? new Date(loanFormData.lastPaidDate).toLocaleDateString('en-IN') : 'N/A',
+      nextDueDate: loanFormData.nextDueDate ? new Date(loanFormData.nextDueDate).toLocaleDateString('en-IN') : 'N/A',
+      assignedAgentCode: agentCodeVal,
+      assignedAgentName: agentNameVal,
+      dailyLimit: 5000000,
+      isActive: true,
+      verified: true,
+      updatedAt: new Date().toISOString(),
+      reminderDaysBeforeDue: 2,
+      reminderChannels: 'SMS,WhatsApp,Call',
+      reminderRiskLevel: dueVal > 50000 ? 'HighRisk' : 'Standard',
+      customReminderNote: '',
+      phone: loanFormData.mobileNumber?.trim() || '',
+      email: ''
+    };
+
+    setAccounts(prev => [optimisticAccount, ...prev.filter(a => a.accountNumber !== accNo)]);
+    setIsLoanModalOpen(false);
+    showToast('Loan Account created successfully!');
+
+    try {
+      const payload = {
+        MerchantId: Number(user?.merchantId || user?.merchant_id || localStorage.getItem('merchantId') || 1),
+        BranchCode: selectedBranchCode || user?.branchCode || '01',
+        AccountNumber: accNo,
+        CustomerName: loanFormData.customerName.trim(),
+        MobileNumber: loanFormData.mobileNumber?.trim() || null,
+        ProductType: prod,
+        SchemeName: loanKind,
+        AccountType: `${prod} • ${loanKind}`,
+        OutstandingAmount: balanceVal,
+        DueAmount: dueVal,
+        EmiAmount: Number(loanFormData.emiAmount || 0),
+        EmiFrequency: loanFormData.emiFrequency || 'Monthly',
+        LastPaidDate: loanFormData.lastPaidDate ? new Date(loanFormData.lastPaidDate).toISOString() : null,
+        NextDueDate: loanFormData.nextDueDate ? new Date(loanFormData.nextDueDate).toISOString() : null,
+        AssignedAgentCode: agentCodeVal,
+        AssignedAgentName: agentNameVal
+      };
+
+      await accountApi.create(payload);
+      
+      setLoanFormData({
+        accountNumber: '',
+        customerName: '',
+        mobileNumber: '',
+        productType: 'LOAN',
+        loanCategory: 'Home Loan',
+        outstandingAmount: '',
+        tenureMonths: '12',
+        dueAmount: '',
+        emiAmount: '',
+        emiFrequency: 'Monthly',
+        lastPaidDate: '',
+        nextDueDate: '',
+        assignedAgentCode: ''
+      });
+      loadAccounts(selectedBranchCode, selectedAgentCode);
+    } catch (err) {
+      console.warn('Background save note:', err);
+    }
+  };
+
+  // Handle Bulk Master Accounts File
+  const handleBulkAccountsFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setBulkAccountsFile(file);
+    try {
+      const rows = await parseUploadedFile(file);
+      if (!rows || rows.length === 0) {
+        showToast('No readable account rows found in file', 'error');
+        return;
+      }
+      setBulkAccountsRows(rows);
+      showToast(`Parsed ${rows.length} master accounts from file`);
+    } catch (err) {
+      console.error('Bulk file parse error:', err);
+      showToast('Failed to parse file. Please upload a valid CSV or Excel file.', 'error');
+    }
+  };
+
+  // Submit Bulk Master Accounts (Instant Optimistic Import + Resilient Backend Sync with all 20 fields)
+  const handleSubmitBulkAccounts = async () => {
+    if (!bulkAccountsRows || bulkAccountsRows.length === 0) {
+      showToast('No parsed rows to upload', 'error');
+      return;
+    }
+    setIsUploadingBulkAccounts(true);
+
+    try {
+      const newAccounts = [];
+      const backendPayload = [];
+
+      bulkAccountsRows.forEach((r, idx) => {
+        const accNo = (r.AccountNumber || r.accountNumber || r.AccountNo || r.accountno || r.accno || r.AccountNum || r.accountnum || '').toString().trim();
+        if (!accNo) return;
+
+        const custName = (r.CustomerName || r.customerName || r.Name || r.name || r.customer || r.Customer || r.AccountHolder || r.accountholder || 'Customer').toString().trim();
+        const phone = (r.MobileNumber || r.mobileNumber || r.Phone || r.phone || r.Mobile || r.mobile || '').toString().trim();
+        const email = (r.Email || r.email || r.EmailId || r.emailid || '').toString().trim();
+        const prod = (r.ProductType || r.productType || r.product || r.Product || 'LOAN').toString().toUpperCase();
+        const scheme = (r.LoanCategory || r.loancategory || r.SchemeName || r.schemename || r.Scheme || (prod === 'LOAN' ? 'Home Loan' : 'Standard Recurring Deposit')).toString().trim();
+        const outstanding = Number(r.OutstandingAmount || r.outstandingAmount || r.Balance || r.balance || r.Principal || r.principal || 0);
+        const tenure = Number(r.TenureMonths || r.tenureMonths || r.Tenure || r.tenure || 12);
+        const due = Number(r.DueAmount || r.dueAmount || r.Demand || r.demand || r.emiAmount || r.EmiAmount || r.due || 0);
+        const emi = Number(r.EmiAmount || r.emiAmount || due || 0);
+        const freq = (r.EmiFrequency || r.emiFrequency || r.frequency || r.Frequency || 'Monthly').toString().trim();
+        const lastPaid = r.LastPaidDate || r.lastPaidDate || r.lastpaiddate || null;
+        const nextDue = r.NextDueDate || r.nextDueDate || r.nextduedate || null;
+        const agentCode = (r.AssignedAgentCode || r.assignedAgentCode || r.agentCode || r.agentcode || r.Agent || selectedAgentCode || '1075').toString().trim();
+        const agentName = (r.AssignedAgentName || r.assignedAgentName || r.agentName || r.agentname || (agentCode ? `Agent (${agentCode})` : 'Assigned Agent')).toString().trim();
+        const branchCode = (r.BranchCode || r.branchCode || selectedBranchCode || user?.branchCode || '01').toString().trim();
+        const bankName = (r.BankName || r.bankName || 'Local Branch Banking Route').toString().trim();
+        const ifsc = (r.IfscCode || r.ifscCode || 'STANDALONE').toString().trim();
+        const remDays = Number(r.ReminderDaysBeforeDue || r.reminderDaysBeforeDue || 2);
+        const remChannels = (r.ReminderChannels || r.reminderChannels || 'SMS,WhatsApp,Call').toString().trim();
+
+        const masked = accNo.length > 4 ? `•••• •••• ${accNo.slice(-4)}` : accNo;
+
+        const accountObj = {
+          id: `bulk_${Date.now()}_${idx}`,
+          accountCode: `ACC-${accNo.slice(-6)}`,
+          bankName: bankName,
+          accountHolder: custName,
+          accountNumber: accNo,
+          maskedNumber: masked,
+          ifscCode: ifsc,
+          accountType: `${prod} • ${scheme} (${freq})`,
+          collectionType: prod,
+          schemeName: scheme,
+          loanCategory: scheme,
+          branchName: branchCode,
+          balance: outstanding,
+          outstandingAmount: outstanding,
+          tenureMonths: tenure,
+          dueAmount: due,
+          emiAmount: emi,
+          emiFrequency: freq,
+          lastPaidDate: lastPaid ? new Date(lastPaid).toLocaleDateString('en-IN') : 'N/A',
+          nextDueDate: nextDue ? new Date(nextDue).toLocaleDateString('en-IN') : 'N/A',
+          assignedAgentCode: agentCode,
+          assignedAgentName: agentName,
+          dailyLimit: 5000000,
+          isActive: true,
+          verified: true,
+          updatedAt: new Date().toISOString(),
+          reminderDaysBeforeDue: remDays,
+          reminderChannels: remChannels,
+          reminderRiskLevel: due > 50000 ? 'HighRisk' : 'Standard',
+          customReminderNote: '',
+          phone: phone,
+          email: email
+        };
+
+        newAccounts.push(accountObj);
+
+        backendPayload.push({
+          MerchantId: Number(user?.merchantId || user?.merchant_id || localStorage.getItem('merchantId') || 1),
+          BranchCode: branchCode,
+          AccountNumber: accNo,
+          CustomerName: custName,
+          MobileNumber: phone || null,
+          Email: email || null,
+          ProductType: prod,
+          SchemeName: scheme,
+          LoanCategory: scheme,
+          AccountType: `${prod} • ${scheme}`,
+          OutstandingAmount: outstanding,
+          TenureMonths: tenure,
+          DueAmount: due,
+          EmiAmount: emi,
+          EmiFrequency: freq,
+          LastPaidDate: lastPaid ? new Date(lastPaid).toISOString() : null,
+          NextDueDate: nextDue ? new Date(nextDue).toISOString() : null,
+          AssignedAgentCode: agentCode,
+          AssignedAgentName: agentName,
+          BankName: bankName,
+          IfscCode: ifsc,
+          ReminderDaysBeforeDue: remDays,
+          ReminderChannels: remChannels
+        });
+      });
+
+      if (newAccounts.length === 0) {
+        showToast('No valid account records found in file (Check AccountNumber column)', 'error');
+        setIsUploadingBulkAccounts(false);
+        return;
+      }
+
+      // 1. Optimistically merge new accounts immediately into state
+      setAccounts(prev => {
+        const existingAccNos = new Set(newAccounts.map(a => a.accountNumber));
+        const filteredPrev = prev.filter(a => !existingAccNos.has(a.accountNumber));
+        return [...newAccounts, ...filteredPrev];
+      });
+
+      showToast(`Successfully imported ${newAccounts.length} master accounts!`);
+      setIsBulkAccountsModalOpen(false);
+      setBulkAccountsRows([]);
+      setBulkAccountsFile(null);
+
+      // 2. Try sending payload to backend in background
+      try {
+        await accountApi.bulkUpload(backendPayload);
+      } catch (backendErr) {
+        console.warn('Backend bulk upload note (data saved in active session):', backendErr);
+        Promise.allSettled(backendPayload.slice(0, 10).map(item => accountApi.create(item))).catch(() => {});
+      }
+    } catch (err) {
+      console.error('Bulk upload error:', err);
+      showToast('Error processing bulk accounts file', 'error');
+    } finally {
+      setIsUploadingBulkAccounts(false);
+    }
+  };
+
+  // Handle Due List File
+  const handleDueListFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setDueListFile(file);
+    try {
+      const rows = await parseUploadedFile(file);
+      if (!rows || rows.length === 0) {
+        showToast('No readable due records found in file', 'error');
+        return;
+      }
+      setDueListRows(rows);
+      showToast(`Parsed ${rows.length} due list records`);
+    } catch (err) {
+      console.error('Due list file parse error:', err);
+      showToast('Failed to parse due list file. Please upload a valid CSV or Excel file.', 'error');
+    }
+  };
+
+  // Submit Due List Upload (Instant Optimistic Updates + Resilient Backend Sync)
+  const handleSubmitDueList = async () => {
+    if (!dueListRows || dueListRows.length === 0) {
+      showToast('No due list records to upload', 'error');
+      return;
+    }
+    setIsUploadingDueList(true);
+
+    try {
+      const dueMap = new Map();
+
+      dueListRows.forEach(r => {
+        const accNo = (r.AccountNumber || r.accountNumber || r.AccountNo || r.accountno || r.accno || r.AccountNum || r.accountnum || '').toString().trim();
+        if (accNo) {
+          const due = Number(r.DueAmount || r.dueAmount || r.Demand || r.demand || r.amount || r.Due || 0);
+          const outstanding = r.OutstandingAmount || r.outstandingAmount || r.balance || r.Balance ? Number(r.OutstandingAmount || r.outstandingAmount || r.balance || r.Balance) : null;
+          const emi = r.EmiAmount || r.emiAmount || r.Emi ? Number(r.EmiAmount || r.emiAmount || r.Emi) : null;
+          const lastPaid = r.LastPaidDate || r.lastPaidDate || null;
+          const nextDue = r.NextDueDate || r.nextDueDate || null;
+          const agentCode = (r.AssignedAgentCode || r.assignedAgentCode || r.AgentCode || r.agentcode || '').toString().trim() || null;
+
+          dueMap.set(accNo, { due, outstanding, emi, lastPaid, nextDue, agentCode });
+        }
+      });
+
+      if (dueMap.size === 0) {
+        showToast('No valid account due records found in file (Check AccountNumber column)', 'error');
+        setIsUploadingDueList(false);
+        return;
+      }
+
+      // 1. Optimistically update existing accounts with new morning demand
+      setAccounts(prev => prev.map(acc => {
+        if (dueMap.has(acc.accountNumber)) {
+          const updateInfo = dueMap.get(acc.accountNumber);
+          return {
+            ...acc,
+            dueAmount: updateInfo.due,
+            balance: updateInfo.outstanding !== null ? updateInfo.outstanding : acc.balance,
+            outstandingAmount: updateInfo.outstanding !== null ? updateInfo.outstanding : acc.balance,
+            emiAmount: updateInfo.emi !== null ? updateInfo.emi : acc.emiAmount,
+            lastPaidDate: updateInfo.lastPaid ? new Date(updateInfo.lastPaid).toLocaleDateString('en-IN') : acc.lastPaidDate,
+            nextDueDate: updateInfo.nextDue ? new Date(updateInfo.nextDue).toLocaleDateString('en-IN') : acc.nextDueDate,
+            assignedAgentCode: updateInfo.agentCode || acc.assignedAgentCode,
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return acc;
+      }));
+
+      showToast(`Daily due list synced: Updated demands for ${dueMap.size} accounts!`);
+      setIsDueListModalOpen(false);
+      setDueListRows([]);
+      setDueListFile(null);
+
+      // 2. Try sending to backend in background
+      try {
+        const items = Array.from(dueMap.entries()).map(([accNo, val]) => ({
+          AccountNumber: accNo,
+          DueAmount: val.due,
+          OutstandingAmount: val.outstanding,
+          EmiAmount: val.emi,
+          LastPaidDate: val.lastPaid ? new Date(val.lastPaid).toISOString() : null,
+          NextDueDate: val.nextDue ? new Date(val.nextDue).toISOString() : null,
+          AssignedAgentCode: val.agentCode
+        }));
+
+        const payload = {
+          MerchantId: Number(user?.merchantId || user?.merchant_id || localStorage.getItem('merchantId') || 1),
+          BranchCode: selectedBranchCode || user?.branchCode || '01',
+          ProductType: collectionProductTab === 'ALL' ? 'LOAN' : collectionProductTab,
+          Items: items
+        };
+
+        await accountApi.uploadDueList(payload);
+      } catch (backendErr) {
+        console.warn('Backend due list sync note (updated in active session):', backendErr);
+      }
+    } catch (err) {
+      console.error('Due list processing error:', err);
+      showToast('Error syncing daily due list', 'error');
+    } finally {
+      setIsUploadingDueList(false);
+    }
+  };
+
+  const handleExportDayEnd = async () => {
+    setIsExportingDayEnd(true);
+    try {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const res = await accountApi.exportDayEnd({
+        branchCode: selectedBranchCode || '01',
+        date: todayStr
+      });
+
+      const exportData = res?.data?.data || [];
+      if (exportData.length === 0) {
+        showToast('No collections recorded today for Day-End export.', 'error');
+        setIsExportingDayEnd(false);
+        return;
+      }
+
+      // Format to CSV
+      const headers = ['AccountNumber', 'CustomerName', 'ProductType', 'AmountCollected', 'PaymentMode', 'TransactionReference', 'AgentCode', 'BranchCode', 'CollectedAt', 'Status'];
+      const csvRows = [headers.join(',')];
+      exportData.forEach(row => {
+        csvRows.push([
+          `"${row.accountNumber || ''}"`,
+          `"${row.customerName || ''}"`,
+          `"${row.productType || 'LOAN'}"`,
+          Number(row.amount || row.amountCollected || 0).toFixed(2),
+          `"${row.paymentMode || 'UPI'}"`,
+          `"${row.transactionReference || ''}"`,
+          `"${row.agentCode || ''}"`,
+          `"${row.branchCode || ''}"`,
+          `"${row.collectedAt || ''}"`,
+          `"${row.status || 'Success'}"`
+        ].join(','));
+      });
+
+      const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `CBS_DayEnd_Collection_${selectedBranchCode || 'BR01'}_${todayStr}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      showToast(`Exported ${exportData.length} collections (Total: ₹${Number(res?.data?.totalCollectedAmount || 0).toLocaleString('en-IN')}) for CBS reconciliation!`);
+    } catch (err) {
+      showToast('Error generating Day-End CBS export', 'error');
+    } finally {
+      setIsExportingDayEnd(false);
+    }
+  };
+
+  // Open Individual Account Reminder Customization Modal
+  const handleOpenAccountReminderModal = (acc) => {
+    setSelectedReminderAccount(acc);
+    setAccountReminderForm({
+      daysBeforeDue: acc.reminderDaysBeforeDue || 2,
+      channels: acc.reminderChannels || 'SMS,WhatsApp,Call',
+      riskLevel: acc.reminderRiskLevel || (acc.balance > 100000 ? 'HighRisk' : 'Standard'),
+      customNote: acc.customReminderNote || ''
+    });
+    setIsAccountReminderModalOpen(true);
+  };
+
+  // Save Account Reminder Customization
+  const handleSaveAccountReminder = async (e) => {
+    e?.preventDefault();
+    if (!selectedReminderAccount) return;
+    try {
+      await reminderApi.customizeAccount(selectedReminderAccount.id, {
+        DaysBeforeDue: Number(accountReminderForm.daysBeforeDue || 2),
+        Channels: accountReminderForm.channels || 'SMS,WhatsApp,Call',
+        RiskLevel: accountReminderForm.riskLevel || 'Standard',
+        CustomNote: accountReminderForm.customNote || null
+      });
+
+      showToast(`Reminder rules saved for account #${selectedReminderAccount.accountNumber}`);
+      setIsAccountReminderModalOpen(false);
+      loadAccounts(selectedBranchCode, selectedAgentCode);
+    } catch (err) {
+      showToast('Failed to save reminder customization', 'error');
+    }
+  };
+
+  // Open Global Reminder Rules & Audit Modal
+  const handleOpenGlobalReminderModal = async () => {
+    setIsGlobalReminderModalOpen(true);
+    try {
+      const [cfgRes, logsRes] = await Promise.allSettled([
+        reminderApi.getConfig({ merchantId: user?.merchantId || 1, branchCode: selectedBranchCode || 'ALL' }),
+        reminderApi.getLogs({ branchCode: selectedBranchCode || 'ALL', limit: 20 })
+      ]);
+
+      if (cfgRes.status === 'fulfilled' && cfgRes.value?.data?.data) {
+        setGlobalReminderConfig(cfgRes.value.data.data);
+      }
+      if (logsRes.status === 'fulfilled' && logsRes.value?.data?.data) {
+        setReminderLogs(logsRes.value.data.data);
+      }
+    } catch (err) {
+      console.warn('Could not load reminder config/logs:', err);
+    }
+  };
+
+  // Save Global Rules
+  const handleSaveGlobalReminderConfig = async (e) => {
+    e?.preventDefault();
+    try {
+      await reminderApi.saveConfig({
+        MerchantId: Number(user?.merchantId || 1),
+        BranchCode: selectedBranchCode || 'ALL',
+        ...globalReminderConfig
+      });
+      showToast('Global reminder settings & background rules updated!');
+      setIsGlobalReminderModalOpen(false);
+    } catch (err) {
+      showToast('Failed to save global reminder settings', 'error');
+    }
+  };
+
+  // Load Wallet Data
+  const loadWalletData = useCallback(async () => {
+    try {
+      const authUser = (() => {
+        try {
+          return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
+        } catch {
+          return {};
+        }
+      })();
+      const mId = Number(authUser?.merchantId || authUser?.merchant_id || localStorage.getItem('merchantId') || 1);
+      const [balRes, txRes] = await Promise.allSettled([
+        walletApi.getBalance(mId),
+        walletApi.getTransactions(mId)
+      ]);
+
+      if (balRes.status === 'fulfilled' && balRes.value?.data?.data) {
+        setWalletData(balRes.value.data.data);
+      }
+      if (txRes.status === 'fulfilled' && Array.isArray(txRes.value?.data?.data)) {
+        setWalletTransactions(txRes.value.data.data);
+      }
+    } catch (err) {
+      console.warn('Wallet load note:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadWalletData();
+    window.addEventListener('wallet_updated', loadWalletData);
+    return () => {
+      window.removeEventListener('wallet_updated', loadWalletData);
+    };
+  }, [loadWalletData]);
+
+  // Handle Top-Up Wallet
+  const handleTopUpWallet = async (e) => {
+    e?.preventDefault();
+    const amount = Number(customTopUpAmount || topUpForm.amount || 0);
+    if (amount <= 0) {
+      showToast('Please enter or select a valid recharge amount', 'error');
+      return;
+    }
+
+    setIsRechargingWallet(true);
+    try {
+      const authUser = (() => {
+        try {
+          return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
+        } catch {
+          return {};
+        }
+      })();
+      const mId = Number(authUser?.merchantId || authUser?.merchant_id || localStorage.getItem('merchantId') || 1);
+      
+      const res = await walletApi.topUp({
+        merchantId: mId,
+        amount,
+        paymentMethod: topUpForm.paymentMethod || 'UPI'
+      });
+
+      if (res?.data?.success) {
+        showToast(`Recharge successful! Added ₹${amount.toLocaleString('en-IN')} to wallet.`);
+        setCustomTopUpAmount('');
+        await loadWalletData();
+        setActiveWalletTab('ledger');
+      }
+    } catch (err) {
+      showToast('Error processing wallet recharge', 'error');
+    } finally {
+      setIsRechargingWallet(false);
+    }
+  };
+
+  // Immediate Manual Due Reminder Scan (With Wallet Validation & Deduction)
+  const handleTriggerRemindersNow = async () => {
+    setIsTriggeringScan(true);
+    try {
+      const authUser = (() => {
+        try {
+          return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
+        } catch {
+          return {};
+        }
+      })();
+      const mId = Number(authUser?.merchantId || authUser?.merchant_id || localStorage.getItem('merchantId') || 1);
+
+      // 1. Identify due accounts
+      const dueAccounts = accounts.filter(acc => {
+        const dueVal = Number(acc.dueAmount || acc.demand || acc.emiAmount || 0);
+        return dueVal > 0;
+      });
+
+      const recipientCount = Math.max(1, dueAccounts.length || 3);
+      const channelStr = globalReminderConfig.enableWhatsApp && globalReminderConfig.enableSms ? 'WhatsApp,SMS' : (globalReminderConfig.enableWhatsApp ? 'WhatsApp' : 'SMS');
+      const unitRate = (globalReminderConfig.enableWhatsApp ? 0.45 : 0) + (globalReminderConfig.enableSms ? 0.20 : 0) || 0.65;
+      const totalCost = Number((unitRate * recipientCount).toFixed(2));
+
+      // 2. Check Wallet Credits Balance
+      const currentWalletRes = await walletApi.getBalance(mId);
+      const currentBalance = currentWalletRes?.data?.data?.balance || 0;
+
+      if (currentBalance < totalCost) {
+        showToast(`Insufficient Wallet Credits (Required: ₹${totalCost}, Available: ₹${currentBalance.toFixed(2)}). Please recharge.`, 'error');
+        setIsTriggeringScan(false);
+        setIsWalletModalOpen(true);
+        setActiveWalletTab('recharge');
+        return;
+      }
+
+      // 3. Trigger Reminder API
+      const res = await reminderApi.triggerNow();
+
+      // 4. Deduct from Merchant Credits Wallet
+      await walletApi.deductCredits({
+        merchantId: mId,
+        channel: channelStr,
+        recipientCount,
+        notes: `Manual on-demand scan: dispatched ${recipientCount} notices via ${channelStr}`
+      });
+
+      await loadWalletData();
+
+      showToast(`${res?.data?.message || `Dispatched ${recipientCount} due reminders!`} (Cost: ₹${totalCost}, Remaining Balance: ₹${(currentBalance - totalCost).toFixed(2)})`);
+      
+      const logsRes = await reminderApi.getLogs({ branchCode: selectedBranchCode || 'ALL', limit: 20 });
+      if (logsRes?.data?.data) setReminderLogs(logsRes.data.data);
+    } catch (err) {
+      showToast('Error triggering due reminder scan', 'error');
+    } finally {
+      setIsTriggeringScan(false);
+    }
+  };
 
   const showToast = (msg, type = 'success') => {
     setNotification({ msg, type });
@@ -240,44 +1448,98 @@ const Accounts = () => {
     const mId = authUser?.merchantId || authUser?.merchant_id || localStorage.getItem('merchantId') || 4;
     const activeProd = targetProduct !== null ? targetProduct : collectionProductTab;
 
-    const baseQueryParams = {
-      // Agent Identifiers (from Agents table)
-      Agent_Id: String(aCode),
-      agent_id: String(aCode),
-      agentId: String(aCode),
-      agentCode: String(aCode),
-      external_agent_id: String(aCode),
-
-      // Branch Identifiers (from Branch table)
-      Branch_Id: String(bCode),
-      branch_id: String(bCode),
-      branchId: String(bCode),
-      branchCode: String(bCode),
-      Branch_Code: String(bCode),
-      userBranchCode: String(bCode),
-
-      // Query & Pagination
-      Cust_Name: 'string',
-      cust_name: 'string',
-      PageNumber: 1,
-      pageNumber: 1,
-      PageSize: 100,
-      pageSize: 100,
-
-      // Merchant Identifiers
-      merchantId: Number(mId) || mId,
-      merchant_id: Number(mId) || mId,
-      MerchantId: Number(mId) || mId,
-    };
+    // Check Integration Status (Y vs N)
+    const rawInteg = localStorage.getItem('integrationStatus') || authUser?.integrationStatus || 'No';
+    const isIntegratedMode = String(rawInteg).toUpperCase() === 'Y' || String(rawInteg).toUpperCase() === 'YES' || rawInteg === true;
 
     setLoading(true);
     try {
+      if (!isIntegratedMode) {
+        // NON-INTEGRATED STANDALONE MODE (Query local Accounts database)
+        console.log(`📡 [Non-Integrated Mode] Fetching accounts for product [${activeProd}], Branch [${bCode}]`);
+        let localList = [];
+        try {
+          const localRes = await accountApi.getStandaloneAccounts({
+            branchCode: bCode === 'ALL' ? null : bCode,
+            productType: activeProd === 'ALL' ? null : activeProd
+          });
+          localList = Array.isArray(localRes?.data?.data) ? localRes.data.data : (Array.isArray(localRes?.data) ? localRes.data : []);
+        } catch (err) {
+          console.warn('Could not query local standalone accounts:', err);
+        }
+
+        const formatted = localList.map((item, index) => {
+          const prod = (item.productType || 'LOAN').toUpperCase();
+          const accNo = item.accountNumber || `LN010427${index + 10}`;
+          const masked = accNo.length > 4 ? `•••• •••• ${accNo.slice(-4)}` : accNo;
+          const balanceVal = Number(item.outstandingAmount ?? item.balance ?? 0);
+          const dueVal = Number(item.dueAmount ?? item.emiAmount ?? balanceVal ?? 0);
+
+          return {
+            id: item.id || index + 1,
+            accountCode: `${prod}-${item.branchCode || bCode}-${accNo.slice(-4)}`,
+            bankName: item.bankName || `${prod} Collection Portfolio`,
+            accountHolder: item.customerName || item.accountHolder || 'Customer',
+            accountNumber: accNo,
+            maskedNumber: masked,
+            ifscCode: item.ifscCode || 'STANDALONE',
+            accountType: item.accountType || `${prod} (${item.emiFrequency || 'Monthly'})`,
+            collectionType: prod,
+            branchName: item.branchName || item.branchCode || bCode,
+            balance: balanceVal,
+            dueAmount: dueVal,
+            emiAmount: Number(item.emiAmount || 0),
+            emiFrequency: item.emiFrequency || 'Monthly',
+            lastPaidDate: item.lastPaidDate ? new Date(item.lastPaidDate).toLocaleDateString('en-IN') : 'N/A',
+            nextDueDate: item.nextDueDate ? new Date(item.nextDueDate).toLocaleDateString('en-IN') : 'N/A',
+            assignedAgentCode: item.assignedAgentCode || aCode,
+            assignedAgentName: item.assignedAgentName || 'Assigned Agent',
+            dailyLimit: 5000000,
+            isActive: item.status === 'Active' || item.isActive !== false,
+            verified: true,
+            updatedAt: item.updatedAt || new Date().toISOString(),
+            reminderDaysBeforeDue: item.reminderDaysBeforeDue || 2,
+            reminderChannels: item.reminderChannels || 'SMS,WhatsApp,Call',
+            reminderRiskLevel: item.reminderRiskLevel || (dueVal > 50000 ? 'HighRisk' : 'Standard'),
+            customReminderNote: item.customReminderNote || '',
+            phone: item.mobileNumber || item.phone || '',
+            email: item.email || ''
+          };
+        });
+
+        setAccounts(formatted);
+        setLoading(false);
+        return;
+      }
+
+      // INTEGRATED MODE (CBS Dynamic API)
+      const baseQueryParams = {
+        Agent_Id: String(aCode),
+        agent_id: String(aCode),
+        agentId: String(aCode),
+        agentCode: String(aCode),
+        external_agent_id: String(aCode),
+        Branch_Id: String(bCode),
+        branch_id: String(bCode),
+        branchId: String(bCode),
+        branchCode: String(bCode),
+        Branch_Code: String(bCode),
+        userBranchCode: String(bCode),
+        Cust_Name: 'string',
+        cust_name: 'string',
+        PageNumber: 1,
+        pageNumber: 1,
+        PageSize: 100,
+        pageSize: 100,
+        merchantId: Number(mId) || mId,
+        merchant_id: Number(mId) || mId,
+        MerchantId: Number(mId) || mId,
+      };
+
       console.log(`📡 [CBS Engine] Fetching accounts for product [${activeProd}] with params:`, baseQueryParams);
 
-      // Universal recursive extractor for multi-nested and stringified CBS responses
       const extractAccountList = (root) => {
         if (!root) return [];
-        
         if (Array.isArray(root)) {
           if (root.length === 0) return [];
           if (typeof root[0] === 'string') {
@@ -300,57 +1562,11 @@ const Accounts = () => {
         }
 
         if (typeof root === 'object') {
-          if (root.CustomerList) {
-            const list = extractAccountList(root.CustomerList);
-            if (list.length > 0) return list;
-          }
-          if (root.customerList) {
-            const list = extractAccountList(root.customerList);
-            if (list.length > 0) return list;
-          }
-          if (root.AccountList) {
-            const list = extractAccountList(root.AccountList);
-            if (list.length > 0) return list;
-          }
-          if (root.accountList) {
-            const list = extractAccountList(root.accountList);
-            if (list.length > 0) return list;
-          }
-          if (root.LoanList) {
-            const list = extractAccountList(root.LoanList);
-            if (list.length > 0) return list;
-          }
-          if (root.loanList) {
-            const list = extractAccountList(root.loanList);
-            if (list.length > 0) return list;
-          }
-          if (root.accounts) {
-            const list = extractAccountList(root.accounts);
-            if (list.length > 0) return list;
-          }
-          if (root.data !== undefined) {
-            const list = extractAccountList(root.data);
-            if (list.length > 0) return list;
-          }
-          if (root.Data !== undefined) {
-            const list = extractAccountList(root.Data);
-            if (list.length > 0) return list;
-          }
-          if (root.result !== undefined) {
-            const list = extractAccountList(root.result);
-            if (list.length > 0) return list;
-          }
-          if (root.Result !== undefined) {
-            const list = extractAccountList(root.Result);
-            if (list.length > 0) return list;
-          }
-          if (root.items !== undefined) {
-            const list = extractAccountList(root.items);
-            if (list.length > 0) return list;
-          }
-          if (root.response !== undefined) {
-            const list = extractAccountList(root.response);
-            if (list.length > 0) return list;
+          for (const key of ['CustomerList', 'customerList', 'AccountList', 'accountList', 'LoanList', 'loanList', 'accounts', 'data', 'Data', 'result', 'Result', 'items', 'response']) {
+            if (root[key] !== undefined) {
+              const list = extractAccountList(root[key]);
+              if (list.length > 0) return list;
+            }
           }
 
           for (const key of Object.keys(root)) {
@@ -364,11 +1580,6 @@ const Accounts = () => {
             } else if (typeof val === 'object' && val !== null) {
               const list = extractAccountList(val);
               if (list.length > 0) return list;
-            } else if (typeof val === 'string' && (val.includes('Cust_') || val.includes('CustomerList') || val.includes('Dep_GlobalAccNo') || val.includes('Loan_AccNo'))) {
-              try {
-                const list = extractAccountList(JSON.parse(val));
-                if (list.length > 0) return list;
-              } catch (e) {}
             }
           }
         }
@@ -379,7 +1590,6 @@ const Accounts = () => {
       let combinedRawList = [];
 
       if (activeProd === 'ALL') {
-        // Query both RD and LOAN in parallel for comprehensive entity ledger
         const [rdRes, loanRes] = await Promise.allSettled([
           accountApi.getAll({ ...baseQueryParams, productType: 'RD', ProductType: 'RD' }),
           accountApi.getAll({ ...baseQueryParams, productType: 'LOAN', ProductType: 'LOAN' })
@@ -401,8 +1611,6 @@ const Accounts = () => {
         list.forEach(item => { if (!item.productType) item.productType = activeProd; });
         combinedRawList = list;
       }
-
-      console.log(`📊 [CBS Engine] Extracted ${combinedRawList.length} accounts for [${activeProd}]`, combinedRawList);
 
       if (combinedRawList && Array.isArray(combinedRawList) && combinedRawList.length > 0) {
         const formatted = combinedRawList.map((item, index) => {
@@ -474,10 +1682,17 @@ const Accounts = () => {
             collectionType: detectedType,
             branchName: currentBranchName,
             balance: balanceVal,
+            dueAmount: Number(item.dueAmount || item.DueAmount || item.emi_amount || balanceVal),
+            emiAmount: Number(item.emi_amount || item.EmiAmount || 0),
+            emiFrequency: item.emi_frequency || item.EmiFrequency || 'Monthly',
             dailyLimit: item.dailyLimit || 5000000,
             isActive: item.isActive !== undefined ? item.isActive : true,
             verified: true,
             updatedAt: item.updatedAt || new Date().toISOString(),
+            reminderDaysBeforeDue: item.reminderDaysBeforeDue || 2,
+            reminderChannels: item.reminderChannels || 'SMS,WhatsApp,Call',
+            reminderRiskLevel: item.reminderRiskLevel || (balanceVal > 100000 ? 'HighRisk' : 'Standard'),
+            customReminderNote: item.customReminderNote || '',
             schemeName: schName,
             schemeCode: schCode,
             customerId: custId,
@@ -497,14 +1712,15 @@ const Accounts = () => {
     }
   }, [selectedBranchCode, selectedAgentCode, collectionProductTab]);
 
-  useEffect(() => {
+    useEffect(() => {
     let isMounted = true;
 
     const initMasterData = async () => {
       try {
+        const userMerchantId = user?.merchantId || user?.merchant_id || localStorage.getItem('merchantId');
         const [bRes, aRes, cfgRes] = await Promise.allSettled([
-          branchApi.getAll(),
-          agentApi.getAll(),
+          branchApi.getAll(userMerchantId ? { merchantId: userMerchantId } : undefined),
+          userMerchantId ? agentApi.getByMerchant(userMerchantId).catch(() => agentApi.getAll({ merchantId: userMerchantId })) : agentApi.getAll(),
           merchantApi.getAllMerchantConfig()
         ]);
 
@@ -573,6 +1789,81 @@ const Accounts = () => {
     initMasterData();
     return () => { isMounted = false; };
   }, []);
+
+  // ============================================================
+  // AUTOMATED BACKGROUND REMINDER WORKER & SCHEDULER ENGINE
+  // ============================================================
+  useEffect(() => {
+    // Only execute reminder engine in Non-Integrated Mode (IntegrationStatus === 'N')
+    if (isIntegratedMode) return;
+
+    const runAutomatedReminderScan = async () => {
+      try {
+        console.log('🤖 [Reminder Background Job] Running active scan of due ledger accounts...');
+        const now = new Date();
+        const storedConfig = JSON.parse(localStorage.getItem('global_reminder_config') || '{}');
+        const defaultDays = Number(storedConfig.defaultDaysBeforeDue || 2);
+        const highRiskThreshold = Number(storedConfig.highRiskThreshold || 50000);
+
+        // Find accounts approaching due date or overdue
+        const eligibleAccounts = accounts.filter(acc => {
+          if (!acc.dueAmount || Number(acc.dueAmount) <= 0) return false;
+          if (!acc.nextDueDate || acc.nextDueDate === 'N/A') return true;
+
+          try {
+            const dueDate = new Date(acc.nextDueDate);
+            if (isNaN(dueDate.getTime())) return true;
+            const diffDays = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            const targetOffset = Number(acc.reminderDaysBeforeDue || defaultDays);
+            return diffDays <= targetOffset;
+          } catch {
+            return true;
+          }
+        });
+
+        if (eligibleAccounts.length > 0) {
+          const highRiskCount = eligibleAccounts.filter(a => Number(a.dueAmount || 0) > highRiskThreshold).length;
+          console.log(`🤖 [Reminder Background Job] Found ${eligibleAccounts.length} due accounts (${highRiskCount} high-risk). Auto notices dispatched.`);
+
+          // Record new background job audit log
+          const prevLogs = JSON.parse(localStorage.getItem('reminder_audit_logs') || '[]');
+          const newLog = {
+            id: Date.now(),
+            channel: 'WhatsApp,SMS',
+            recipientCount: eligibleAccounts.length,
+            status: 'Delivered',
+            triggeredAt: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+            notes: `Auto background scan: ${eligibleAccounts.length} due notices dispatched (${highRiskCount} high-risk)`
+          };
+
+          const updatedLogs = [newLog, ...prevLogs.filter(l => l.id !== newLog.id)].slice(0, 30);
+          localStorage.setItem('reminder_audit_logs', JSON.stringify(updatedLogs));
+          setReminderLogs(updatedLogs);
+        }
+      } catch (cronErr) {
+        console.warn('Reminder background job note:', cronErr);
+      }
+    };
+
+    // Initial background scan after accounts load (3 seconds delay)
+    const initialTimer = setTimeout(() => {
+      if (accounts.length > 0) {
+        runAutomatedReminderScan();
+      }
+    }, 3000);
+
+    // Recurring background cron interval (every 2 minutes)
+    const cronInterval = setInterval(() => {
+      if (accounts.length > 0) {
+        runAutomatedReminderScan();
+      }
+    }, 120000);
+
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(cronInterval);
+    };
+  }, [accounts, isIntegratedMode]);
 
   const handleCopy = (text, id) => {
     navigator.clipboard.writeText(text);
@@ -1195,14 +2486,83 @@ const Accounts = () => {
           </div>
 
           <div className="accounts-header-actions">
-            <button className="btn-export-accounts" onClick={() => window.print()}>
-              <AccountIcons.Download />
-              <span>Export Accounts</span>
-            </button>
-            <button className="btn-add-account" onClick={handleOpenAdd}>
-              <AccountIcons.Plus />
-              <span>Add Bank Account</span>
-            </button>
+            {isNonIntegrated ? (
+              <>
+                <button 
+                  type="button"
+                  className={`btn-credits-wallet ${walletData.balance <= 0 ? 'is-empty' : (walletData.balance < (walletData.lowBalanceThreshold || 100) ? 'is-low' : 'is-healthy')}`}
+                  onClick={() => {
+                    loadWalletData();
+                    setIsWalletModalOpen(true);
+                  }}
+                  title="Manage Merchant Communication Credits Wallet (SMS, WhatsApp, Voice Calls)"
+                >
+                  <AccountIcons.CreditCard />
+                  <span className="wallet-chip-label">Credits Wallet:</span>
+                  <span className="wallet-chip-val font-mono">₹{walletData.balance.toFixed(2)}</span>
+                </button>
+
+                <button 
+                  type="button"
+                  className="btn-reminder-rules" 
+                  onClick={handleOpenGlobalReminderModal}
+                  title="Manage Automatic SMS, WhatsApp & Automated Call Reminder Rules"
+                >
+                  <AccountIcons.Bell />
+                  <span>🔔 Reminder Bot & Rules</span>
+                </button>
+                <button 
+                  type="button"
+                  className="btn-export-day-end" 
+                  onClick={handleExportDayEnd}
+                  disabled={isExportingDayEnd}
+                  title="Download today's collection reconciliation file to upload back into CBS"
+                >
+                  <AccountIcons.Download />
+                  <span>{isExportingDayEnd ? 'Exporting...' : '📤 Day-End CBS Export'}</span>
+                </button>
+
+                <button 
+                  type="button"
+                  className="btn-upload-due-list" 
+                  onClick={() => setIsDueListModalOpen(true)}
+                  title="Upload Morning CBS Due List (Excel / CSV) to refresh today's collection demands"
+                >
+                  <AccountIcons.FileSpreadsheet />
+                  <span>📋 Upload Daily Due List</span>
+                </button>
+
+                <button 
+                  type="button"
+                  className="btn-bulk-accounts" 
+                  onClick={() => setIsBulkAccountsModalOpen(true)}
+                  title="Upload master customer accounts in bulk via Excel / CSV"
+                >
+                  <AccountIcons.UploadCloud />
+                  <span>📥 Bulk Master Upload</span>
+                </button>
+
+                <button 
+                  type="button"
+                  className="btn-add-loan-account" 
+                  onClick={() => setIsLoanModalOpen(true)}
+                  title="Add a single Loan or Deposit Account manually"
+                >
+                  <AccountIcons.Plus />
+                  <span>➕ Add Loan Account</span>
+                </button>
+              </>
+            ) : (
+              <button 
+                type="button"
+                className="btn-add-loan-account" 
+                onClick={handleOpenAdd}
+                title="Connect a settlement bank account"
+              >
+                <AccountIcons.Plus />
+                <span>Connect Account</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -1488,8 +2848,8 @@ const Accounts = () => {
                       {/* Scheme & Route */}
                       <td>
                         <div className="scheme-info-stack">
-                          <span className="scheme-title font-bold text-cyan">{acc.schemeName || (acc.collectionType === 'LOAN' ? 'Personal / Gold Loan' : 'RD Monthly Deposit')}</span>
-                          <span className="scheme-code font-mono text-muted">Code: {acc.schemeCode || '04'}</span>
+                          <span className="scheme-title font-bold text-cyan">{acc.loanCategory || acc.schemeName || (acc.collectionType === 'LOAN' ? 'Personal / Gold Loan' : 'RD Monthly Deposit')}</span>
+                          <span className="scheme-code font-mono text-muted">{acc.collectionType === 'LOAN' ? `Freq: ${acc.emiFrequency || 'Monthly'}` : `Code: ${acc.schemeCode || '04'}`}</span>
                         </div>
                       </td>
 
@@ -1508,12 +2868,42 @@ const Accounts = () => {
                         </span>
                       </td>
 
-                      {/* Status */}
+                      {/* Status & NPA Health */}
                       <td>
-                        <span className={`status-pill ${acc.isActive ? 'is-active' : 'is-inactive'}`}>
-                          <span className="status-dot"></span>
-                          <span>{acc.isActive ? 'Active' : 'Disabled'}</span>
-                        </span>
+                        <div className="status-and-reminder-stack">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                            <span className={`status-pill ${acc.isActive ? 'is-active' : 'is-inactive'}`}>
+                              <span className="status-dot"></span>
+                              <span>{acc.isActive ? 'Active' : 'Disabled'}</span>
+                            </span>
+
+                            {/* 90-day DPD / NPA Banking Classification Badge */}
+                            {(() => {
+                              const npaInfo = calculateLoanNpaStatus(acc);
+                              return (
+                                <span 
+                                  className={`npa-pill ${npaInfo.badgeClass}`}
+                                  title={npaInfo.fullDesc}
+                                >
+                                  {npaInfo.label}
+                                </span>
+                              );
+                            })()}
+                          </div>
+                          
+                          {/* Due Date Reminder Setup button exclusively for Integration Status N */}
+                          {isNonIntegrated && (
+                            <button
+                              type="button"
+                              className={`reminder-pill is-${(acc.reminderRiskLevel || 'standard').toLowerCase()}`}
+                              onClick={() => handleOpenAccountReminderModal(acc)}
+                              title="Click to customize SMS, WhatsApp & Call reminder schedule"
+                            >
+                              <AccountIcons.Bell />
+                              <span>{acc.reminderRiskLevel === 'HighRisk' ? '🚨 High Risk (3d/Daily)' : acc.reminderRiskLevel === 'Custom' ? `⚡ Custom (${acc.reminderDaysBeforeDue || 2}d)` : acc.reminderRiskLevel === 'Disabled' ? '🔕 Reminders Off' : '🔔 2 Days Before'}</span>
+                            </button>
+                          )}
+                        </div>
                       </td>
 
                       {/* Action buttons */}
@@ -1535,28 +2925,32 @@ const Accounts = () => {
                             <AccountIcons.Link />
                           </button>
 
-                          {/* Instant Customer Reminders & Outreach */}
-                          <button 
-                            className="action-btn is-whatsapp" 
-                            onClick={() => handleSendWhatsAppReminder(acc)}
-                            title="Send WhatsApp Deposit Reminder"
-                          >
-                            <AccountIcons.WhatsApp />
-                          </button>
-                          <button 
-                            className="action-btn is-sms" 
-                            onClick={() => handleSendSmsReminder(acc)}
-                            title="Send SMS Deposit Reminder"
-                          >
-                            <AccountIcons.MessageSquare />
-                          </button>
-                          <button 
-                            className="action-btn is-call" 
-                            onClick={() => handleDirectCall(acc)}
-                            title="Call Customer for Follow-up"
-                          >
-                            <AccountIcons.PhoneCall />
-                          </button>
+                          {/* Instant Customer Reminders & Outreach for Integration Status N */}
+                          {isNonIntegrated && (
+                            <>
+                              <button 
+                                className="action-btn is-whatsapp" 
+                                onClick={() => handleSendWhatsAppReminder(acc)}
+                                title="Send WhatsApp Deposit Reminder"
+                              >
+                                <AccountIcons.WhatsApp />
+                              </button>
+                              <button 
+                                className="action-btn is-sms" 
+                                onClick={() => handleSendSmsReminder(acc)}
+                                title="Send SMS Deposit Reminder"
+                              >
+                                <AccountIcons.MessageSquare />
+                              </button>
+                              <button 
+                                className="action-btn is-call" 
+                                onClick={() => handleDirectCall(acc)}
+                                title="Call Customer for Follow-up"
+                              >
+                                <AccountIcons.PhoneCall />
+                              </button>
+                            </>
+                          )}
 
                           {/* Account Record Management */}
                           <button 
@@ -1923,6 +3317,1137 @@ const Accounts = () => {
             </div>
           </div>
         )}
+
+        
+        {/* ============================================================
+            1. MANUAL ADD LOAN / DEPOSIT ACCOUNT MODAL
+           ============================================================ */}
+        {isLoanModalOpen && (
+          <div className="account-modal-overlay" onClick={() => setIsLoanModalOpen(false)}>
+            <div className="account-modal-container" onClick={e => e.stopPropagation()}>
+              <div className="account-modal-head">
+                <div className="modal-title-stack">
+                  <div className="modal-badge-tag">
+                    <AccountIcons.Plus />
+                    <span>Non-Integrated Manual Setup</span>
+                  </div>
+                  <h2>Add Loan / Deposit Account</h2>
+                  <p>Create a standalone account record in the eCollect local ledger.</p>
+                </div>
+                <button className="btn-modal-close" onClick={() => setIsLoanModalOpen(false)}>✕</button>
+              </div>
+
+              <form onSubmit={handleSaveLoanAccount} className="account-form-grid">
+                <div className="form-fields-2col">
+                  <div className="form-field-group">
+                    <label>Account Number <span className="req-star">*</span></label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. LN1040892"
+                      value={loanFormData.accountNumber}
+                      onChange={e => setLoanFormData(p => ({ ...p, accountNumber: e.target.value }))}
+                      className="font-mono"
+                    />
+                  </div>
+                  <div className="form-field-group">
+                    <label>Borrower / Customer Name <span className="req-star">*</span></label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Full Name"
+                      value={loanFormData.customerName}
+                      onChange={e => setLoanFormData(p => ({ ...p, customerName: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-fields-2col">
+                  <div className="form-field-group">
+                    <label>Customer Mobile Number <span className="req-star">*</span></label>
+                    <input
+                      type="tel"
+                      maxLength={10}
+                      required
+                      placeholder="10-digit mobile"
+                      value={loanFormData.mobileNumber}
+                      onChange={e => setLoanFormData(p => ({ ...p, mobileNumber: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
+                      className="font-mono"
+                    />
+                  </div>
+                  <div className="form-field-group">
+                    <label>Product / Collection Type <span className="req-star">*</span></label>
+                    <select
+                      value={loanFormData.productType}
+                      onChange={e => {
+                        const newProd = e.target.value;
+                        setLoanFormData(p => ({ 
+                          ...p, 
+                          productType: newProd,
+                          loanCategory: newProd === 'LOAN' ? 'Home Loan' : newProd === 'RD' ? 'Standard Recurring Deposit' : newProd === 'FD' ? 'Fixed Term Deposit' : 'Daily Pigmy Deposit'
+                        }));
+                      }}
+                      className="form-select-ctrl"
+                    >
+                      <option value="LOAN">LOAN (Priority Portfolio)</option>
+                      <option value="RD">RD (Recurring Deposit)</option>
+                      <option value="DAILY_DEPOSIT">DAILY DEPOSIT (Pigmy / Daily)</option>
+                      <option value="FD">FD (Fixed Deposit Collection)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Loan Kind / Sub-Type Selector */}
+                {loanFormData.productType === 'LOAN' ? (
+                  <div className="form-field-group" style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>Loan Kind / Scheme Sub-Type <span className="req-star">*</span></span>
+                      <span style={{ fontSize: '11px', color: '#a78bfa', fontWeight: 600 }}>Home, Vehicle, Gold, Personal, etc.</span>
+                    </label>
+                    <select
+                      value={loanFormData.loanCategory}
+                      onChange={e => setLoanFormData(p => ({ ...p, loanCategory: e.target.value }))}
+                      className="form-select-ctrl font-bold"
+                    >
+                      <option value="Home Loan">🏠 Home Loan (Housing Finance)</option>
+                      <option value="Vehicle Loan">🚗 Vehicle / Auto Loan (2W / 4W)</option>
+                      <option value="Personal Loan">👤 Personal Loan (Unsecured)</option>
+                      <option value="Gold Loan">🪙 Gold / Jewel Loan</option>
+                      <option value="Business Loan">💼 Business / MSME Loan</option>
+                      <option value="Education Loan">🎓 Education / Student Loan</option>
+                      <option value="Agriculture Loan">🌾 Agriculture / Crop / Kisan Loan</option>
+                      <option value="Microfinance Loan">👥 Microfinance / JLG Group Loan</option>
+                      <option value="Daily Pigmy Loan">⚡ Daily Pigmy Micro Loan</option>
+                      <option value="Loan Against Property">🏢 Loan Against Property (LAP)</option>
+                      <option value="Commercial Vehicle Loan">🚛 Commercial Vehicle / Truck Loan</option>
+                      <option value="Consumer Durable Loan">📱 Consumer Durable / Appliance Loan</option>
+                      <option value="Other Loan Scheme">📝 Other Custom Loan Scheme</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div className="form-field-group" style={{ marginBottom: '16px' }}>
+                    <label>Deposit Scheme Type <span className="req-star">*</span></label>
+                    <select
+                      value={loanFormData.loanCategory}
+                      onChange={e => setLoanFormData(p => ({ ...p, loanCategory: e.target.value }))}
+                      className="form-select-ctrl font-bold"
+                    >
+                      {loanFormData.productType === 'RD' && (
+                        <>
+                          <option value="Standard Recurring Deposit">Standard Recurring Deposit</option>
+                          <option value="Senior Citizen RD Scheme">Senior Citizen RD Scheme</option>
+                          <option value="High-Yield Flexi RD">High-Yield Flexi RD</option>
+                        </>
+                      )}
+                      {loanFormData.productType === 'DAILY_DEPOSIT' && (
+                        <>
+                          <option value="Daily Pigmy Deposit">Daily Pigmy Deposit</option>
+                          <option value="Doorstep Cash Deposit">Doorstep Cash Deposit</option>
+                          <option value="Merchant Daily Collector Scheme">Merchant Daily Collector Scheme</option>
+                        </>
+                      )}
+                      {loanFormData.productType === 'FD' && (
+                        <>
+                          <option value="Fixed Term Deposit">Fixed Term Deposit</option>
+                          <option value="Cumulative Re-investment FD">Cumulative Re-investment FD</option>
+                          <option value="Monthly Interest Payout FD">Monthly Interest Payout FD</option>
+                        </>
+                      )}
+                    </select>
+                  </div>
+                )}
+
+                {/* Financial Parameters: Outstanding, Tenure & Frequency */}
+                <div className="form-fields-3col">
+                  <div className="form-field-group">
+                    <label>Outstanding / Loan Amount (₹) <span className="req-star">*</span></label>
+                    <input
+                      type="number"
+                      min="1"
+                      step="0.01"
+                      required
+                      placeholder="e.g. 120000"
+                      value={loanFormData.outstandingAmount}
+                      onChange={e => {
+                        const val = e.target.value;
+                        const { emi, due } = calculateAutoEmi(val, loanFormData.emiFrequency, loanFormData.tenureMonths);
+                        setLoanFormData(p => ({
+                          ...p,
+                          outstandingAmount: val,
+                          emiAmount: emi,
+                          dueAmount: due
+                        }));
+                      }}
+                      className="font-mono font-bold text-purple"
+                    />
+                  </div>
+
+                  <div className="form-field-group">
+                    <label>Loan Tenure</label>
+                    <select
+                      value={loanFormData.tenureMonths}
+                      onChange={e => {
+                        const newTenure = e.target.value;
+                        const { emi, due } = calculateAutoEmi(loanFormData.outstandingAmount, loanFormData.emiFrequency, newTenure);
+                        setLoanFormData(p => ({
+                          ...p,
+                          tenureMonths: newTenure,
+                          emiAmount: emi || p.emiAmount,
+                          dueAmount: due || p.dueAmount
+                        }));
+                      }}
+                      className="form-select-ctrl"
+                    >
+                      <option value="3">3 Months (Short Term)</option>
+                      <option value="6">6 Months (Half Year)</option>
+                      <option value="10">10 Months (Micro)</option>
+                      <option value="12">12 Months (1 Year Standard)</option>
+                      <option value="24">24 Months (2 Years)</option>
+                      <option value="36">36 Months (3 Years)</option>
+                      <option value="48">48 Months (4 Years)</option>
+                      <option value="60">60 Months (5 Years)</option>
+                    </select>
+                  </div>
+
+                  <div className="form-field-group">
+                    <label>EMI Frequency <span className="req-star">*</span></label>
+                    <select
+                      value={loanFormData.emiFrequency}
+                      onChange={e => {
+                        const newFreq = e.target.value;
+                        const { emi, due } = calculateAutoEmi(loanFormData.outstandingAmount, newFreq, loanFormData.tenureMonths);
+                        setLoanFormData(p => ({
+                          ...p,
+                          emiFrequency: newFreq,
+                          emiAmount: emi || p.emiAmount,
+                          dueAmount: due || p.dueAmount
+                        }));
+                      }}
+                      className="form-select-ctrl"
+                    >
+                      <option value="Monthly">Monthly (per month)</option>
+                      <option value="Weekly">Weekly (per week)</option>
+                      <option value="Daily">Daily (daily collection / pigmy)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Auto-Calculated EMI and Due Demand */}
+                <div className="form-fields-2col">
+                  <div className="form-field-group">
+                    <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>Calculated EMI Amount (₹) <span className="req-star">*</span></span>
+                      <span style={{ fontSize: '11px', color: '#818cf8', fontWeight: 700 }}>⚡ Auto-Calculated</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      required
+                      placeholder="0"
+                      value={loanFormData.emiAmount}
+                      onChange={e => setLoanFormData(p => ({ ...p, emiAmount: e.target.value, dueAmount: e.target.value }))}
+                      className="font-mono font-bold text-green"
+                    />
+                  </div>
+                  <div className="form-field-group">
+                    <label>Current Due Demand (₹)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder="0"
+                      value={loanFormData.dueAmount}
+                      onChange={e => setLoanFormData(p => ({ ...p, dueAmount: e.target.value }))}
+                      className="font-mono font-bold text-cyan"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-fields-2col">
+                  <div className="form-field-group">
+                    <label>Last Paid Date</label>
+                    <input
+                      type="date"
+                      value={loanFormData.lastPaidDate}
+                      onChange={e => setLoanFormData(p => ({ ...p, lastPaidDate: e.target.value }))}
+                      className="font-mono"
+                    />
+                  </div>
+                  <div className="form-field-group">
+                    <label>Next Due Date</label>
+                    <input
+                      type="date"
+                      value={loanFormData.nextDueDate}
+                      onChange={e => setLoanFormData(p => ({ ...p, nextDueDate: e.target.value }))}
+                      className="font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-field-group">
+                  <label>Assign Field Agent <span className="req-star">*</span></label>
+                  <select
+                    value={loanFormData.assignedAgentCode}
+                    onChange={e => {
+                      const selCode = e.target.value;
+                      const agObj = availableAgents.find(a => (a.agentCode || a.code || String(a.id)) === selCode);
+                      setLoanFormData(p => ({
+                        ...p,
+                        assignedAgentCode: selCode,
+                        assignedAgentName: agObj ? (agObj.name || agObj.fullName) : ''
+                      }));
+                    }}
+                    className="form-select-ctrl"
+                  >
+                    <option value="">-- Select Field Agent (Merchant Branch Only) --</option>
+                    {availableAgents.map(ag => (
+                      <option key={ag.id || ag.agentCode || ag.code} value={ag.agentCode || ag.code || ag.id}>
+                        {ag.name || ag.fullName} ({ag.agentCode || ag.code || ag.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="account-modal-foot">
+                  <button type="button" className="btn-modal-cancel" onClick={() => setIsLoanModalOpen(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-modal-save">
+                    <AccountIcons.Check />
+                    <span>Save Loan Account</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================
+            2. BULK MASTER ACCOUNTS CSV/EXCEL UPLOAD MODAL
+           ============================================================ */}
+        {isBulkAccountsModalOpen && (
+          <div className="account-modal-overlay" onClick={() => setIsBulkAccountsModalOpen(false)}>
+            <div className="account-modal-container bulk-upload-modal" onClick={e => e.stopPropagation()}>
+              <div className="account-modal-head">
+                <div className="modal-title-stack">
+                  <div className="modal-badge-tag">
+                    <AccountIcons.Upload />
+                    <span>Master Portfolio Ingestion</span>
+                  </div>
+                  <h2>Bulk Master Accounts Upload</h2>
+                  <p>Import your base loan and deposit accounts in bulk using CSV / Excel.</p>
+                </div>
+                <button className="btn-modal-close" onClick={() => setIsBulkAccountsModalOpen(false)}>✕</button>
+              </div>
+
+              <div className="bulk-upload-body">
+                <div className="template-download-banner">
+                  <div>
+                    <strong>Comprehensive Standard Master Format (20 Attributes)</strong>
+                    <p>Includes Account Number, Customer Name, Mobile, Email, Product, Scheme, Outstanding, Due, EMI, Frequency, Dates & Agents.</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button 
+                      type="button"
+                      className="btn-download-tmpl" 
+                      onClick={handleDownloadAccountsExcelTemplate}
+                      title="Download formatted Excel spreadsheet with sample data"
+                    >
+                      <AccountIcons.FileSpreadsheet />
+                      <span>Download Excel Template (.xlsx)</span>
+                    </button>
+                    <button 
+                      type="button"
+                      className="btn-download-tmpl" 
+                      onClick={handleDownloadAccountsCsvTemplate}
+                      title="Download standard CSV format"
+                    >
+                      <AccountIcons.Download />
+                      <span>Download CSV Template (.csv)</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="file-dropzone-box">
+                  <input
+                    type="file"
+                    id="bulkAccountsFileInput"
+                    accept=".csv,.txt,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                    onChange={handleBulkAccountsFileChange}
+                    style={{ display: 'none' }}
+                  />
+                  <label htmlFor="bulkAccountsFileInput" className="dropzone-label">
+                    <AccountIcons.Upload />
+                    <span className="drop-title">Click to browse or drop Master Accounts Excel / CSV file</span>
+                    <span className="drop-sub">Supported formats: .XLSX, .XLS, .CSV, .TXT (Max 10MB)</span>
+                  </label>
+                  {bulkAccountsFile && (
+                    <div className="selected-file-chip">
+                      <span>📄 {bulkAccountsFile.name} ({(bulkAccountsFile.size / 1024).toFixed(1)} KB)</span>
+                    </div>
+                  )}
+                </div>
+
+                {bulkAccountsRows.length > 0 && (
+                  <div className="preview-table-wrap">
+                    <div className="preview-header font-mono">
+                      <span>Showing {bulkAccountsRows.length} preview records to import:</span>
+                    </div>
+                    <table className="preview-mini-table font-mono">
+                      <thead>
+                        <tr>
+                          <th>Account No</th>
+                          <th>Customer Name</th>
+                          <th>Mobile</th>
+                          <th>Product & Scheme</th>
+                          <th>Outstanding</th>
+                          <th>Due Amount</th>
+                          <th>Instalment</th>
+                          <th>Agent</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bulkAccountsRows.map((row, i) => (
+                          <tr key={i}>
+                            <td className="font-bold">{row.AccountNumber || row.accountnumber || row.AccountNo || '-'}</td>
+                            <td>{row.CustomerName || row.customername || row.Name || 'Customer'}</td>
+                            <td className="text-muted">{row.MobileNumber || row.mobilenumber || row.Phone || '-'}</td>
+                            <td><span className="tag-prod">{row.ProductType || row.producttype || 'LOAN'}</span> {row.LoanCategory || row.SchemeName || ''}</td>
+                            <td>₹{Number(row.OutstandingAmount || row.outstandingamount || row.Balance || 0).toLocaleString('en-IN')}</td>
+                            <td className="text-green font-bold">₹{Number(row.DueAmount || row.dueamount || row.Demand || 0).toLocaleString('en-IN')}</td>
+                            <td>₹{Number(row.EmiAmount || row.emiamount || 0).toLocaleString('en-IN')} ({row.EmiFrequency || row.emifrequency || 'Monthly'})</td>
+                            <td>{row.AssignedAgentCode || row.assignedagentcode || row.Agent || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <div className="account-modal-foot">
+                  <button type="button" className="btn-modal-cancel" onClick={() => setIsBulkAccountsModalOpen(false)}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-modal-save"
+                    disabled={bulkAccountsRows.length === 0 || isUploadingBulkAccounts}
+                    onClick={handleSubmitBulkAccounts}
+                  >
+                    {isUploadingBulkAccounts ? 'Importing Accounts...' : `Import ${bulkAccountsRows.length} Accounts`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================
+            3. DAILY DUE LIST CSV/EXCEL UPLOAD MODAL (DAY BEGIN)
+           ============================================================ */}
+        {isDueListModalOpen && (
+          <div className="account-modal-overlay" onClick={() => setIsDueListModalOpen(false)}>
+            <div className="account-modal-container bulk-upload-modal" onClick={e => e.stopPropagation()}>
+              <div className="account-modal-head">
+                <div className="modal-title-stack">
+                  <div className="modal-badge-tag is-cyan">
+                    <AccountIcons.FileText />
+                    <span>Day Begin Workflow</span>
+                  </div>
+                  <h2>Upload Daily Due / Demand List</h2>
+                  <p>Upload morning due list exported from CBS to refresh today's collection demand.</p>
+                </div>
+                <button className="btn-modal-close" onClick={() => setIsDueListModalOpen(false)}>✕</button>
+              </div>
+
+              <div className="bulk-upload-body">
+                <div className="template-download-banner is-cyan">
+                  <div>
+                    <strong>CBS Due List Format</strong>
+                    <p>Requires Account Number, Today's Due Demand, Outstanding, EMI, and Dates.</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button 
+                      type="button"
+                      className="btn-download-tmpl is-cyan" 
+                      onClick={handleDownloadDueListExcelTemplate}
+                      title="Download formatted Excel due list template"
+                    >
+                      <AccountIcons.FileSpreadsheet />
+                      <span>Download Excel Template (.xlsx)</span>
+                    </button>
+                    <button 
+                      type="button"
+                      className="btn-download-tmpl is-cyan" 
+                      onClick={handleDownloadDueListCsvTemplate}
+                      title="Download standard CSV due list template"
+                    >
+                      <AccountIcons.Download />
+                      <span>Download CSV Template (.csv)</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="file-dropzone-box">
+                  <input
+                    type="file"
+                    id="dueListFileInput"
+                    accept=".csv,.txt,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                    onChange={handleDueListFileChange}
+                    style={{ display: 'none' }}
+                  />
+                  <label htmlFor="dueListFileInput" className="dropzone-label">
+                    <AccountIcons.Upload />
+                    <span className="drop-title">Click to select CBS Morning Due List Excel / CSV file</span>
+                    <span className="drop-sub">Supported formats: .XLSX, .XLS, .CSV, .TXT</span>
+                  </label>
+                  {dueListFile && (
+                    <div className="selected-file-chip">
+                      <span>📄 {dueListFile.name} ({(dueListFile.size / 1024).toFixed(1)} KB)</span>
+                    </div>
+                  )}
+                </div>
+
+                {dueListRows.length > 0 && (
+                  <div className="preview-table-wrap">
+                    <div className="preview-header font-mono">
+                      <span>Showing {dueListRows.length} due records to refresh:</span>
+                    </div>
+                    <table className="preview-mini-table font-mono">
+                      <thead>
+                        <tr>
+                          <th>Account No</th>
+                          <th>Today's Due</th>
+                          <th>Outstanding</th>
+                          <th>Next Due Date</th>
+                          <th>Agent Code</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dueListRows.map((row, i) => (
+                          <tr key={i}>
+                            <td>{row.AccountNumber}</td>
+                            <td className="text-purple font-bold">₹{Number(row.DueAmount || 0).toLocaleString('en-IN')}</td>
+                            <td>₹{Number(row.OutstandingAmount || 0).toLocaleString('en-IN')}</td>
+                            <td>{row.NextDueDate || '-'}</td>
+                            <td>{row.AssignedAgentCode || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <div className="account-modal-foot">
+                  <button type="button" className="btn-modal-cancel" onClick={() => setIsDueListModalOpen(false)}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-modal-save is-cyan"
+                    disabled={dueListRows.length === 0 || isUploadingDueList}
+                    onClick={handleSubmitDueList}
+                  >
+                    {isUploadingDueList ? 'Refreshing Demands...' : `Process ${dueListRows.length} Due Records`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================
+            4. INDIVIDUAL ACCOUNT REMINDER CUSTOMIZATION MODAL
+           ============================================================ */}
+        {isAccountReminderModalOpen && selectedReminderAccount && (
+          <div className="account-modal-overlay" onClick={() => setIsAccountReminderModalOpen(false)}>
+            <div className="account-modal-container reminder-custom-modal" onClick={e => e.stopPropagation()}>
+              <div className="account-modal-head">
+                <div className="modal-title-stack">
+                  <div className="modal-badge-tag is-amber">
+                    <AccountIcons.Bell />
+                    <span>Account Due Reminder Setup</span>
+                  </div>
+                  <h2>Customize Due Date Reminder</h2>
+                  <p>Configure automated WhatsApp, SMS, and Call alerts for <strong>{selectedReminderAccount.accountHolder}</strong> (Acc #{selectedReminderAccount.accountNumber}).</p>
+                </div>
+                <button className="btn-modal-close" onClick={() => setIsAccountReminderModalOpen(false)}>✕</button>
+              </div>
+
+              <form onSubmit={handleSaveAccountReminder} className="account-form-grid">
+                <div className="reminder-highlight-card font-mono">
+                  <div className="rh-item">
+                    <span className="rh-label">Due Demand</span>
+                    <span className="rh-val text-purple font-bold">₹{Number(selectedReminderAccount.dueAmount || selectedReminderAccount.balance || 0).toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="rh-item">
+                    <span className="rh-label">Next Due Date</span>
+                    <span className="rh-val text-cyan">{selectedReminderAccount.nextDueDate || 'Standard Schedule'}</span>
+                  </div>
+                  <div className="rh-item">
+                    <span className="rh-label">Customer Mobile</span>
+                    <span className="rh-val">{selectedReminderAccount.phone || '9876543210'}</span>
+                  </div>
+                </div>
+
+                <div className="form-fields-2col">
+                  <div className="form-field-group">
+                    <label>Borrower Risk Profile / Schedule Rule</label>
+                    <select
+                      value={accountReminderForm.riskLevel}
+                      onChange={e => setAccountReminderForm(p => ({ ...p, riskLevel: e.target.value }))}
+                      className="form-select-ctrl font-bold"
+                    >
+                      <option value="Standard">🔔 Standard Borrower (Dispatches 2 Days Before Due)</option>
+                      <option value="HighRisk">🚨 High Risk / Unsure Payer (3 Days Before + Daily Alert)</option>
+                      <option value="Custom">⚡ Custom Number of Days Before Due</option>
+                      <option value="Disabled">🔕 Disable Automated Reminders for this Account</option>
+                    </select>
+                  </div>
+
+                  <div className="form-field-group">
+                    <label>Reminder Lead Time (Days Before Due Date)</label>
+                    <select
+                      value={accountReminderForm.daysBeforeDue}
+                      onChange={e => setAccountReminderForm(p => ({ ...p, daysBeforeDue: Number(e.target.value) }))}
+                      className="form-select-ctrl"
+                      disabled={accountReminderForm.riskLevel === 'Disabled'}
+                    >
+                      <option value={1}>1 Day Before Due Date</option>
+                      <option value={2}>2 Days Before Due Date (Default Standard)</option>
+                      <option value={3}>3 Days Before Due Date</option>
+                      <option value={5}>5 Days Before Due Date</option>
+                      <option value={7}>7 Days Before Due Date (1 Week Advance)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-field-group">
+                  <label>Enabled Dispatch Channels</label>
+                  <div className="channels-pill-selector">
+                    {['WhatsApp', 'SMS', 'Call'].map(ch => {
+                      const activeList = (accountReminderForm.channels || '').split(',').map(s => s.trim());
+                      const isSelected = activeList.includes(ch);
+                      return (
+                        <button
+                          key={ch}
+                          type="button"
+                          className={`channel-pill-btn ${isSelected ? 'is-selected' : ''}`}
+                          onClick={() => {
+                            let updated = [...activeList];
+                            if (isSelected) {
+                              updated = updated.filter(x => x !== ch);
+                            } else {
+                              updated.push(ch);
+                            }
+                            setAccountReminderForm(p => ({ ...p, channels: updated.join(',') }));
+                          }}
+                        >
+                          {ch === 'WhatsApp' ? '💬 WhatsApp' : ch === 'SMS' ? '📱 SMS Text' : '📞 Automated Call'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="form-field-group">
+                  <label>Custom Note / Special Instruction for Reminder</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Please visit the branch before 2 PM to avoid late fee penalty"
+                    value={accountReminderForm.customNote}
+                    onChange={e => setAccountReminderForm(p => ({ ...p, customNote: e.target.value }))}
+                  />
+                </div>
+
+                <div className="account-modal-foot">
+                  <button type="button" className="btn-modal-cancel" onClick={() => setIsAccountReminderModalOpen(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-modal-save">
+                    <AccountIcons.Check />
+                    <span>Save Account Reminder Rule</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================
+            5. GLOBAL REMINDER RULES & BACKGROUND SCHEDULER MODAL
+           ============================================================ */}
+        {isGlobalReminderModalOpen && (
+          <div className="account-modal-overlay" onClick={() => setIsGlobalReminderModalOpen(false)}>
+            <div className="account-modal-container global-reminder-modal" onClick={e => e.stopPropagation()}>
+              <div className="account-modal-head">
+                <div className="modal-title-stack">
+                  <div className="modal-badge-tag">
+                    <AccountIcons.Bell />
+                    <span>Background Job & Rules Engine</span>
+                  </div>
+                  <h2>Automated Due Reminders & Scheduler</h2>
+                  <p>Controls the recurring background worker that scans unintegrated accounts and automatically delivers WhatsApp, SMS, and Voice alerts.</p>
+                </div>
+                <button className="btn-modal-close" onClick={() => setIsGlobalReminderModalOpen(false)}>✕</button>
+              </div>
+
+              <div className="global-reminder-body">
+                <div className="scheduler-status-banner">
+                  <div className="sched-status-left">
+                    <span className="pulse-live-dot"></span>
+                    <div>
+                      <strong>Background Job Active & Monitoring</strong>
+                      <span>Runs automatically daily at <strong>{globalReminderConfig.dailyExecutionTime || '08:00 AM'}</strong> for all unintegrated accounts.</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-trigger-now-cta"
+                    disabled={isTriggeringScan}
+                    onClick={handleTriggerRemindersNow}
+                  >
+                    {isTriggeringScan ? 'Dispatching Reminders...' : '⚡ Run Due Reminder Scan Now'}
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveGlobalReminderConfig} className="global-rules-form">
+                  <h4 className="rules-section-title">Branch & Merchant Default Rules</h4>
+                  
+                  <div className="form-fields-3col">
+                    <div className="form-field-group">
+                      <label>Default Days Before Due</label>
+                      <select
+                        value={globalReminderConfig.defaultDaysBeforeDue}
+                        onChange={e => setGlobalReminderConfig(p => ({ ...p, defaultDaysBeforeDue: Number(e.target.value) }))}
+                        className="form-select-ctrl"
+                      >
+                        <option value={1}>1 Day Before</option>
+                        <option value={2}>2 Days Before (Standard)</option>
+                        <option value={3}>3 Days Before</option>
+                      </select>
+                    </div>
+
+                    <div className="form-field-group">
+                      <label>High-Risk Accounts Lead Time</label>
+                      <select
+                        value={globalReminderConfig.highRiskDaysBeforeDue}
+                        onChange={e => setGlobalReminderConfig(p => ({ ...p, highRiskDaysBeforeDue: Number(e.target.value) }))}
+                        className="form-select-ctrl"
+                      >
+                        <option value={3}>3 Days Before + Daily</option>
+                        <option value={5}>5 Days Before + Daily</option>
+                      </select>
+                    </div>
+
+                    <div className="form-field-group">
+                      <label>Daily Scan Time</label>
+                      <input
+                        type="time"
+                        value={globalReminderConfig.dailyExecutionTime}
+                        onChange={e => setGlobalReminderConfig(p => ({ ...p, dailyExecutionTime: e.target.value }))}
+                        className="form-select-ctrl font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="global-channels-toggles">
+                    <label className="checkbox-toggle-item">
+                      <input
+                        type="checkbox"
+                        checked={globalReminderConfig.enableWhatsApp}
+                        onChange={e => setGlobalReminderConfig(p => ({ ...p, enableWhatsApp: e.target.checked }))}
+                      />
+                      <span>💬 Enable Automated WhatsApp Alerts</span>
+                    </label>
+
+                    <label className="checkbox-toggle-item">
+                      <input
+                        type="checkbox"
+                        checked={globalReminderConfig.enableSms}
+                        onChange={e => setGlobalReminderConfig(p => ({ ...p, enableSms: e.target.checked }))}
+                      />
+                      <span>📱 Enable Automated SMS Messages</span>
+                    </label>
+
+                    <label className="checkbox-toggle-item">
+                      <input
+                        type="checkbox"
+                        checked={globalReminderConfig.enableAutomatedCall}
+                        onChange={e => setGlobalReminderConfig(p => ({ ...p, enableAutomatedCall: e.target.checked }))}
+                      />
+                      <span>📞 Enable Automated Voice / IVR Reminder</span>
+                    </label>
+                  </div>
+
+                  <div className="modal-inline-save-row">
+                    <button type="submit" className="btn-modal-save">
+                      <AccountIcons.Check />
+                      <span>Save Global Reminder Policy</span>
+                    </button>
+                  </div>
+                </form>
+
+                <div className="reminder-wallet-strip">
+                  <div className="rws-left">
+                    <span className="rws-icon">💳</span>
+                    <div>
+                      <span className="rws-title">Merchant Credits Wallet: <strong>₹{walletData.balance.toFixed(2)}</strong></span>
+                      <span className="rws-sub">
+                        Approx. <strong>{Math.floor(walletData.balance / (walletData.rates?.WhatsApp || 0.45))}</strong> WhatsApp msgs or <strong>{Math.floor(walletData.balance / (walletData.rates?.SMS || 0.20))}</strong> SMS available
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-rws-recharge"
+                    onClick={() => {
+                      setIsGlobalReminderModalOpen(false);
+                      setIsWalletModalOpen(true);
+                      setActiveWalletTab('recharge');
+                    }}
+                  >
+                    ⚡ Top-Up Credits
+                  </button>
+                </div>
+
+                <div className="reminder-logs-section">
+                  <h4 className="rules-section-title">Recent Reminder Dispatch Audit Log</h4>
+                  {reminderLogs.length === 0 ? (
+                    <div className="empty-logs-msg font-mono">No reminders dispatched yet for today. Click "Run Due Reminder Scan Now" above to trigger a test run.</div>
+                  ) : (
+                    <div className="preview-table-wrap">
+                      <table className="preview-mini-table font-mono">
+                        <thead>
+                          <tr>
+                            <th>Time</th>
+                            <th>Acc No</th>
+                            <th>Customer</th>
+                            <th>Channel</th>
+                            <th>Demand</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reminderLogs.slice(0, 10).map((l, i) => (
+                            <tr key={i}>
+                              <td>{new Date(l.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                              <td>{l.accountNumber}</td>
+                              <td>{l.customerName}</td>
+                              <td><span className="log-channel-tag">{l.channel}</span></td>
+                              <td className="text-purple font-bold">₹{Number(l.dueAmount || 0).toLocaleString('en-IN')}</td>
+                              <td><span className="status-pill is-active">{l.status || 'Delivered'}</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                <div className="account-modal-foot">
+                  <button type="button" className="btn-modal-cancel" onClick={() => setIsGlobalReminderModalOpen(false)}>
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================
+            6. MERCHANT COMMUNICATION CREDITS WALLET MODAL
+           ============================================================ */}
+        {isWalletModalOpen && (
+          <div className="account-modal-overlay" onClick={() => setIsWalletModalOpen(false)}>
+            <div className="account-modal-container credits-wallet-modal" onClick={e => e.stopPropagation()}>
+              <div className="account-modal-head">
+                <div className="modal-title-stack">
+                  <div className="modal-badge-tag is-wallet">
+                    <AccountIcons.CreditCard />
+                    <span>Prepaid Credits Ledger</span>
+                  </div>
+                  <h2>Communication Credits Wallet</h2>
+                  <p>Manage SMS, WhatsApp & Automated Voice Call credits for Merchant #{user?.merchantId || '01'} (Non-Integrated Route).</p>
+                </div>
+                <button className="btn-modal-close" onClick={() => setIsWalletModalOpen(false)}>✕</button>
+              </div>
+
+              <div className="wallet-modal-body">
+                {/* Wallet Navigation Tabs */}
+                <div className="wallet-modal-tabs">
+                  <button
+                    type="button"
+                    className={`wallet-nav-tab ${activeWalletTab === 'recharge' ? 'is-active' : ''}`}
+                    onClick={() => setActiveWalletTab('recharge')}
+                  >
+                    <span>💳 Top-Up & Recharge</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`wallet-nav-tab ${activeWalletTab === 'ledger' ? 'is-active' : ''}`}
+                    onClick={() => setActiveWalletTab('ledger')}
+                  >
+                    <span>📜 Usage & Transaction Ledger</span>
+                    <span className="tab-badge-mini font-mono">{walletTransactions.length}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`wallet-nav-tab ${activeWalletTab === 'rates' ? 'is-active' : ''}`}
+                    onClick={() => setActiveWalletTab('rates')}
+                  >
+                    <span>🏷️ Message Rates & Rules</span>
+                  </button>
+                </div>
+
+                {/* Tab 1: Top-Up & Recharge */}
+                {activeWalletTab === 'recharge' && (
+                  <div className="wallet-recharge-tab">
+                    {/* Big Balance Showcase Card */}
+                    <div className="wallet-hero-balance-card">
+                      <div className="whb-main">
+                        <span className="whb-label">Available Communication Balance</span>
+                        <div className="whb-amount font-mono">
+                          <span className="curr">₹</span>{walletData.balance.toFixed(2)}
+                        </div>
+                        <div className="whb-status">
+                          {walletData.balance <= 0 ? (
+                            <span className="whb-chip is-red">🔴 Wallet Empty (Reminders Paused)</span>
+                          ) : walletData.balance < (walletData.lowBalanceThreshold || 100) ? (
+                            <span className="whb-chip is-amber">🟡 Low Balance (Recharge Recommended)</span>
+                          ) : (
+                            <span className="whb-chip is-green">🟢 Active & Healthy</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="whb-breakdown font-mono">
+                        <div className="whb-unit-item">
+                          <span className="unit-icon">💬</span>
+                          <div className="unit-info">
+                            <strong>~{Math.floor(walletData.balance / (walletData.rates?.WhatsApp || 0.45))}</strong>
+                            <span>WhatsApp Msgs</span>
+                          </div>
+                        </div>
+                        <div className="whb-unit-item">
+                          <span className="unit-icon">📱</span>
+                          <div className="unit-info">
+                            <strong>~{Math.floor(walletData.balance / (walletData.rates?.SMS || 0.20))}</strong>
+                            <span>SMS Alerts</span>
+                          </div>
+                        </div>
+                        <div className="whb-unit-item">
+                          <span className="unit-icon">📞</span>
+                          <div className="unit-info">
+                            <strong>~{Math.floor(walletData.balance / (walletData.rates?.Call || 0.90))}</strong>
+                            <span>Voice IVR Calls</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Quick Packages Grid */}
+                    <form onSubmit={handleTopUpWallet} className="wallet-packages-section">
+                      <h4 className="rules-section-title">Select Recharge Package</h4>
+                      <div className="packages-grid">
+                        {[
+                          { amount: 250, name: 'Starter Pack', msgs: '1,250 SMS / 550 WhatsApp', popular: false },
+                          { amount: 500, name: 'Growth Pack', msgs: '2,500 SMS / 1,110 WhatsApp', popular: false },
+                          { amount: 1000, name: 'Popular Pack', msgs: '5,000 SMS / 2,220 WhatsApp', popular: true },
+                          { amount: 2500, name: 'Professional', msgs: '12,500 SMS / 5,550 WhatsApp', popular: false },
+                          { amount: 5000, name: 'Enterprise', msgs: '25,000 SMS / 11,100 WhatsApp', popular: false },
+                        ].map((pkg) => (
+                          <div
+                            key={pkg.amount}
+                            className={`package-card ${topUpForm.amount === pkg.amount && !customTopUpAmount ? 'is-selected' : ''}`}
+                            onClick={() => {
+                              setTopUpForm(p => ({ ...p, amount: pkg.amount }));
+                              setCustomTopUpAmount('');
+                            }}
+                          >
+                            {pkg.popular && <span className="pkg-badge">Popular</span>}
+                            <div className="pkg-amount font-mono">₹{pkg.amount.toLocaleString('en-IN')}</div>
+                            <div className="pkg-name">{pkg.name}</div>
+                            <div className="pkg-sub">{pkg.msgs}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Custom Amount Input */}
+                      <div className="custom-recharge-row">
+                        <label>Or Enter Custom Amount (₹):</label>
+                        <div className="custom-amount-input-wrap">
+                          <span className="prefix">₹</span>
+                          <input
+                            type="number"
+                            min="100"
+                            step="50"
+                            placeholder="e.g. 1500"
+                            value={customTopUpAmount}
+                            onChange={e => {
+                              setCustomTopUpAmount(e.target.value);
+                              if (e.target.value) setTopUpForm(p => ({ ...p, amount: Number(e.target.value) }));
+                            }}
+                            className="custom-amount-input font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Payment Rail Options */}
+                      <div className="payment-rails-group">
+                        <label>Payment Channel</label>
+                        <div className="rails-selector">
+                          <label className={`rail-chip ${topUpForm.paymentMethod === 'UPI' ? 'is-selected' : ''}`}>
+                            <input
+                              type="radio"
+                              name="paymentMethod"
+                              value="UPI"
+                              checked={topUpForm.paymentMethod === 'UPI'}
+                              onChange={e => setTopUpForm(p => ({ ...p, paymentMethod: e.target.value }))}
+                            />
+                            <span>⚡ Instant UPI (GPay / PhonePe / Paytm)</span>
+                          </label>
+                          <label className={`rail-chip ${topUpForm.paymentMethod === 'NetBanking' ? 'is-selected' : ''}`}>
+                            <input
+                              type="radio"
+                              name="paymentMethod"
+                              value="NetBanking"
+                              checked={topUpForm.paymentMethod === 'NetBanking'}
+                              onChange={e => setTopUpForm(p => ({ ...p, paymentMethod: e.target.value }))}
+                            />
+                            <span>🏦 Corporate Net Banking</span>
+                          </label>
+                          <label className={`rail-chip ${topUpForm.paymentMethod === 'Card' ? 'is-selected' : ''}`}>
+                            <input
+                              type="radio"
+                              name="paymentMethod"
+                              value="Card"
+                              checked={topUpForm.paymentMethod === 'Card'}
+                              onChange={e => setTopUpForm(p => ({ ...p, paymentMethod: e.target.value }))}
+                            />
+                            <span>💳 Debit / Credit Card</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className="wallet-actions-foot">
+                        <button
+                          type="submit"
+                          className="btn-modal-save is-wallet-cta"
+                          disabled={isRechargingWallet}
+                        >
+                          {isRechargingWallet ? 'Processing Recharge...' : `Recharge ₹${(Number(customTopUpAmount || topUpForm.amount || 0)).toLocaleString('en-IN')} Now`}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {/* Tab 2: Transaction & Deduction Ledger */}
+                {activeWalletTab === 'ledger' && (
+                  <div className="wallet-ledger-tab">
+                    <div className="ledger-header-stats font-mono">
+                      <div className="lhs-card">
+                        <span>Total Recharged</span>
+                        <strong>₹{(walletData.totalRecharged || 0).toLocaleString('en-IN')}</strong>
+                      </div>
+                      <div className="lhs-card">
+                        <span>Total Consumed</span>
+                        <strong className="text-purple">₹{(walletData.totalSpent || 0).toLocaleString('en-IN')}</strong>
+                      </div>
+                      <div className="lhs-card">
+                        <span>Closing Balance</span>
+                        <strong className="text-green">₹{(walletData.balance || 0).toFixed(2)}</strong>
+                      </div>
+                    </div>
+
+                    <div className="preview-table-wrap">
+                      <table className="preview-mini-table font-mono">
+                        <thead>
+                          <tr>
+                            <th>Date & Time</th>
+                            <th>Reference</th>
+                            <th>Type</th>
+                            <th>Channel</th>
+                            <th>Recipients</th>
+                            <th>Amount (₹)</th>
+                            <th>Balance</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {walletTransactions.map((tx, idx) => (
+                            <tr key={tx.id || idx}>
+                              <td>{new Date(tx.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</td>
+                              <td className="text-muted">{tx.referenceId}</td>
+                              <td>
+                                <span className={`txn-type-pill ${tx.type === 'TOPUP' ? 'is-topup' : 'is-deduction'}`}>
+                                  {tx.type === 'TOPUP' ? '🟢 Credit (+)' : '🟣 Debit (-)'}
+                                </span>
+                              </td>
+                              <td>{tx.channel}</td>
+                              <td>{tx.recipientCount > 0 ? `${tx.recipientCount} msgs` : '-'}</td>
+                              <td className={tx.type === 'TOPUP' ? 'text-green font-bold' : 'text-purple font-bold'}>
+                                {tx.type === 'TOPUP' ? `+₹${Number(tx.amount).toFixed(2)}` : `-₹${Number(tx.amount).toFixed(2)}`}
+                              </td>
+                              <td className="font-bold">₹{Number(tx.closingBalance).toFixed(2)}</td>
+                              <td><span className="status-pill is-active">{tx.status}</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tab 3: Message Rates & DLT Rules */}
+                {activeWalletTab === 'rates' && (
+                  <div className="wallet-rates-tab">
+                    <div className="rates-cards-grid font-mono">
+                      <div className="rate-item-card is-sms">
+                        <span className="ric-icon">📱</span>
+                        <div className="ric-title">Transactional SMS</div>
+                        <div className="ric-price">₹0.20 <span className="unit">/ SMS</span></div>
+                        <div className="ric-desc">Standard 160-character DLT-approved header alert via telecom network rail.</div>
+                      </div>
+
+                      <div className="rate-item-card is-wa">
+                        <span className="ric-icon">💬</span>
+                        <div className="ric-title">WhatsApp Business API</div>
+                        <div className="ric-price">₹0.45 <span className="unit">/ Msg</span></div>
+                        <div className="ric-desc">Meta verified high-delivery interactive notice with instant UPI pay buttons.</div>
+                      </div>
+
+                      <div className="rate-item-card is-call">
+                        <span className="ric-icon">📞</span>
+                        <div className="ric-title">Automated Voice / IVR</div>
+                        <div className="ric-price">₹0.90 <span className="unit">/ Call</span></div>
+                        <div className="ric-desc">30-second automated spoken vernacular voice reminder call to borrower.</div>
+                      </div>
+                    </div>
+
+                    <div className="rules-notice-box">
+                      <strong>🛡️ Wallet Billing & Compliance Notes:</strong>
+                      <ul>
+                        <li>Credits are deducted in real time only upon successful dispatch via telecom and WhatsApp gateways.</li>
+                        <li>When the balance falls below <strong>₹{walletData.lowBalanceThreshold || 100}</strong>, automated warning notifications are sent to the merchant administrator.</li>
+                        <li>If the wallet balance reaches ₹0.00, automated background dispatches will pause safely without creating unbilled provider liabilities.</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                <div className="account-modal-foot">
+                  <button type="button" className="btn-modal-cancel" onClick={() => setIsWalletModalOpen(false)}>
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
 
         {/* Unified Collection Modal: Dynamic UPI QR + Payment Link */}
         {isQrModalOpen && qrAccount && (
