@@ -334,8 +334,7 @@ const Branches = () => {
     <DashboardLayout pageTitle="Branch Network" role={rawRole}>
       {loading && <LoadingAnimation message="Loading Regional Branches..." />}
       
-      <DashboardLayout role="softwareadmin" pageTitle="Branch Network">
-        <div className={`branches-page ${loading ? 'content-blurred' : ''}`}>
+      <div className={`branches-page ${loading ? 'content-blurred' : ''}`}>
           
           {/* Header */}
           <div className="page-header">
@@ -900,8 +899,6 @@ const Branches = () => {
           </div>
 
         </div>
-
-      </div>
     </DashboardLayout>
   );
 };

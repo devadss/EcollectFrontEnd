@@ -305,8 +305,7 @@ const Agents = () => {
     <DashboardLayout pageTitle="Field Agents" role={rawRole}>
       {loading && <LoadingAnimation message="Loading Field Representatives..." />}
       
-      <DashboardLayout role="softwareadmin" pageTitle="Field Agents Directory">
-        <div className={`agents-page ${loading ? 'content-blurred' : ''}`}>
+      <div className={`agents-page ${loading ? 'content-blurred' : ''}`}>
           
           {/* Header */}
           <div className="page-header">
@@ -731,8 +730,6 @@ const Agents = () => {
           </div>
 
         </div>
-
-      </div>
     </DashboardLayout>
   );
 };

@@ -225,8 +225,7 @@ const Merchants = () => {
     <DashboardLayout pageTitle="Merchants Directory">
       {loading && <LoadingAnimation message="Loading Merchant Records..." />}
       
-      <DashboardLayout role="softwareadmin" pageTitle="Merchants Directory">
-        <div className={`merchants-page ${loading ? 'content-blurred' : ''}`}>
+      <div className={`merchants-page ${loading ? 'content-blurred' : ''}`}>
           
           {/* Top Header */}
           <div className="page-header">
@@ -679,8 +678,6 @@ const Merchants = () => {
           </div>
 
         </div>
-
-      </div>
     </DashboardLayout>
   );
 };
