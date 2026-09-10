@@ -159,22 +159,8 @@ const MerchantsConfig = () => {
               <ConfigIcons.Sparkles />
               <span>Integration Orchestration</span>
             </div>
-            <h1 className="config-page-title">
-              Merchants <span className="gradient-text">API Config</span>
-            </h1>
-            <p className="config-page-subtitle">
-              Manage endpoint routing, webhook definitions, and payment product credentials
-            </p>
-          </div>
-
-          <div className="config-header-actions">
-            <button className="config-export-btn" onClick={() => window.print()}>
-              <ConfigIcons.Download />
-              <span>Export Schemas</span>
-            </button>
-            <button className="config-add-btn" onClick={() => navigate('/merchants/merchantconfig/add')}>
-              <ConfigIcons.Plus />
-              <span>Add Endpoint Config</span>
+            <button className="btn-primary-gradient" onClick={() => navigate('/merchants/merchantconfig/add')}>
+              ➕ Add Merchants Config
             </button>
           </div>
         </div>

@@ -305,35 +305,19 @@ const Agents = () => {
     <DashboardLayout pageTitle="Field Agents" role={rawRole}>
       {loading && <LoadingAnimation message="Loading Field Representatives..." />}
       
-      {/* Live Toast Banner */}
-      {actionMessage && (
-        <div style={{
-          position: 'fixed',
-          top: '24px',
-          right: '24px',
-          zIndex: 9999,
-          background: actionMessage.type === 'success' ? '#065f46' : '#991b1b',
-          color: '#ffffff',
-          padding: '12px 20px',
-          borderRadius: '10px',
-          boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-          fontWeight: '600',
-          fontSize: '14px',
-          border: '1px solid rgba(255,255,255,0.2)'
-        }}>
-          {actionMessage.text}
-        </div>
-      )}
-      
-      <div className="agents-root-container">
-        
-        {/* Hero Header */}
-        <div className="agents-hero-header">
-          <div className="agents-hero-titles">
-            <div className="agents-badge-tag">
-              <span className="pulse-dot"></span>
-              <AgentIcons.Sparkles />
-              <span>Field Representative Network</span>
+      <DashboardLayout role="softwareadmin" pageTitle="Field Agents Directory">
+        <div className={`agents-page ${loading ? 'content-blurred' : ''}`}>
+          
+          {/* Header */}
+          <div className="page-header">
+            <div>
+              <div className="header-badge">
+                <span className="pulse-dot"></span> Field Representative Portal
+              </div>
+              <h1 className="page-title gradient-text">
+                Field <span className="gradient-text">Agents</span>
+              </h1>
+              <p className="page-subtitle">Manage agent assignments, merchant links, and commission rates</p>
             </div>
             <h1 className="agents-page-title">
               Field <span className="gradient-text">Agents</span>

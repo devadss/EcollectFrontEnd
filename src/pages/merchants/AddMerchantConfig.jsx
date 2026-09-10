@@ -295,7 +295,7 @@ const AddMerchantConfig = () => {
           </div>
 
           <div className="form-actions">
-            <button type="submit" className="btn-primary" disabled={loading}>
+            <button type="submit" className="btn-primary-gradient" disabled={loading}>
               {/*{loading ? 'Registering...' : 'Add Merchant Config '}*/}
               {loading ? (
                 <>

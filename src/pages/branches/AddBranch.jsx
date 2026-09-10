@@ -681,8 +681,8 @@ const AddBranch = () => {
           </div>
 
           <div className="form-actions">
-            <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? 'Saving Branch...' : isEdit ? 'Update Branch' : 'Create Branch'}
+            <button type="submit" className="btn-primary-gradient" disabled={loading}>
+              {loading ? 'Saving...' : isEdit ? 'Update Branch' : 'Create Branch'}
             </button>
             <button type="button" className="btn-outline" onClick={() => navigate('/branches')}>
               Cancel
