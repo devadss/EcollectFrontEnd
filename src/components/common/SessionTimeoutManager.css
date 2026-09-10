@@ -1,0 +1,162 @@
+/* ==========================================================================
+   Session Timeout Warning Modal Styles
+   ========================================================================== */
+
+.session-timeout-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  background: rgba(3, 7, 18, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.25s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.session-timeout-modal {
+  background: var(--bgCard, #0f172a);
+  border: 1px solid var(--borderGlow, rgba(239, 68, 68, 0.35));
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 35px rgba(239, 68, 68, 0.2);
+  border-radius: 20px;
+  max-width: 480px;
+  width: 100%;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 20px;
+  color: var(--textPrimary, #f8fafc);
+  animation: scaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+
+@keyframes scaleUp {
+  from { transform: scale(0.92); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.session-timeout-icon-wrap {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1.5px solid rgba(239, 68, 68, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ef4444;
+  animation: pulseIcon 2s infinite;
+}
+
+@keyframes pulseIcon {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+.session-timeout-title {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  margin: 0;
+  color: var(--textPrimary, #ffffff);
+}
+
+.session-timeout-desc {
+  font-size: 14.5px;
+  color: var(--textMuted, #94a3b8);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.session-countdown-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+  padding: 8px 18px;
+  border-radius: 9999px;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+}
+
+.session-timeout-actions {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  margin-top: 10px;
+}
+
+.session-btn-stay {
+  flex: 1;
+  padding: 13px 20px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
+  transition: all 0.2s ease;
+}
+
+.session-btn-stay:hover {
+  background: linear-gradient(135deg, #1d4ed8, #1e40af);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5);
+}
+
+.session-btn-logout {
+  padding: 13px 20px;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--textMuted, #94a3b8);
+  font-size: 14px;
+  font-weight: 700;
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.15));
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.session-btn-logout:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Accessible light mode styles */
+[data-theme-mode="light"] .session-timeout-modal {
+  background: #ffffff;
+  border-color: #fca5a5;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .session-timeout-title {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .session-timeout-desc {
+  color: #64748b;
+}
+
+[data-theme-mode="light"] .session-btn-logout {
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+[data-theme-mode="light"] .session-btn-logout:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}

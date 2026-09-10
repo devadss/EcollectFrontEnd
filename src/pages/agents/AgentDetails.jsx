@@ -68,8 +68,20 @@ const AgentDetails = () => {
     );
   }
 
+  const authUser = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
+    } catch {
+      return {};
+    }
+  })();
+
+  const rawRole = (localStorage.getItem('user_role') || localStorage.getItem('role') || authUser?.role || '').toLowerCase().trim();
+  const normRole = rawRole.replace(/[^a-z0-9]/g, '');
+  const isSoftwareAdmin = (normRole.includes('software') || normRole.includes('superadmin') || normRole === 'admin') && !normRole.includes('merchant') && !normRole.includes('branch') && !normRole.includes('agent');
+
   return (
-    <DashboardLayout role="softwareadmin">
+    <DashboardLayout role={rawRole}>
       <div className="agent-details-page">
         <div className="page-header">
           <div>
@@ -78,7 +90,9 @@ const AgentDetails = () => {
           </div>
           <div className="header-actions">
             <button className="btn-outline" onClick={() => navigate('/agents')}>← Back</button>
-            <button className="btn-primary" onClick={() => navigate(`/agents/edit/${id}`)}>✏️ Edit</button>
+            {isSoftwareAdmin && (
+              <button className="btn-primary" onClick={() => navigate(`/agents/edit/${id}`)}>✏️ Edit Agent</button>
+            )}
           </div>
         </div>
 

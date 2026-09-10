@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../common/Sidebar';
 import TopBar from '../common/TopBar';
+import './DashboardLayout.css';
 
-const DashboardLayout = ({ children, role = 'softwareadmin', pageTitle = 'Dashboard' }) => {
+const DashboardLayout = ({ children, pageTitle = 'Dashboard' }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -19,6 +20,14 @@ const DashboardLayout = ({ children, role = 'softwareadmin', pageTitle = 'Dashbo
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Handle auto-collapse on tablet
+  useEffect(() => {
+    const width = window.innerWidth;
+    if (width > 768 && width <= 1024) {
+      setCollapsed(true);
+    }
+  }, []);
+
   const toggleSidebar = () => {
     if (isMobile) {
       setMobileOpen(!mobileOpen);
@@ -31,35 +40,32 @@ const DashboardLayout = ({ children, role = 'softwareadmin', pageTitle = 'Dashbo
     setMobileOpen(false);
   };
 
-  const sidebarWidth = isMobile ? 0 : (collapsed ? 76 : 260);
+  const sidebarWidth = isMobile ? 0 : (collapsed ? 78 : 264);
 
   return (
-    <div 
-      style={{
-        display: 'flex',
-        width: '100%',
-        minHeight: '100vh',
-        background: '#070a14', /* Fixed: Dark background matching sidebar! */
-        overflow: 'hidden',
-      }}
-    >
+    <div className="app-dashboard-root">
+      {/* Subtle ambient light glow orbs */}
+      <div className="ambient-glow-mesh">
+        <div className="glow-orb glow-top-left"></div>
+        <div className="glow-orb glow-bottom-right"></div>
+      </div>
+
+      {/* Mobile Drawer Overlay */}
       {isMobile && mobileOpen && (
         <div 
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.7)',
-            zIndex: 999,
-          }}
+          className="dashboard-mobile-overlay"
           onClick={closeMobile}
+          role="button"
+          aria-label="Close navigation sidebar"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') closeMobile();
+          }}
         />
       )}
       
+      {/* Sidebar Component */}
       <Sidebar
-        role={role}
         collapsed={collapsed}
         mobileOpen={mobileOpen}
         onToggle={toggleSidebar}
@@ -67,39 +73,27 @@ const DashboardLayout = ({ children, role = 'softwareadmin', pageTitle = 'Dashbo
         isMobile={isMobile}
       />
       
+      {/* Main Content Area */}
       <div 
+        className="app-main-viewport"
         style={{
-          flex: 1,
-          minHeight: '100vh',
           marginLeft: isMobile ? '0px' : `${sidebarWidth}px`,
           width: isMobile ? '100%' : `calc(100% - ${sidebarWidth}px)`,
           maxWidth: isMobile ? '100%' : `calc(100% - ${sidebarWidth}px)`,
-          background: '#070a14', /* Fixed: Dark background matching sidebar! */
-          overflowX: 'hidden',
-          transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1), max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          boxSizing: 'border-box',
         }}
       >
         <TopBar
           onToggle={toggleSidebar}
           pageTitle={pageTitle}
-          role={role}
           isMobile={isMobile}
           collapsed={collapsed}
+          mobileOpen={mobileOpen}
         />
-        <div 
-          style={{
-            padding: '24px 32px',
-            minHeight: 'calc(100vh - 70px)',
-            background: '#070a14', /* Fixed: Dark background matching sidebar! */
-            width: '100%',
-            maxWidth: '100%',
-            overflowX: 'hidden',
-            boxSizing: 'border-box',
-          }}
-        >
+        
+        {/* Main Body Container */}
+        <main className="app-content-container">
           {children}
-        </div>
+        </main>
       </div>
     </div>
   );

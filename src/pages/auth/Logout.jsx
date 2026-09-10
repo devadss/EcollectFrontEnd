@@ -1,60 +1,129 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authApi } from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
 import './Logout.css';
 
-// SVG Icons for clean zero-dependency rendering
-const Icons = {
+// SVG Icons
+const LogoutIcons = {
   Logo: () => (
     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="12 2 2 7 12 12 22 7 12 2" />
-      <polyline points="2 17 12 22 22 17" />
-      <polyline points="2 12 12 17 22 12" />
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  ),
+  Theme: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2v2" />
+      <path d="M12 20v2" />
+      <path d="m4.93 4.93 1.41 1.41" />
+      <path d="m17.66 17.66 1.41 1.41" />
+      <path d="M2 12h2" />
+      <path d="M20 12h2" />
+      <path d="m6.34 17.66-1.41 1.41" />
+      <path d="m19.07 4.93-1.41 1.41" />
+      <circle cx="12" cy="12" r="4" />
     </svg>
   ),
   LogOut: () => (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
       <polyline points="16 17 21 12 16 7" />
       <line x1="21" y1="12" x2="9" y2="12" />
     </svg>
   ),
   ShieldCheck: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
       <path d="m9 12 2 2 4-4" />
     </svg>
   ),
+  ShieldAlert: () => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      <line x1="12" y1="8" x2="12" y2="12" />
+      <line x1="12" y1="16" x2="12.01" y2="16" />
+    </svg>
+  ),
   ArrowLeft: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <line x1="19" y1="12" x2="5" y2="12" />
       <polyline points="12 19 5 12 12 5" />
     </svg>
   ),
+  ArrowRight: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="5" y1="12" x2="19" y2="12" />
+      <polyline points="12 5 19 12 12 19" />
+    </svg>
+  ),
   Lock: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
     </svg>
   ),
+  Key: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="7.5" cy="15.5" r="5.5" />
+      <path d="m21 3-9.5 9.5" />
+      <path d="m15.5 7.5 3 3" />
+    </svg>
+  ),
+  User: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  ),
   Clock: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10" />
       <polyline points="12 6 12 12 16 14" />
+    </svg>
+  ),
+  Check: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
     </svg>
   )
 };
 
 const Logout = () => {
   const navigate = useNavigate();
-  const { theme } = useTheme?.() || {};
+  const { theme, currentTheme, changeTheme, themes } = useTheme();
+  const isLight = theme?.id?.startsWith('light');
+  const [showThemeMenu, setShowThemeMenu] = useState(false);
+  const themeMenuRef = useRef(null);
 
-  // Status: 'confirm' | 'logging_out' | 'logged_out'
-  const [status, setStatus] = useState('confirm');
-  const [countdown, setCountdown] = useState(5);
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const [status, setStatus] = useState('confirm'); // 'confirm' | 'logging_out' | 'logged_out'
+  const [countdown, setCountdown] = useState(4);
+  const [mousePosition, setMousePosition] = useState({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+  const [progressStep, setProgressStep] = useState(0);
 
-  // Mouse tracking glow effect
+  // Close theme menu on click outside
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (themeMenuRef.current && !themeMenuRef.current.contains(e.target)) {
+        setShowThemeMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  // Get current stored user identity
+  const storedUser = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
+    } catch {
+      return {};
+    }
+  })();
+
+  const userRole = (storedUser.role || localStorage.getItem('user_role') || localStorage.getItem('role') || 'Software Admin');
+  const displayName = storedUser.fullName || storedUser.name || storedUser.username || 'Administrator';
+  const initialLetter = displayName.charAt(0).toUpperCase();
+
   useEffect(() => {
     const handleMouseMove = (e) => {
       setMousePosition({ x: e.clientX, y: e.clientY });
@@ -63,139 +132,317 @@ const Logout = () => {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
-  // Execute sign-out and clear storage
-  const handleConfirmLogout = () => {
+  const handleConfirmLogout = async () => {
     setStatus('logging_out');
 
-    setTimeout(() => {
-      // Clear security tokens and local storage data
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      sessionStorage.clear();
+    // Trigger backend logout endpoint in background
+    try {
+      authApi.logout().catch(() => {});
+    } catch (e) {
+      console.warn('Backend logout non-blocking call:', e);
+    }
 
-      setStatus('logged_out');
-    }, 1500);
+    // Step 1: Revoking tokens
+    setProgressStep(1);
+    await new Promise(r => setTimeout(r, 450));
+
+    // Step 2: Flushing caches
+    setProgressStep(2);
+    await new Promise(r => setTimeout(r, 450));
+
+    // Step 3: Clearing Local Data
+    setProgressStep(3);
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('token');
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('auth_user');
+    localStorage.removeItem('user');
+    localStorage.removeItem('user_role');
+    localStorage.removeItem('role');
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('branchId');
+    localStorage.removeItem('branchName');
+    localStorage.removeItem('branchCode');
+    localStorage.removeItem('merchantId');
+    localStorage.removeItem('agentId');
+    localStorage.removeItem('integrationStatus');
+    localStorage.removeItem('auth_permissions');
+    localStorage.removeItem('permissions');
+    localStorage.removeItem('auth_menus');
+    sessionStorage.clear();
+    await new Promise(r => setTimeout(r, 400));
+
+    // Step 4: Completed
+    setProgressStep(4);
+    setStatus('logged_out');
   };
 
-  // Auto redirect timer after logout
+  // Redirect countdown when in 'logged_out' state
   useEffect(() => {
     let timer;
-    if (status === 'logged_out' && countdown > 0) {
+    if (status === 'logged_out') {
       timer = setInterval(() => {
-        setCountdown((prev) => prev - 1);
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            navigate('/login', { replace: true });
+            return 0;
+          }
+          return prev - 1;
+        });
       }, 1000);
-    } else if (status === 'logged_out' && countdown === 0) {
-      navigate('/login');
     }
     return () => clearInterval(timer);
-  }, [status, countdown, navigate]);
+  }, [status, navigate]);
 
-  const handleCancel = () => {
-    navigate(-1); // Return to previous page/dashboard
-  };
+  // Circle countdown progress (4s total)
+  const strokeDashoffset = 125.6 - (125.6 * (countdown / 4));
 
   return (
-    <div className="logout-container">
-      {/* Interactive Mouse Glow Ambient Layer */}
+    <div className="logout-root-viewport">
+      {/* Floating Theme Switcher */}
+      <div className="auth-theme-floating-toggle" ref={themeMenuRef}>
+        <button 
+          type="button"
+          className="auth-theme-pill-btn"
+          onClick={() => setShowThemeMenu(!showThemeMenu)}
+          title="Switch Theme Palette"
+        >
+          <LogoutIcons.Theme />
+          <span className="auth-theme-pill-text">{isLight ? 'Light Theme' : 'Dark Theme'}</span>
+          <span className="auth-theme-swatch-mini" style={{ background: theme?.accent || '#4f46e5' }}></span>
+        </button>
+
+        {showThemeMenu && (
+          <div className="auth-theme-dropdown-menu">
+            <div className="theme-dd-header">Theme & Appearance</div>
+            <div className="theme-dd-section">☀️ Light Themes</div>
+            {Object.keys(themes).filter(k => k.startsWith('light')).map((key) => (
+              <button
+                key={key}
+                type="button"
+                className={`theme-dd-item ${currentTheme === key ? 'is-active' : ''}`}
+                onClick={() => { changeTheme(key); setShowThemeMenu(false); }}
+              >
+                <span className="theme-dd-dot" style={{ background: themes[key]?.accent || '#4f46e5' }}></span>
+                <span className="theme-dd-label">{themes[key]?.name || key}</span>
+                {currentTheme === key && <span className="theme-dd-check">✓</span>}
+              </button>
+            ))}
+
+            <div className="theme-dd-section">🌙 Dark Themes</div>
+            {Object.keys(themes).filter(k => !k.startsWith('light')).map((key) => (
+              <button
+                key={key}
+                type="button"
+                className={`theme-dd-item ${currentTheme === key ? 'is-active' : ''}`}
+                onClick={() => { changeTheme(key); setShowThemeMenu(false); }}
+              >
+                <span className="theme-dd-dot" style={{ background: themes[key]?.accent || '#6366f1' }}></span>
+                <span className="theme-dd-label">{themes[key]?.name || key}</span>
+                {currentTheme === key && <span className="theme-dd-check">✓</span>}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Interactive Cursor Spotlight Glow */}
       <div 
-        className="logout-mouse-glow"
+        className="logout-ambient-cursor"
         style={{
-          background: `radial-gradient(circle 550px at ${mousePosition.x}px ${mousePosition.y}px, rgba(99, 102, 241, 0.15), transparent 70%)`,
+          transform: `translate(${mousePosition.x - 300}px, ${mousePosition.y - 300}px)`,
         }}
       />
 
-      {/* Aurora Ambient Background Orbs */}
-      <div className="logout-aurora">
-        <div className="logout-aurora-1"></div>
-        <div className="logout-aurora-2"></div>
-        <div className="logout-aurora-3"></div>
+      {/* Floating Background Ambient Mesh */}
+      <div className="logout-ambient-grid">
+        <div className="logout-orb orb-primary"></div>
+        <div className="logout-orb orb-secondary"></div>
+        <div className="logout-orb orb-tertiary"></div>
       </div>
 
-      {/* Brand Header */}
-      <div className="logout-brand">
-        <div className="logout-brand-icon">
-          <Icons.Logo />
-        </div>
-        <span className="logout-brand-text">Tech<span className="logout-brand-highlight">Pay</span></span>
+      {/* Top Brand Emblem */}
+      <div className="logout-top-branding" onClick={() => navigate('/dashboard')} title="eCollect • Smart Payment Solutions">
+        <img 
+          src={isLight ? "/ecollect-logo-dark.png" : "/ecollect-logo.png"} 
+          alt="eCollect - Smart Payment Solutions" 
+          className="logout-brand-logo-img" 
+        />
       </div>
 
-      {/* Logout Main Card */}
-      <div className="logout-card-wrapper">
+      {/* Main Glass Card Container */}
+      <div className="logout-card-container">
         
-        {/* STATE 1: Confirmation Screen */}
+        {/* ============================================================
+            PHASE 1: CONFIRMATION PROMPT
+            ============================================================ */}
         {status === 'confirm' && (
-          <div className="logout-card">
-            <div className="logout-card-icon-wrap warning">
-              <Icons.LogOut />
-            </div>
-            
-            <h2>Sign Out of Account?</h2>
-            <p className="logout-subtitle">You are about to securely end your active session on TechPay.</p>
+          <div className="logout-glass-card">
+            <div className="card-ambient-glow is-violet"></div>
 
-            {/* Session Insights Summary */}
-            <div className="session-summary-box">
-              <div className="summary-item">
-                <Icons.Clock />
-                <div>
-                  <span className="summary-label">Session Duration</span>
-                  <span className="summary-val">42 minutes</span>
-                </div>
-              </div>
-              <div className="summary-item">
-                <Icons.Lock />
-                <div>
-                  <span className="summary-label">Encrypted IP</span>
-                  <span className="summary-val">192.168.1.***</span>
-                </div>
-              </div>
+            {/* Glowing Icon Header */}
+            <div className="logout-icon-bubble is-violet">
+              <LogoutIcons.ShieldAlert />
             </div>
 
-            {/* Actions */}
-            <div className="logout-actions">
-              <button type="button" className="btn-confirm-logout" onClick={handleConfirmLogout}>
-                Confirm Sign Out
+            <div className="logout-card-titles">
+              <div className="logout-security-pill is-violet">
+                <span className="pulse-dot"></span>
+                <span>Session Termination Request</span>
+              </div>
+              <h2 className="logout-main-title">Confirm Secure Sign Out</h2>
+              <p className="logout-description">
+                You are about to terminate your authenticated banking session. All active bearer tokens, session caches, and sockets will be revoked.
+              </p>
+            </div>
+
+            {/* Authenticated Identity Pill Card */}
+            <div className="logout-user-identity-card">
+              <div className="identity-avatar-monogram">
+                {initialLetter}
+              </div>
+              <div className="identity-details">
+                <div className="identity-name">{displayName}</div>
+                <div className="identity-role-badge">
+                  <span className="role-dot"></span>
+                  {userRole}
+                </div>
+              </div>
+            </div>
+
+            {/* Security Scope Checklist */}
+            <div className="logout-security-checklist">
+              <div className="checklist-item">
+                <span className="checklist-icon"><LogoutIcons.Check /></span>
+                <span>256-bit TLS Session Bearer Tokens Revoked</span>
+              </div>
+              <div className="checklist-item">
+                <span className="checklist-icon"><LogoutIcons.Check /></span>
+                <span>In-Memory Client Telemetry Flushed</span>
+              </div>
+              <div className="checklist-item">
+                <span className="checklist-icon"><LogoutIcons.Check /></span>
+                <span>Live Core Banking Sockets Disconnected</span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="logout-actions-cluster">
+              <button 
+                type="button" 
+                className="btn-confirm-signout" 
+                onClick={handleConfirmLogout}
+              >
+                <LogoutIcons.LogOut />
+                <span>Confirm & Sign Out</span>
               </button>
-              <button type="button" className="btn-cancel-logout" onClick={handleCancel}>
-                <Icons.ArrowLeft />
-                Return to Dashboard
+              
+              <button 
+                type="button" 
+                className="btn-cancel-return" 
+                onClick={() => navigate(-1)}
+              >
+                <LogoutIcons.ArrowLeft />
+                <span>Stay in Portal / Return</span>
               </button>
             </div>
           </div>
         )}
 
-        {/* STATE 2: Logging Out Loader */}
+        {/* ============================================================
+            PHASE 2: TERMINATING SESSION (PROGRESS)
+            ============================================================ */}
         {status === 'logging_out' && (
-          <div className="logout-card">
-            <div className="logout-card-icon-wrap processing">
-              <span className="logout-spinner"></span>
+          <div className="logout-glass-card">
+            <div className="card-ambient-glow is-indigo"></div>
+
+            {/* High-Tech Orbital Multi-Ring Spinner */}
+            <div className="logout-orbital-spinner">
+              <div className="spinner-ring outer"></div>
+              <div className="spinner-ring middle"></div>
+              <div className="spinner-ring inner"></div>
+              <div className="spinner-center">
+                <LogoutIcons.Lock />
+              </div>
             </div>
 
-            <h2>Ending Active Session...</h2>
-            <p className="logout-subtitle">Clearing security credentials and encrypting local logs.</p>
+            <div className="logout-card-titles">
+              <h2 className="logout-main-title">Terminating Session</h2>
+              <p className="logout-description">
+                Safely flushing credential stores and closing encrypted banking socket connections...
+              </p>
+            </div>
 
-            <div className="logout-progress-bar">
-              <div className="logout-progress-fill"></div>
+            {/* Interactive Step Telemetry */}
+            <div className="logout-progress-track">
+              <div 
+                className="logout-progress-bar"
+                style={{ width: progressStep === 1 ? '35%' : progressStep === 2 ? '75%' : '100%' }}
+              >
+                <div className="progress-sweep"></div>
+              </div>
+            </div>
+
+            <div className="logout-status-code font-mono">
+              {progressStep === 1 && 'REVOKING OAUTH 2.0 BEARER TOKENS...'}
+              {progressStep === 2 && 'PURGING ENCRYPTED LOCAL STORAGE CACHES...'}
+              {progressStep === 3 && 'CLOSING GATEWAY TELEMETRY SOCKETS...'}
             </div>
           </div>
         )}
 
-        {/* STATE 3: Successfully Logged Out */}
+        {/* ============================================================
+            PHASE 3: SAFELY LOGGED OUT
+            ============================================================ */}
         {status === 'logged_out' && (
-          <div className="logout-card">
-            <div className="logout-card-icon-wrap success">
-              <Icons.ShieldCheck />
+          <div className="logout-glass-card">
+            <div className="card-ambient-glow is-green"></div>
+
+            <div className="logout-icon-bubble is-green">
+              <LogoutIcons.ShieldCheck />
             </div>
 
-            <h2>You Have Been Logged Out</h2>
-            <p className="logout-subtitle">Your session ended safely. All temporary authorization keys have been cleared.</p>
-
-            <div className="logout-timer-badge">
-              Redirecting to Sign In page in <strong>{countdown}s</strong>
+            <div className="logout-card-titles">
+              <div className="logout-security-pill is-green">
+                <span className="pulse-dot"></span>
+                <span>Session Safely Revoked</span>
+              </div>
+              <h2 className="logout-main-title">Signed Out Successfully</h2>
+              <p className="logout-description">
+                Your session has been securely closed. All local credentials have been cleared from this browser.
+              </p>
             </div>
 
-            <div className="logout-actions">
-              <button type="button" className="btn-confirm-logout" onClick={() => navigate('/login')}>
-                Sign In Again
+            {/* Circular Countdown Progress Badge */}
+            <div className="logout-countdown-ring-box">
+              <svg className="countdown-svg" width="60" height="60" viewBox="0 0 44 44">
+                <circle className="countdown-bg-circle" cx="22" cy="22" r="20" />
+                <circle 
+                  className="countdown-progress-circle" 
+                  cx="22" 
+                  cy="22" 
+                  r="20" 
+                  style={{ strokeDashoffset: strokeDashoffset }}
+                />
+              </svg>
+              <div className="countdown-number font-mono">{countdown}</div>
+            </div>
+
+            <div className="logout-redirect-caption">
+              Automatic redirect to login in <strong className="font-mono">{countdown}s</strong>
+            </div>
+
+            {/* Direct Return Button */}
+            <div className="logout-actions-cluster">
+              <button 
+                type="button" 
+                className="btn-confirm-signout is-return" 
+                onClick={() => navigate('/login')}
+              >
+                <span>Return to Login Portal</span>
+                <LogoutIcons.ArrowRight />
               </button>
             </div>
           </div>
@@ -203,10 +450,21 @@ const Logout = () => {
 
       </div>
 
-      {/* Security Footer Badge */}
-      <div className="logout-footer-badge">
-        <Icons.ShieldCheck /> 256-bit SSL Session Protection Active
+      {/* Security & Regulatory Footer */}
+      <div className="logout-bottom-security-bar">
+        <div className="security-cert-item">
+          <LogoutIcons.ShieldCheck />
+          <span>PCI-DSS 4.0 Level 1 Certified</span>
+        </div>
+        <span className="footer-sep">•</span>
+        <div className="security-cert-item">
+          <LogoutIcons.Key />
+          <span>AES 256-Bit SSL/TLS Encryption</span>
+        </div>
+        <span className="footer-sep">•</span>
+        <span>Ecollect Pvt Ltd</span>
       </div>
+
     </div>
   );
 };

@@ -1,59 +1,143 @@
 /* ==========================================================================
-   UNIFIED ENTERPRISE DASHBOARD LAYOUT (100% Cohesive Dark Theme)
+   EcollectPG - Ultra-Premium Dashboard Layout System
    ========================================================================== */
 
-/* Main Layout Wrapper */
-.dashboard-layout {
+.app-dashboard-root {
   display: flex;
-  min-height: 100vh;
   width: 100vw;
-  background-color: #070a14; /* Deep dark background matching sidebar */
-  color: #ffffff;
-  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  min-height: 100vh;
+  background-color: var(--bgPrimary);
+  color: var(--textPrimary);
   overflow-x: hidden;
+  box-sizing: border-box;
+  position: relative;
 }
 
-/* Content Area next to Sidebar */
-.dashboard-main-content {
+/* Ambient Background Glow Mesh */
+.ambient-glow-mesh {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.glow-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(140px);
+  opacity: 0.12;
+  transition: all 1s ease;
+}
+
+.glow-top-left {
+  top: -10%;
+  left: 15%;
+  width: 500px;
+  height: 500px;
+  background: var(--accentGradient, radial-gradient(circle, #6366f1 0%, #8b5cf6 100%));
+}
+
+.glow-bottom-right {
+  bottom: -15%;
+  right: 5%;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, var(--accent) 0%, rgba(99, 102, 241, 0) 70%);
+}
+
+/* Light Mode Ambient Glow Tuning */
+[data-theme-mode="light"] .glow-orb {
+  opacity: 0.32;
+  filter: blur(120px);
+}
+
+[data-theme-mode="light"] .glow-top-left {
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.12) 0%, rgba(139, 92, 246, 0.06) 50%, transparent 80%);
+}
+
+[data-theme-mode="light"] .glow-bottom-right {
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.1) 0%, rgba(99, 102, 241, 0.04) 50%, transparent 80%);
+}
+
+/* Mobile Drawer Backdrop Overlay */
+.dashboard-mobile-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 999;
+  animation: overlayFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme-mode="light"] .dashboard-mobile-overlay {
+  background: rgba(15, 23, 42, 0.45);
+}
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Main Viewport Container */
+.app-main-viewport {
   flex: 1;
+  min-height: 100vh;
+  background-color: transparent;
+  overflow-x: hidden;
+  transition: margin-left 0.3s cubic-bezier(0.16, 1, 0.3, 1), width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  background-color: #070a14; /* Eliminates the harsh white background! */
-  margin-left: 260px; /* Width of expanded sidebar */
-  transition: margin-left 0.3s ease;
+  position: relative;
+  z-index: 1;
 }
 
-.sidebar-collapsed .dashboard-main-content {
-  margin-left: 76px; /* Width of collapsed sidebar */
-}
-
-/* Dashboard Body Padding */
-.dashboard-page-body {
-  padding: 32px;
+/* Content Container */
+.app-content-container {
   flex: 1;
-  background-color: #070a14;
+  padding: 28px 36px 36px 36px;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  box-sizing: border-box;
+  position: relative;
 }
 
-/* Dark Glass Cards for Metrics & Charts */
-.stat-card-ultra,
-.chart-card,
-.table-card {
-  background: rgba(17, 24, 39, 0.75) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  backdrop-filter: blur(16px);
-  border-radius: 20px !important;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3) !important;
-  color: #ffffff !important;
+/* Responsive Rules */
+@media (max-width: 1024px) {
+  .app-content-container {
+    padding: 24px 24px 32px 24px;
+  }
 }
 
-/* Dark Table Styles */
-.table-card table th {
-  color: #94a3b8 !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-}
+@media (max-width: 768px) {
+  .app-main-viewport {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  .app-content-container {
+    padding: 20px 16px 28px 16px;
+  }
 
-.table-card table td {
-  color: #f1f5f9 !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+  .glow-top-left {
+    width: 300px;
+    height: 300px;
+    left: 0;
+  }
+  
+  .glow-bottom-right {
+    width: 350px;
+    height: 350px;
+  }
 }

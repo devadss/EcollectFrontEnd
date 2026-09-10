@@ -8,6 +8,102 @@
   margin: 0 auto;
 }
 
+/* ===== PAGE HEADER ===== */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.page-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, #f7971e, #ffd200);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.page-subtitle {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+  margin: 4px 0 0 0;
+}
+
+.btn-outline {
+  padding: 10px 24px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.btn-outline:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+/* ===== INTEGRATION BANNER ===== */
+.integration-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.integration-banner.active {
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.integration-banner.inactive {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.banner-icon {
+  font-size: 20px;
+}
+
+.banner-text {
+  flex: 1;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.banner-status {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 14px;
+  border-radius: 20px;
+}
+
+.integration-banner.active .banner-status {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.integration-banner.inactive .banner-status {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
 /* ===== FORM ===== */
 .branch-form {
   display: flex;
@@ -16,20 +112,19 @@
 }
 
 .form-section {
-  background: var(--bgCard, #ffffff);
-  border-radius: 20px;
-  border: 1px solid var(--borderColor, #e5e5e5);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
   padding: 24px 28px;
-  box-shadow: var(--cardShadow, 0 2px 20px rgba(0, 0, 0, 0.04));
 }
 
 .form-section h3 {
   font-size: 16px;
   font-weight: 700;
-  color: var(--textPrimary, #1a1a2e);
+  color: #fff;
   margin: 0 0 20px 0;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--borderColor, #e5e5e5);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .form-grid {
@@ -50,35 +145,129 @@
 .form-group label {
   font-size: 13px;
   font-weight: 600;
-  color: var(--textSecondary, #666666);
+  color: rgba(255, 255, 255, 0.7);
   margin-bottom: 6px;
 }
 
 .form-group input,
 .form-group select,
 .form-group textarea {
-  padding: 10px 14px;
-  border: 1px solid var(--borderColor, #e5e5e5);
+  padding: 12px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
-  background: var(--bgPrimary, #f5f5f5);
-  color: var(--textPrimary, #1a1a2e);
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
   font-size: 14px;
   outline: none;
   transition: all 0.3s ease;
   font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: rgba(255, 255, 255, 0.25);
 }
 
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {
-  border-color: var(--accent, #000000);
-  box-shadow: 0 0 0 3px var(--accentLight, rgba(0, 0, 0, 0.06));
-  background: var(--bgCard, #ffffff);
+  border-color: #f7971e;
+  box-shadow: 0 0 0 3px rgba(247, 151, 30, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.form-group select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M6 8L1 3h10z' fill='rgba(255,255,255,0.4)'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  cursor: pointer;
+}
+
+.form-group select option {
+  background: #1a1a2e;
+  color: #fff;
 }
 
 .form-group textarea {
   resize: vertical;
   min-height: 80px;
+}
+
+/* ===== LOADING INPUT ===== */
+.loading-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+}
+
+.spinner-small {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #22c55e;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ===== BRANCH SELECT DROPDOWN ===== */
+.branch-select-dropdown {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M6 8L1 3h10z' fill='rgba(255,255,255,0.4)'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+}
+
+.branch-select-dropdown:focus {
+  border-color: #22c55e;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+}
+
+.branch-select-dropdown option {
+  background: #1a1a2e;
+  color: #fff;
+}
+
+/* ===== NO BRANCHES WARNING ===== */
+.no-branches-warning {
+  padding: 12px 16px;
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  border-radius: 10px;
+  color: #ef4444;
+  font-size: 14px;
+}
+
+/* ===== ERROR TEXT ===== */
+.error-text {
+  color: #ef4444;
+  font-size: 12px;
+  margin-top: 4px;
 }
 
 /* ===== FORM ACTIONS ===== */
@@ -90,20 +279,21 @@
 }
 
 .btn-primary {
-  background: var(--accent, #000000);
+  padding: 12px 32px;
+  background: linear-gradient(135deg, #f7971e, #ffd200);
   border: none;
-  color: #ffffff;
-  padding: 12px 28px;
-  border-radius: 12px;
+  border-radius: 10px;
+  color: #1a1a1a;
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
   transition: all 0.3s ease;
+  font-family: inherit;
 }
 
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 8px 30px rgba(247, 151, 30, 0.3);
 }
 
 .btn-primary:disabled {
@@ -111,28 +301,63 @@
   cursor: not-allowed;
 }
 
-.btn-outline {
-  background: transparent;
-  border: 2px solid var(--borderColor, #e5e5e5);
-  color: var(--textSecondary, #666666);
-  padding: 10px 24px;
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.btn-outline:hover {
-  border-color: var(--accent, #000000);
-  color: var(--textPrimary, #1a1a2e);
-}
-
 /* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {
-  .add-branch { padding: 16px; }
-  .form-grid { grid-template-columns: 1fr; }
-  .form-section { padding: 18px 20px; }
-  .form-actions { flex-direction: column-reverse; }
-  .form-actions button { width: 100%; justify-content: center; }
+  .add-branch { 
+    padding: 16px; 
+  }
+  
+  .form-grid { 
+    grid-template-columns: 1fr; 
+  }
+  
+  .form-section { 
+    padding: 18px 20px; 
+  }
+  
+  .form-actions { 
+    flex-direction: column-reverse; 
+  }
+  
+  .form-actions button { 
+    width: 100%; 
+    justify-content: center; 
+  }
+
+  .page-title {
+    font-size: 22px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .integration-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .add-branch {
+    padding: 12px;
+  }
+
+  .form-section {
+    padding: 14px 16px;
+  }
+
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+
+  .btn-primary,
+  .btn-outline {
+    padding: 12px 20px;
+    font-size: 13px;
+  }
 }

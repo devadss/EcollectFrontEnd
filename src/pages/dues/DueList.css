@@ -1,0 +1,548 @@
+/* ============================================================
+   eCollect Enterprise Daily Due Demand & Field Recovery Hub CSS
+   Ultra-Premium Theme-Adaptive Styling (Light & Dark Compatible)
+   ============================================================ */
+
+.due-page-container {
+  padding: 24px;
+  max-width: 1600px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  color: var(--textPrimary, #f8fafc);
+}
+
+/* ============================================================
+   1. HERO HEADER WITH GLASSMORPHISM & ACCENT GRADIENT
+   ============================================================ */
+.due-hero-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  background: var(--bgCardGlass, rgba(17, 24, 39, 0.75));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 28px 32px;
+  border-radius: 24px;
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.08));
+  box-shadow: var(--cardShadow, 0 10px 30px rgba(0, 0, 0, 0.25));
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.due-hero-header::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #ef4444 0%, #f59e0b 50%, #10b981 100%);
+}
+
+.due-badge-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 999px;
+  color: #ef4444;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.due-page-title {
+  font-size: 28px;
+  font-weight: 900;
+  color: var(--textPrimary, #ffffff);
+  margin: 0 0 6px 0;
+  letter-spacing: -0.6px;
+  line-height: 1.2;
+}
+
+.due-page-subtitle {
+  font-size: 14px;
+  color: var(--textSecondary, #94a3b8);
+  margin: 0;
+  max-width: 650px;
+}
+
+.due-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-due-upload {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 22px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 14px;
+  font-size: 13.5px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 18px rgba(239, 68, 68, 0.35);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-due-upload:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(239, 68, 68, 0.45);
+}
+
+.btn-due-export {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: var(--bgSecondary, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.12));
+  color: var(--textPrimary, #e2e8f0);
+  border-radius: 14px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-due-export:hover {
+  background: var(--bgHover, rgba(255, 255, 255, 0.1));
+  border-color: var(--accent, #6366f1);
+  color: var(--textPrimary, #ffffff);
+  transform: translateY(-1px);
+}
+
+/* ============================================================
+   2. TELEMETRY KPI CARDS (THEME ADAPTIVE)
+   ============================================================ */
+.due-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 18px;
+}
+
+.due-kpi-card {
+  padding: 22px 24px;
+  border-radius: 20px;
+  background: var(--bgCardGlass, rgba(17, 24, 39, 0.75));
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.08));
+  box-shadow: var(--cardShadow, 0 4px 20px rgba(0, 0, 0, 0.15));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.due-kpi-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--cardShadowHover, 0 12px 30px rgba(0, 0, 0, 0.25));
+  border-color: var(--borderGlow, rgba(99, 102, 241, 0.35));
+}
+
+.due-kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 5px;
+  height: 100%;
+  border-radius: 4px 0 0 4px;
+}
+
+.due-kpi-card.is-demand::before { background: linear-gradient(180deg, #ef4444, #dc2626); }
+.due-kpi-card.is-borrowers::before { background: linear-gradient(180deg, #38bdf8, #0284c7); }
+.due-kpi-card.is-collected::before { background: linear-gradient(180deg, #10b981, #059669); }
+.due-kpi-card.is-pending::before { background: linear-gradient(180deg, #f59e0b, #d97706); }
+.due-kpi-card.is-efficiency::before { background: linear-gradient(180deg, #818cf8, #4f46e5); }
+
+.due-kpi-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--textMuted, #94a3b8);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.due-kpi-val {
+  font-size: 26px;
+  font-weight: 900;
+  color: var(--textPrimary, #ffffff);
+  margin: 0;
+  letter-spacing: -0.5px;
+  font-family: 'JetBrains Mono', monospace, sans-serif;
+}
+
+.due-kpi-sub {
+  font-size: 12px;
+  color: var(--textMuted, #64748b);
+  font-weight: 500;
+}
+
+/* ============================================================
+   3. NAVIGATION TOOLBAR & FILTER CONTROLS
+   ============================================================ */
+.due-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  background: var(--bgCardGlass, rgba(17, 24, 39, 0.6));
+  backdrop-filter: blur(16px);
+  padding: 16px 22px;
+  border-radius: 18px;
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.08));
+  box-shadow: var(--cardShadow, 0 4px 15px rgba(0, 0, 0, 0.1));
+}
+
+.due-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.due-search-input {
+  padding: 10px 16px 10px 38px;
+  border-radius: 12px;
+  background: var(--bgSecondary, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.12));
+  color: var(--textPrimary, #fff);
+  font-size: 13.5px;
+  width: 280px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.due-search-input:focus {
+  border-color: var(--accent, #6366f1);
+  box-shadow: 0 0 0 3px var(--accentLight, rgba(99, 102, 241, 0.15));
+}
+
+.due-select-ctrl {
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: var(--bgSecondary, #0f172a);
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.14));
+  color: var(--textPrimary, #f8fafc);
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.due-select-ctrl:focus {
+  border-color: var(--accent, #6366f1);
+}
+
+/* ============================================================
+   4. MASTER DUE DEMAND TABLE CARD
+   ============================================================ */
+.due-table-card {
+  background: var(--bgCardGlass, rgba(17, 24, 39, 0.85));
+  backdrop-filter: blur(20px);
+  border-radius: 22px;
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.08));
+  overflow: hidden;
+  box-shadow: var(--cardShadow, 0 10px 30px rgba(0, 0, 0, 0.2));
+}
+
+.due-master-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.due-master-table th {
+  padding: 16px 20px;
+  background: var(--bgSecondary, rgba(15, 23, 42, 0.95));
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--textMuted, #94a3b8);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  border-bottom: 1px solid var(--tableBorder, rgba(255, 255, 255, 0.1));
+}
+
+.due-master-table td {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--tableBorder, rgba(255, 255, 255, 0.05));
+  font-size: 13.5px;
+  color: var(--textPrimary, #e2e8f0);
+  vertical-align: middle;
+  transition: background 0.15s ease;
+}
+
+.due-master-table tr:hover td {
+  background: var(--tableHover, rgba(99, 102, 241, 0.04));
+}
+
+/* Action Button Pills */
+.btn-action-pill {
+  padding: 7px 14px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 800;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-action-pill:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+}
+
+.btn-action-pill.is-qr {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: #ffffff;
+  box-shadow: 0 3px 10px rgba(99, 102, 241, 0.3);
+}
+
+.btn-action-pill.is-cash {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  box-shadow: 0 3px 10px rgba(16, 185, 129, 0.3);
+}
+
+.btn-action-pill.is-sms {
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+}
+
+.btn-action-pill.is-call {
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  color: var(--accent, #818cf8);
+}
+
+.due-status-badge {
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  display: inline-block;
+}
+
+.due-status-badge.is-pending {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #ef4444;
+}
+
+.due-status-badge.is-paid {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #10b981;
+}
+
+/* ============================================================
+   5. LIGHT THEME OVERRIDES FOR ULTRA-PREMIUM CRISPNESS
+   ============================================================ */
+[data-theme-mode="light"] .due-hero-header {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme-mode="light"] .due-kpi-card {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+}
+
+[data-theme-mode="light"] .due-toolbar {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.03);
+}
+
+[data-theme-mode="light"] .due-table-card {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme-mode="light"] .due-master-table th {
+  background: #f8fafc;
+  color: #475569;
+  border-bottom-color: rgba(15, 23, 42, 0.08);
+}
+
+[data-theme-mode="light"] .due-master-table td {
+  color: #0f172a;
+  border-bottom-color: rgba(15, 23, 42, 0.06);
+}
+
+[data-theme-mode="light"] .due-select-ctrl {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+[data-theme-mode="light"] .due-search-input {
+  background: #f8fafc;
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+
+/* ============================================================
+   6. PAGINATION BAR (THEME ADAPTIVE & RESPONSIVE)
+   ============================================================ */
+.due-pagination-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px 24px;
+  background: var(--bgSecondary, rgba(15, 23, 42, 0.95));
+  border-top: 1px solid var(--borderColor, rgba(255, 255, 255, 0.08));
+}
+
+.due-pagination-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--textSecondary, #94a3b8);
+}
+
+.due-page-size-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.due-page-size-select {
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--bgCard, #111827);
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.12));
+  color: var(--textPrimary, #fff);
+  font-size: 12.5px;
+  font-weight: 700;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.due-page-size-select:focus {
+  border-color: var(--accent, #6366f1);
+}
+
+.due-pagination-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.btn-page-ctrl {
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--bgCard, #111827);
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.1));
+  color: var(--textPrimary, #e2e8f0);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-page-ctrl:hover:not(:disabled) {
+  background: var(--bgHover, rgba(255, 255, 255, 0.08));
+  border-color: var(--accent, #6366f1);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.btn-page-ctrl:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-page-num {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: var(--bgCard, #111827);
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.1));
+  color: var(--textSecondary, #94a3b8);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.btn-page-num:hover:not(.is-active) {
+  background: var(--bgHover, rgba(255, 255, 255, 0.08));
+  color: var(--textPrimary, #fff);
+  border-color: var(--borderColor, rgba(255, 255, 255, 0.2));
+}
+
+.btn-page-num.is-active {
+  background: var(--accentGradient, linear-gradient(135deg, #6366f1, #4f46e5));
+  border-color: var(--accent, #6366f1);
+  color: #ffffff;
+  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.4);
+}
+
+[data-theme-mode="light"] .due-pagination-bar {
+  background: #f8fafc;
+  border-top-color: rgba(15, 23, 42, 0.08);
+}
+
+[data-theme-mode="light"] .due-page-size-select {
+  background: #ffffff;
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+[data-theme-mode="light"] .btn-page-ctrl {
+  background: #ffffff;
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+[data-theme-mode="light"] .btn-page-num {
+  background: #ffffff;
+  color: #475569;
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+[data-theme-mode="light"] .btn-page-num.is-active {
+  background: var(--accentGradient, linear-gradient(135deg, #4f46e5, #6366f1));
+  color: #ffffff;
+}

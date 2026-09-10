@@ -1,7 +1,8 @@
-import React, { useState,useEffect  } from 'react';
-import { useNavigate,useParams } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import DashboardLayout from '../../components/layouts/DashboardLayout'; 
 import { merchantApi } from '../../services/api'; 
+import { useDialog } from '../../context/DialogContext';
 import './AddMerchantConfig.css';
 
 const AddMerchantConfig = () => {
@@ -9,8 +10,8 @@ const AddMerchantConfig = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEdit = !!id;
+  const { showSuccess, showError } = useDialog();
   const [loading, setLoading] = useState(false);
-  const [pageLoading, setPageLoading] = useState(true);
   const [formData, setFormData] = useState({
     merchantId: '',
     productType: '',
@@ -22,67 +23,36 @@ const AddMerchantConfig = () => {
     requestMapping: '',
     responseMapping: '',
     priority: '',
-    branchId:'02'
-    //isActive: ''
-    // gstState: '',
-    // monthlyExpectedVolume: '',
-    // monthlyExpectedTransactionCount: '',
-    // averageTicketSize: '',
-    // contactPerson: { name: '', emailAddress: '', phoneNumber: '' },
-    // authorizedSignatory: { name: '', panNumber: '', phone: '', email: '', designation: '' },
-    // settlementAccounts: [{ accountHolderName: '', accountNumber: '', accountType: '', bankName: '', bankBranch: '', ifscCode: '' }]
+    branchId: '02'
   });
+
+  const loadAgent = useCallback(async () => {
+    try {
+      const res = await merchantApi.getAllMerchantConfigById(id);
+      setFormData({
+        ...res.data,
+        productType: res.data.productType?.toLowerCase() || "",
+      });
+    } catch (error) {
+      console.error('Error loading agent:', error);
+    }
+  }, [id]);
+
+  const loadMerchants = useCallback(async () => {
+    try {
+      const response = await merchantApi.getAllMerchant();
+      setMerchants(response.data.data);
+    } catch (error) {
+      console.error(error);
+    }
+  }, []);
 
   useEffect(() => {
     loadMerchants();
     if (isEdit) {
       loadAgent();
     }
-  }, [id]);
-
-
-  const loadData = async () => {
-    try {
-      setPageLoading(true);
-      await loadMerchants();
-      if (isEdit) {
-        await loadAgent();
-      }
-    } catch (error) {
-      console.error('Error loading data:', error);
-    } finally {
-      setTimeout(() => {
-        setPageLoading(false);
-      }, 500);
-    }
-  };
-
-  const loadAgent = async () => {
-    try {
-      const res = await merchantApi.getAllMerchantConfigById(id);
-      console.log(res.data);
-      //setFormData(res.data);
-
-       setFormData({
-        ...res.data,
-        productType: res.data.productType?.toLowerCase() || "",
-      });
-       
-    } catch (error) {
-      console.error('Error loading agent:', error);
-    }
-  };
-
-  const loadMerchants = async () => {
-    try {
-      const response = await merchantApi.getAllMerchant();
-      // console.log("response:",response);
-      // console.log("response Data:", response.data.data);
-      setMerchants(response.data.data);
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  }, [isEdit, loadAgent, loadMerchants]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -139,45 +109,6 @@ const AddMerchantConfig = () => {
     return Object.keys(tempErrors).length === 0;
   };
 
-  const handleContactChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      contactPerson: { ...prev.contactPerson, [name]: value }
-    }));
-  };
-
-  const handleSignatoryChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      authorizedSignatory: { ...prev.authorizedSignatory, [name]: value }
-    }));
-  };
-
-  const handleAccountChange = (index, e) => {
-    const { name, value } = e.target;
-    const updatedAccounts = [...formData.settlementAccounts];
-    updatedAccounts[index] = { ...updatedAccounts[index], [name]: value };
-    setFormData(prev => ({ ...prev, settlementAccounts: updatedAccounts }));
-  };
-
-  const addAccount = () => {
-    setFormData(prev => ({
-      ...prev,
-      settlementAccounts: [...prev.settlementAccounts, { accountHolderName: '', accountNumber: '', accountType: '', bankName: '', bankBranch: '', ifscCode: '' }]
-    }));
-  };
-
-  const removeAccount = (index) => {
-    if (formData.settlementAccounts.length > 1) {
-      const updatedAccounts = formData.settlementAccounts.filter((_, i) => i !== index);
-      setFormData(prev => ({ ...prev, settlementAccounts: updatedAccounts }));
-    }
-  };
-
-
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -188,38 +119,20 @@ const AddMerchantConfig = () => {
 
     try {
       let response;
-      console.log(formData);
-      if(isEdit){
-        //Update API
+      if (isEdit) {
         response = await merchantApi.updateMerchantConfig(id, formData);
+        showSuccess(response?.data?.message || 'Merchant API Configuration updated successfully.', 'Configuration Updated');
       } else {
-        //Create API
         response = await merchantApi.configMerchant(formData);
-      }
-      if(response.data.success === true) {
-        alert(response.data.message);
-      } else {
-        alert("Failed to save");
+        showSuccess(response?.data?.message || 'Merchant API Configuration registered and provisioned successfully.', 'Configuration Created');
       }
       navigate('/merchants/merchantconfig');
-
-      // if (isEdit) {
-      //   await agentApi.update(id, formData);
-      // } else {
-      //   await agentApi.create(formData);
-      // }
-      // navigate('/agents');
-      
-
     } catch (error) {
-      console.error('Error creating merchant:', error);
-      alert('Failed to create merchant. Please try again.');
-
-      // console.log("Status:", error.response?.status);
-      // console.log("Response:", error.response?.data);
-      // console.log("Headers:", error.response?.headers);
-
-      alert(JSON.stringify(error.response?.data));
+      console.error('Error saving merchant config:', error);
+      showError(
+        error.response?.data?.message || error.response?.data?.title || error.message || 'Failed to save merchant configuration. Please verify all fields.', 
+        'Configuration Save Failed'
+      );
     } finally {
       setLoading(false);
     }

@@ -1,0 +1,292 @@
+/* Customer Pay Decision Portal Styles */
+
+.customer-portal-viewport {
+  min-height: 100vh;
+  width: 100%;
+  background: #090d16;
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.customer-portal-loading {
+  text-align: center;
+  color: #94a3b8;
+}
+
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(99, 102, 241, 0.2);
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 16px auto;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.customer-portal-card {
+  background: #111827;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  border-radius: 20px;
+  max-width: 520px;
+  width: 100%;
+  padding: 28px 24px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+}
+
+.portal-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.brand-badge {
+  display: inline-block;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: #6366f1;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.portal-header h2 {
+  font-size: 22px;
+  font-weight: 800;
+  color: #f8fafc;
+  margin: 0 0 6px 0;
+}
+
+.sub-text {
+  font-size: 13px;
+  color: #94a3b8;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.loan-summary-box {
+  display: flex;
+  justify-content: space-between;
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 14px 18px;
+  margin-bottom: 24px;
+}
+
+.sum-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.sum-item .lbl {
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+.sum-item .val {
+  font-size: 16px;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.sum-item .val.amount {
+  color: #10b981;
+}
+
+.step-section {
+  margin-bottom: 24px;
+}
+
+.step-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #cbd5e1;
+  margin-bottom: 14px;
+}
+
+.frequency-options-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.freq-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.freq-card:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+.freq-card.selected {
+  border-color: #6366f1;
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.radio-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.freq-card.selected .radio-dot {
+  border-color: #6366f1;
+}
+
+.inner-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #6366f1;
+}
+
+.card-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.f-name {
+  font-size: 14px;
+  color: #f8fafc;
+}
+
+.f-desc {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.f-calc {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #38bdf8;
+  margin-top: 2px;
+}
+
+.schedule-summary-callout {
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 12.5px;
+}
+
+.callout-header {
+  font-weight: 700;
+  color: #38bdf8;
+  margin-bottom: 8px;
+}
+
+.callout-row {
+  display: flex;
+  justify-content: space-between;
+  color: #cbd5e1;
+  margin-bottom: 4px;
+}
+
+.checkbox-mandate-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #0f172a;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 12px;
+  padding: 14px;
+  cursor: pointer;
+}
+
+.checkbox-mandate-card input {
+  margin-top: 3px;
+  accent-color: #10b981;
+}
+
+.chk-label-box strong {
+  font-size: 13.5px;
+  color: #f8fafc;
+  display: block;
+}
+
+.chk-label-box p {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 2px 0 0 0;
+  line-height: 1.4;
+}
+
+.confirm-btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: #ffffff;
+  border: none;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
+}
+
+.success-confirmation-screen {
+  text-align: center;
+  padding: 20px 10px;
+}
+
+.success-icon-animated {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.success-confirmation-screen h3 {
+  font-size: 20px;
+  color: #f8fafc;
+  margin-bottom: 8px;
+}
+
+.success-confirmation-screen p {
+  font-size: 14px;
+  color: #94a3b8;
+  margin-bottom: 16px;
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: 9999px;
+  font-size: 12.5px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+.status-pill.active {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.thank-you-note {
+  font-size: 12px;
+  color: #64748b;
+}

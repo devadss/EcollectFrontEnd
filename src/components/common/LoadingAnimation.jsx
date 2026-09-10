@@ -3,119 +3,100 @@ import React, { useEffect, useState } from 'react';
 import './LoadingAnimation.css';
 
 const LoadingAnimation = ({ 
-  message = 'Loading...',
-  type = 'coin', // 'coin', 'ring', 'pulse', 'glow'
+  message = 'Synchronizing Gateway Telemetry...',
   size = 'medium' // 'small', 'medium', 'large'
 }) => {
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = useState(18);
 
   useEffect(() => {
     const interval = setInterval(() => {
       setProgress(prev => {
-        if (prev >= 100) {
+        if (prev >= 98) {
           clearInterval(interval);
-          return 100;
+          return 98;
         }
-        return prev + 1;
+        const jump = Math.floor(Math.random() * 8) + 4;
+        return Math.min(prev + jump, 98);
       });
-    }, 30);
+    }, 120);
 
     return () => clearInterval(interval);
   }, []);
 
-  const renderLoader = () => {
-    switch(type) {
-      case 'ring':
-        return (
-          <div className="premium-ring-container">
-            <div className="premium-ring">
-              <div className="ring-segment"></div>
-              <div className="ring-segment"></div>
-              <div className="ring-segment"></div>
-              <div className="ring-segment"></div>
-              <div className="ring-segment"></div>
-              <div className="ring-segment"></div>
-              <div className="ring-segment"></div>
-              <div className="ring-segment"></div>
-            </div>
-            <div className="ring-center">
-              <span className="rupee-symbol">₹</span>
-            </div>
-          </div>
-        );
-      
-      case 'pulse':
-        return (
-          <div className="premium-pulse-container">
-            <div className="pulse-ring pulse-1"></div>
-            <div className="pulse-ring pulse-2"></div>
-            <div className="pulse-ring pulse-3"></div>
-            <div className="pulse-ring pulse-4"></div>
-            <div className="pulse-center">
-              <span className="rupee-symbol">₹</span>
-            </div>
-          </div>
-        );
-      
-      case 'glow':
-        return (
-          <div className="premium-glow-container">
-            <div className="glow-core">
-              <span className="rupee-symbol">₹</span>
-            </div>
-            <div className="glow-orb glow-1"></div>
-            <div className="glow-orb glow-2"></div>
-            <div className="glow-orb glow-3"></div>
-            <div className="glow-orb glow-4"></div>
-            <div className="glow-orb glow-5"></div>
-            <div className="glow-orb glow-6"></div>
-          </div>
-        );
-      
-      case 'coin':
-      default:
-        return (
-          <div className={`rupee-coin-container ${size}`}>
-            <div className="rupee-coin">
-              <div className="coin-inner">
-                <span className="rupee-symbol">₹</span>
-              </div>
-            </div>
-            <div className="glow-ring ring-1"></div>
-            <div className="glow-ring ring-2"></div>
-            <div className="glow-ring ring-3"></div>
-          </div>
-        );
-    }
-  };
-
   return (
-    <div className="loading-overlay">
-      <div className="loading-backdrop"></div>
-      <div className="loading-box">
-        {renderLoader()}
+    <div className="fintech-loading-overlay">
+      <div className="fintech-loading-backdrop"></div>
+      
+      <div className="fintech-loading-box">
         
-        {/* Premium Progress Bar */}
-        <div className="premium-progress-container">
-          <div className="premium-progress-bar">
-            <div 
-              className="premium-progress-fill" 
-              style={{ width: `${progress}%` }}
-            ></div>
+        {/* Dynamic Theme Glow Radiance */}
+        <div className="loading-theme-halo"></div>
+
+        {/* 3D Spinning Fintech Hologram Stage */}
+        <div className={`fintech-stage ${size}`}>
+          {/* Orbital dynamic rings */}
+          <div className="theme-orbit-ring ring-1"></div>
+          <div className="theme-orbit-ring ring-2"></div>
+          
+          {/* 3D Rotating Emblem with dynamic theme glow */}
+          <div className="theme-coin-3d-wrapper">
+            <div className="theme-coin-face coin-front">
+              <img 
+                src="/gold-coin.jpg" 
+                alt="Fintech Portal Emblem" 
+                className="theme-coin-img"
+              />
+              <div className="theme-coin-shine-sweep"></div>
+            </div>
+            <div className="theme-coin-face coin-back">
+              <img 
+                src="/gold-coin.jpg" 
+                alt="Fintech Portal Emblem" 
+                className="theme-coin-img"
+              />
+              <div className="theme-coin-shine-sweep"></div>
+            </div>
           </div>
-          <span className="premium-progress-text">{progress}%</span>
+
+          {/* Sparkle Particles matching theme */}
+          <div className="theme-sparkle sp-1">✦</div>
+          <div className="theme-sparkle sp-2">★</div>
+          <div className="theme-sparkle sp-3">✦</div>
         </div>
-        
-        {message && (
-          <div className="loading-message">
-            <span className="message-text">{message}</span>
-            <span className="dots">
+
+        {/* Status Messaging */}
+        <div className="loading-text-stack">
+          <div className="loading-main-message">
+            <span className="message-title">{message}</span>
+            <span className="live-dots theme-dots">
               <span>.</span>
               <span>.</span>
               <span>.</span>
             </span>
           </div>
-        )}
+
+          <div className="loading-security-badge">
+            <span className="security-dot"></span>
+            <span>256-Bit Encrypted Secure Banking Vault</span>
+          </div>
+        </div>
+
+        {/* Dynamic Theme Progress Bar */}
+        <div className="fintech-progress-container">
+          <div className="fintech-progress-track">
+            <div 
+              className="fintech-progress-bar" 
+              style={{ width: `${progress}%` }}
+            >
+              <div className="progress-light-sweep"></div>
+            </div>
+          </div>
+          <div className="progress-status-row font-mono">
+            <span className="progress-state">PROCESSING TRANSACTION</span>
+            <span className="progress-number">{progress}%</span>
+          </div>
+        </div>
+
       </div>
     </div>
   );
