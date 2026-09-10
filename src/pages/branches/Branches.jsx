@@ -334,35 +334,19 @@ const Branches = () => {
     <DashboardLayout pageTitle="Branch Network" role={rawRole}>
       {loading && <LoadingAnimation message="Loading Regional Branches..." />}
       
-      {/* Live Toast Banner */}
-      {actionMessage && (
-        <div style={{
-          position: 'fixed',
-          top: '24px',
-          right: '24px',
-          zIndex: 9999,
-          background: actionMessage.type === 'success' ? '#065f46' : '#991b1b',
-          color: '#ffffff',
-          padding: '12px 20px',
-          borderRadius: '10px',
-          boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-          fontWeight: '600',
-          fontSize: '14px',
-          border: '1px solid rgba(255,255,255,0.2)'
-        }}>
-          {actionMessage.text}
-        </div>
-      )}
-
-      <div className="branches-root-container">
-        
-        {/* Top Hero Header */}
-        <div className="branches-hero-header">
-          <div className="branches-hero-titles">
-            <div className="branches-badge-tag">
-              <span className="pulse-dot"></span>
-              <BranchIcons.Sparkles />
-              <span>Regional Banking Infrastructure</span>
+      <DashboardLayout role="softwareadmin" pageTitle="Branch Network">
+        <div className={`branches-page ${loading ? 'content-blurred' : ''}`}>
+          
+          {/* Header */}
+          <div className="page-header">
+            <div>
+              <div className="header-badge">
+                <span className="pulse-dot"></span> Regional Infrastructure
+              </div>
+              <h1 className="page-title gradient-text">
+                Branch <span className="gradient-text">Network</span>
+              </h1>
+              <p className="page-subtitle">Manage regional office locations, field teams, and localized revenue</p>
             </div>
             <h1 className="branches-page-title">
               Branch <span className="gradient-text">Network</span>
