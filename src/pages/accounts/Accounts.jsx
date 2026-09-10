@@ -1934,6 +1934,7 @@ const Accounts = () => {
     } catch (err) {
       console.warn('Wallet load note:', err);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -2346,6 +2347,7 @@ const Accounts = () => {
     } finally {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBranchCode, selectedAgentCode, collectionProductTab]);
 
     useEffect(() => {
@@ -2424,6 +2426,7 @@ const Accounts = () => {
 
     initMasterData();
     return () => { isMounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ============================================================
@@ -2984,6 +2987,7 @@ const Accounts = () => {
       isSubscribed = false;
       clearInterval(pollInterval);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isQrModalOpen, qrData?.orderId, linkData?.orderId, paymentStatus, linkStatus, verifiedPaymentReceipt]);
 
   // Live Expiry Countdown Timer for Dynamic QR (5 minutes = 300s)
@@ -4081,6 +4085,12 @@ const Accounts = () => {
                   <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600 }}>Active Overdue Demand</div>
                   <div className="font-mono font-bold" style={{ fontSize: '18px', color: '#ef4444' }}>
                     ₹{totalDueDemand.toLocaleString('en-IN')}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600 }}>Total Outstanding</div>
+                  <div className="font-mono font-bold" style={{ fontSize: '18px', color: '#fbbf24' }}>
+                    ₹{totalOutstanding.toLocaleString('en-IN')}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>

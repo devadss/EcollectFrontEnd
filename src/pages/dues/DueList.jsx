@@ -97,10 +97,8 @@ const DueList = () => {
   }, [isIntegratedMode, isSoftwareAdmin, navigate]);
 
   const [accounts, setAccounts] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'PENDING' | 'PAID'
-  const [bucketFilter, setBucketFilter] = useState('ALL');
   const [agentFilter, setAgentFilter] = useState('ALL');
   const [productFilter, setProductFilter] = useState('ALL');
   const [notification, setNotification] = useState(null);
@@ -198,7 +196,6 @@ const DueList = () => {
 
   // Load Accounts from local ledger
   const loadDueAccounts = useCallback(() => {
-    setLoading(true);
     try {
       const stored = JSON.parse(localStorage.getItem('ecollect_standalone_accounts') || '[]');
       if (stored && stored.length > 0) {
@@ -263,8 +260,6 @@ const DueList = () => {
       }
     } catch (err) {
       console.error('Failed to load accounts:', err);
-    } finally {
-      setLoading(false);
     }
   }, []);
 
@@ -783,6 +778,15 @@ const DueList = () => {
                             title="Generate Dynamic UPI QR"
                           >
                             <Icons.QrCode /> <span>QR</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-action-pill is-link"
+                            style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.3)' }}
+                            onClick={() => handleOpenLinkModal(acc)}
+                            title="Generate Payment Link"
+                          >
+                            <Icons.CreditCard /> <span>Link</span>
                           </button>
                           <button
                             type="button"

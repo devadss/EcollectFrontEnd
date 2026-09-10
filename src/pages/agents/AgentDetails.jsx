@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
-import { agentApi, merchantApi } from '../../services/api';
+import { agentApi } from '../../services/api';
 import './AgentDetails.css';
 
 const AgentDetails = () => {
@@ -14,6 +14,7 @@ const AgentDetails = () => {
 
   useEffect(() => {
     loadAgent();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const loadAgent = async () => {

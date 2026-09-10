@@ -260,6 +260,7 @@ const AddAgent = () => {
     return () => {
       isMounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isEdit, isSoftwareAdmin, isBranchUser, currentMerchantId]);
 
   // Handle Merchant Selection & Sync Integration Status Dynamically

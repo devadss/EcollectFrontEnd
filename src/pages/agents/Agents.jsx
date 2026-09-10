@@ -157,7 +157,6 @@ const Agents = () => {
   });
   const [selectedStatusTab, setSelectedStatusTab] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'PENDING' | 'INACTIVE'
   const [viewLayout, setViewLayout] = useState('grid'); // 'grid' | 'table'
-  const [actionMessage, setActionMessage] = useState(null);
 
   // Sync with global MerchantContext (Admin only)
   useEffect(() => {
@@ -168,6 +167,7 @@ const Agents = () => {
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [merchantSelfId, branchSelfId, isSoftwareAdmin, isBranchUser]);
 
   const loadData = async () => {
@@ -213,15 +213,13 @@ const Agents = () => {
   const handleApproveAgent = async (id, name) => {
     try {
       await agentApi.approve(id);
-      setActionMessage({ type: 'success', text: `✅ Agent "${name}" approved successfully by Software Admin!` });
-      setTimeout(() => setActionMessage(null), 4000);
+      showSuccess(`Agent "${name}" approved successfully by Software Admin!`, 'Agent Approved');
       loadData();
     } catch (err) {
       console.error('Error approving agent:', err);
       // Optimistic local update
       setAgents(prev => prev.map(a => a.id === id ? { ...a, isActive: true, isVerified: true, isApproved: true, status: 'Active' } : a));
-      setActionMessage({ type: 'success', text: `✅ Agent "${name}" approved and activated!` });
-      setTimeout(() => setActionMessage(null), 4000);
+      showSuccess(`Agent "${name}" approved and activated!`, 'Agent Activated');
     }
   };
 
@@ -305,26 +303,18 @@ const Agents = () => {
     <DashboardLayout pageTitle="Field Agents" role={rawRole}>
       {loading && <LoadingAnimation message="Loading Field Representatives..." />}
       
-      <DashboardLayout role="softwareadmin" pageTitle="Field Agents Directory">
-        <div className={`agents-page ${loading ? 'content-blurred' : ''}`}>
-          
-          {/* Header */}
-          <div className="page-header">
-            <div>
-              <div className="header-badge">
-                <span className="pulse-dot"></span> Field Representative Portal
-              </div>
-              <h1 className="page-title gradient-text">
-                Field <span className="gradient-text">Agents</span>
-              </h1>
-              <p className="page-subtitle">Manage agent assignments, merchant links, and commission rates</p>
+      <div className={`agents-page ${loading ? 'content-blurred' : ''}`}>
+        
+        {/* Header */}
+        <div className="page-header">
+          <div>
+            <div className="header-badge">
+              <span className="pulse-dot"></span> Field Representative Portal
             </div>
-            <h1 className="agents-page-title">
+            <h1 className="page-title gradient-text">
               Field <span className="gradient-text">Agents</span>
             </h1>
-            <p className="agents-page-subtitle">
-              Manage agent credentials, merchant route assignments, and commission schedules
-            </p>
+            <p className="page-subtitle">Manage agent credentials, merchant route assignments, and commission schedules</p>
           </div>
 
           <div className="agents-header-actions">
