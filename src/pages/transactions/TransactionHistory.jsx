@@ -16,6 +16,8 @@ import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
 import { transactionApi, branchApi, agentApi } from '../../services/api';
 import { useMerchantContext } from '../../context/MerchantContext';
+import { exportToCsv } from '../../utils/exportLedger';
+import TransactionPrintLedger from '../../components/ledger/TransactionPrintLedger';
 import './TransactionHistory.css';
 
 ChartJS.register(
@@ -112,6 +114,9 @@ export const normalizeTransaction = (t) => {
     transactionId: t.transactionId || t.TransactionId || t.paymentGatewayTransactionId || t.PaymentGatewayTransactionId || (t.id ?? t.Id)?.toString() || 'TXN-0000',
     orderId: t.orderId || t.OrderId || '',
     utr: t.utr || t.Utr || t.rrn || t.Rrn || t.paymentGatewayTransactionId || t.PaymentGatewayTransactionId || '',
+    vendorPostTransId: t.vendorPostTransId || t.VendorPostTransId || t.vendor_post_trans_id || t.vendorPostTransID || t.vendor_post_transid || '',
+    vendorPostStatus: t.vendorPostStatus || t.VendorPostStatus || t.vendor_post_status || '',
+    receiptNumber: t.vendorPostTransId || t.VendorPostTransId || t.vendor_post_trans_id || t.vendorPostTransID || t.vendor_post_transid || t.receiptNumber || t.ReceiptNumber || '',
     amount: txAmount,
     status: (t.status || t.Status || t.transactionStatus || t.TransactionStatus || 'SUCCESS').toString().toUpperCase(),
     paymentMode: (t.paymentMode || t.PaymentMode || t.paymentMethod || t.PaymentMethod || t.method || t.Method || t.paymentChannel || t.PaymentChannel || t.mode || 'UPI').toString().toUpperCase(),
@@ -397,22 +402,32 @@ const TransactionHistory = () => {
 
   const loadTransactions = useCallback(async () => {
     try {
-      const queryParams = {
-        Search: filter.search && filter.search.trim() ? filter.search.trim() : 'ALL',
-        Status: filter.statusTab || 'ALL',
-        PaymentMode: filter.paymentMode || 'ALL',
-        BankCode: filter.branchId ? (branches.find(b => String(b.id) === String(filter.branchId))?.code || 'ALL') : 'ALL'
-      };
+      const queryParams = {};
+      if (filter.search && filter.search.trim() && filter.search.trim().toUpperCase() !== 'ALL') {
+        queryParams.Search = filter.search.trim();
+      }
+      if (filter.statusTab && filter.statusTab.toUpperCase() !== 'ALL') {
+        queryParams.Status = filter.statusTab;
+      }
+      if (filter.paymentMode && filter.paymentMode.toUpperCase() !== 'ALL') {
+        queryParams.PaymentMode = filter.paymentMode;
+      }
+      if (filter.branchId && filter.branchId !== 'ALL') {
+        const bCode = branches.find(b => String(b.id) === String(filter.branchId))?.code;
+        if (bCode) queryParams.BankCode = bCode;
+      }
       if (activeMerchantId && activeMerchantId !== 'ALL') {
         queryParams.merchantId = activeMerchantId;
         queryParams.MerchantId = activeMerchantId;
       }
       if (isBranchUser && branchSelfId) {
         queryParams.branchId = branchSelfId;
-      } else if (filter.branchId) {
+      } else if (filter.branchId && filter.branchId !== 'ALL') {
         queryParams.branchId = filter.branchId;
       }
-      if (filter.agentId) queryParams.agentId = filter.agentId;
+      if (filter.agentId && filter.agentId !== 'ALL') {
+        queryParams.agentId = filter.agentId;
+      }
 
       let res = await transactionApi.getAll(queryParams).catch(() => null);
       let listData = res?.data?.data || res?.data?.items || res?.data?.result || res?.data || [];
@@ -426,7 +441,26 @@ const TransactionHistory = () => {
         }
       }
 
-      const safeData = Array.isArray(listData) ? listData.map(normalizeTransaction) : [];
+      let localStandaloneTxns = [];
+      try {
+        const stored = JSON.parse(localStorage.getItem('ecollect_standalone_transactions') || '[]');
+        if (Array.isArray(stored)) localStandaloneTxns = stored;
+      } catch (e) {
+        console.warn('Local standalone txns load error:', e);
+      }
+
+      const mergedList = Array.isArray(listData) ? [...listData] : [];
+      const seenIds = new Set(mergedList.map(t => t.id || t.transactionId || t.TransactionId || t.receiptNumber));
+      
+      localStandaloneTxns.forEach(t => {
+        const id = t.id || t.transactionId || t.receiptNumber;
+        if (!seenIds.has(id)) {
+          seenIds.add(id);
+          mergedList.unshift(t);
+        }
+      });
+
+      const safeData = mergedList.map(normalizeTransaction);
       setTransactions(safeData);
     } catch (err) {
       console.error('Error fetching transactions:', err);
@@ -468,6 +502,8 @@ const TransactionHistory = () => {
     return transactions.filter(t => {
       const q = filter.search.toLowerCase().trim();
       const matchesSearch = !q ||
+        (t.receiptNumber || '').toLowerCase().includes(q) ||
+        (t.vendorPostTransId || '').toLowerCase().includes(q) ||
         (t.id || '').toString().toLowerCase().includes(q) ||
         (t.transactionId || '').toLowerCase().includes(q) ||
         (t.orderId || '').toLowerCase().includes(q) ||
@@ -494,10 +530,19 @@ const TransactionHistory = () => {
         : (String(t.branchId ?? t.BranchId) === String(effectiveBranchId) ||
            (t.branchName && branches.find(b => String(b.id) === String(effectiveBranchId))?.name?.toLowerCase() === t.branchName.toLowerCase()));
 
+      const selectedAgentObj = agents.find(a => String(a.id || a.agentId) === String(filter.agentId));
+      const selAgentName = (selectedAgentObj?.name || selectedAgentObj?.agentName || selectedAgentObj?.fullName || '').toLowerCase().trim();
+      const selAgentCode = (selectedAgentObj?.agentCode || selectedAgentObj?.code || selectedAgentObj?.external_agent_id || '').toLowerCase().trim();
+
       const matchesAgent = !filter.agentId
         ? true
-        : (String(t.agentId ?? t.AgentId) === String(filter.agentId) ||
-           (t.agentName && agents.find(a => String(a.id) === String(filter.agentId))?.agentName?.toLowerCase() === t.agentName.toLowerCase()));
+        : (
+            (t.agentId != null && String(t.agentId ?? t.AgentId) === String(filter.agentId)) ||
+            (selAgentCode && t.agentCode && String(t.agentCode).toLowerCase().trim() === selAgentCode) ||
+            (selAgentCode && t.agent && String(t.agent).toLowerCase().includes(selAgentCode)) ||
+            (selAgentName && t.agentName && String(t.agentName).toLowerCase().trim() === selAgentName) ||
+            (selAgentName && t.agent && String(t.agent).toLowerCase().includes(selAgentName))
+          );
 
       let matchesStatusTab = true;
       const statusLower = (t.status || '').toLowerCase();
@@ -641,6 +686,28 @@ const TransactionHistory = () => {
     return filteredTransactions.slice(start, start + pageSize);
   }, [filteredTransactions, currentPage, pageSize]);
 
+  const handleExportCsv = () => {
+    const columns = [
+      { key: '#sno', label: 'S.No' },
+      { key: 'receiptNumber', label: 'Receipt Number' },
+      { key: 'vendorPostTransId', label: 'Vendor Post Ref / CBS ID' },
+      { key: 'date', label: 'Transaction Date' },
+      { key: 'id', label: 'Transaction ID' },
+      { key: 'orderId', label: 'Order ID' },
+      { key: 'customer', label: 'Customer Name' },
+      { key: 'customerPhone', label: 'Customer Phone' },
+      { key: 'merchantName', label: 'Merchant' },
+      { key: 'branchName', label: 'Branch' },
+      { key: 'agentName', label: 'Agent' },
+      { key: 'paymentMode', label: 'Payment Channel' },
+      { key: 'collectionType', label: 'Collection Type' },
+      { key: 'amount', label: 'Amount (INR)' },
+      { key: 'status', label: 'Clearance Status' },
+      { key: 'utr', label: 'Banking UTR / RRN' }
+    ];
+    exportToCsv('Transaction_Ledger', filteredTransactions, columns);
+  };
+
   const getStatusClass = (status) => {
     const s = (status || '').toLowerCase();
     if (s === 'success' || s === 'completed') return 'is-success';
@@ -676,9 +743,13 @@ const TransactionHistory = () => {
               <TxIcons.Refresh />
               <span>Refresh</span>
             </button>
-            <button className="tx-export-btn" onClick={() => window.print()}>
+            <button className="tx-export-btn is-csv" onClick={handleExportCsv} title="Download CSV Spreadsheet">
               <TxIcons.Export />
-              <span>Export Ledger</span>
+              <span>Export to CSV</span>
+            </button>
+            <button className="tx-export-btn" onClick={() => window.print()} title="Print or Save Official PDF Statement">
+              <TxIcons.Print />
+              <span>Export to PDF Ledger</span>
             </button>
           </div>
         </div>
@@ -1036,28 +1107,30 @@ const TransactionHistory = () => {
                 </select>
               )}
 
-              {/* Branch Filter */}
-              <select
-                value={filter.branchId}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setFilter(prev => ({ ...prev, branchId: val, agentId: '' }));
-                }}
-                className="tx-mode-select"
-                style={{ minWidth: '150px' }}
-              >
-                <option value="">🏢 All Branches ({branches.length})</option>
-                {branches.map((b) => {
-                  const bId = b.id || b.branchId;
-                  const bName = b.name || b.branchName || `Branch #${bId}`;
-                  const bCode = b.code || b.branchCode ? ` (${b.code || b.branchCode})` : '';
-                  return (
-                    <option key={bId} value={bId}>
-                      🏢 {bName}{bCode}
-                    </option>
-                  );
-                })}
-              </select>
+              {/* Branch Filter - Only shown for Merchant & Software Admin Logins */}
+              {!isBranchUser && (
+                <select
+                  value={filter.branchId}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFilter(prev => ({ ...prev, branchId: val, agentId: '' }));
+                  }}
+                  className="tx-mode-select"
+                  style={{ minWidth: '150px' }}
+                >
+                  <option value="">🏢 All Branches ({branches.length})</option>
+                  {branches.map((b) => {
+                    const bId = b.id || b.branchId;
+                    const bName = b.name || b.branchName || `Branch #${bId}`;
+                    const bCode = b.code || b.branchCode ? ` (${b.code || b.branchCode})` : '';
+                    return (
+                      <option key={bId} value={bId}>
+                        🏢 {bName}{bCode}
+                      </option>
+                    );
+                  })}
+                </select>
+              )}
 
               {/* Agent Filter */}
               <select
@@ -1107,10 +1180,20 @@ const TransactionHistory = () => {
               </select>
 
               {/* Reset Filters button if any active */}
-              {(filter.search || filter.paymentMode || filter.collectionType || filter.branchId || filter.agentId || filter.dateFrom || filter.dateTo || filter.datePeriod !== 'ALL' || filter.statusTab !== 'ALL') && (
+              {(filter.search || filter.paymentMode || filter.collectionType || (!isBranchUser && filter.branchId) || filter.agentId || filter.dateFrom || filter.dateTo || filter.datePeriod !== 'ALL' || filter.statusTab !== 'ALL') && (
                 <button
                   className="tx-reset-filters-btn"
-                  onClick={() => setFilter({ search: '', statusTab: 'ALL', paymentMode: '', collectionType: '', datePeriod: 'ALL', branchId: '', agentId: '', dateFrom: '', dateTo: '' })}
+                  onClick={() => setFilter({ 
+                    search: '', 
+                    statusTab: 'ALL', 
+                    paymentMode: '', 
+                    collectionType: '', 
+                    datePeriod: 'ALL', 
+                    branchId: (isBranchUser && branchSelfId) ? branchSelfId : '', 
+                    agentId: '', 
+                    dateFrom: '', 
+                    dateTo: '' 
+                  })}
                   title="Reset all active filters"
                 >
                   ✕ Reset Filters
@@ -1125,7 +1208,8 @@ const TransactionHistory = () => {
             <table className="tx-data-table">
               <thead>
                 <tr>
-                  <th style={{ width: '50px' }}>#</th>
+                  <th style={{ width: '45px' }}>#</th>
+                  <th>Receipt Number</th>
                   <th>Transaction ID / UTR</th>
                   {isSoftwareAdmin && <th>Merchant Partner</th>}
                   <th>Branch Outlet</th>
@@ -1142,7 +1226,7 @@ const TransactionHistory = () => {
               <tbody>
                 {paginatedTransactions.length === 0 ? (
                   <tr>
-                    <td colSpan={isSoftwareAdmin ? 12 : 11} className="empty-tx-cell">
+                    <td colSpan={isSoftwareAdmin ? 13 : 12} className="empty-tx-cell">
                       <div className="empty-tx-box">
                         <span className="empty-glyph">📋</span>
                         <h4>No Transactions Found</h4>
@@ -1153,23 +1237,53 @@ const TransactionHistory = () => {
                 ) : (
                   paginatedTransactions.map((t, index) => {
                     const statusClass = getStatusClass(t.status);
-                    const isCopied = copiedId === (t.id || t.transactionId);
+                    const receiptVal = t.vendorPostTransId || t.receiptNumber || (t.id ? `LOC_REC_${t.id}` : '—');
+                    const txnVal = t.transactionId || t.id || 'TXN-0000';
+                    const isReceiptCopied = copiedId === `rec_${t.id || index}`;
+                    const isTxnCopied = copiedId === `txn_${t.id || index}`;
                     const absoluteIndex = (currentPage - 1) * pageSize + index + 1;
 
                     return (
                       <tr key={t.id || t.transactionId || index} className="tx-table-row">
                         <td className="row-index font-mono">{String(absoluteIndex).padStart(2, '0')}</td>
                         
-                        {/* Transaction ID & UTR */}
+                        {/* 1. SEPARATE COLUMN: Receipt Number (VendorPostTransId / CBS / Local Ref) */}
+                        <td>
+                          <div className="tx-id-cell">
+                            <span className="tx-id-badge font-mono" style={{ color: 'var(--accent, #6366f1)', fontWeight: 700 }}>
+                              📄 {receiptVal}
+                              <button 
+                                className="mini-copy-btn" 
+                                onClick={() => handleCopy(receiptVal, `rec_${t.id || index}`)} 
+                                title="Copy Receipt Number"
+                              >
+                                {isReceiptCopied ? <TxIcons.CheckMark /> : <TxIcons.Copy />}
+                              </button>
+                            </span>
+                            {t.vendorPostStatus && (
+                              <span className="tx-utr-code font-mono" style={{ fontSize: '10.5px', color: '#10b981', fontWeight: 600 }}>
+                                ● {t.vendorPostStatus}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* 2. SEPARATE COLUMN: Transaction ID & Banking UTR */}
                         <td>
                           <div className="tx-id-cell">
                             <span className="tx-id-badge font-mono">
-                              #{t.transactionId || t.id || 'TXN-0000'}
-                              <button className="mini-copy-btn" onClick={() => handleCopy(t.transactionId || t.id, t.id || t.transactionId)} title="Copy ID">
-                                {isCopied ? <TxIcons.CheckMark /> : <TxIcons.Copy />}
+                              #{txnVal}
+                              <button 
+                                className="mini-copy-btn" 
+                                onClick={() => handleCopy(txnVal, `txn_${t.id || index}`)} 
+                                title="Copy Transaction ID"
+                              >
+                                {isTxnCopied ? <TxIcons.CheckMark /> : <TxIcons.Copy />}
                               </button>
                             </span>
-                            <span className="tx-utr-code font-mono text-muted">{t.utr || `UTR-2026-${absoluteIndex + 900}`}</span>
+                            <span className="tx-utr-code font-mono text-muted">
+                              {t.utr || `UTR-2026-${absoluteIndex + 900}`}
+                            </span>
                           </div>
                         </td>
 
@@ -1360,7 +1474,9 @@ const TransactionHistory = () => {
                   </div>
                   <div>
                     <h3 className="modal-title">Transaction Receipt</h3>
-                    <span className="modal-code font-mono">#{selectedTxn.transactionId || selectedTxn.id}</span>
+                    <span className="modal-code font-mono" style={{ color: 'var(--accent, #6366f1)', fontWeight: 700 }}>
+                      📄 Receipt #{selectedTxn.receiptNumber || selectedTxn.vendorPostTransId || selectedTxn.transactionId || selectedTxn.id}
+                    </span>
                   </div>
                 </div>
                 <button className="modal-close-btn" onClick={() => setSelectedTxn(null)}>
@@ -1382,6 +1498,22 @@ const TransactionHistory = () => {
 
                 {/* Key Telemetry Breakdown */}
                 <div className="modal-telemetry-grid">
+                  <div className="telemetry-item" style={{ gridColumn: 'span 2', background: 'rgba(99, 102, 241, 0.08)', borderColor: 'rgba(99, 102, 241, 0.25)' }}>
+                    <span className="item-label" style={{ color: 'var(--accent, #6366f1)' }}>Official Receipt Number (Vendor / CBS Ref)</span>
+                    <span className="item-val font-mono font-bold" style={{ color: 'var(--accent, #6366f1)', fontSize: '15px' }}>
+                      📄 {selectedTxn.receiptNumber || selectedTxn.vendorPostTransId || selectedTxn.transactionId}
+                    </span>
+                  </div>
+                  <div className="telemetry-item">
+                    <span className="item-label">System Transaction ID</span>
+                    <span className="item-val font-mono">#{selectedTxn.transactionId || selectedTxn.id}</span>
+                  </div>
+                  <div className="telemetry-item">
+                    <span className="item-label">Posting Mode / Status</span>
+                    <span className="item-val font-mono font-bold" style={{ color: '#10b981' }}>
+                      {selectedTxn.vendorPostStatus || 'CBS_POSTED'}
+                    </span>
+                  </div>
                   <div className="telemetry-item">
                     <span className="item-label">Merchant Partner</span>
                     <span className="item-val font-bold">{selectedTxn.merchant || selectedTxn.merchantName || 'Apex Retail Services'}</span>
@@ -1437,6 +1569,14 @@ const TransactionHistory = () => {
             </div>
           </div>
         )}
+
+        {/* Official Printable Statement for PDF Export */}
+        <TransactionPrintLedger 
+          transactions={filteredTransactions}
+          stats={stats}
+          filters={filter}
+          merchantName={selectedMerchant?.merchantName || user?.name || 'Apex Retail Services'}
+        />
 
       </div>
     </DashboardLayout>

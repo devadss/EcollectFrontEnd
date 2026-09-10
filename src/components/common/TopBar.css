@@ -672,12 +672,22 @@
 }
 
 .merchant-dropdown-list::-webkit-scrollbar {
-  width: 5px;
+  width: 10px;
+}
+
+.merchant-dropdown-list::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.3);
+  border-radius: 6px;
 }
 
 .merchant-dropdown-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
+  background: #64748b;
+  border-radius: 6px;
+  border: 2px solid rgba(15, 23, 42, 0.3);
+}
+
+.merchant-dropdown-list::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 .merchant-dropdown-item {
@@ -781,4 +791,138 @@
   .merchant-selector-name {
     max-width: 90px;
   }
+}
+
+/* ==========================================================================
+   ULTRA-PREMIUM LIGHT MODE TOPBAR OVERRIDES
+   ========================================================================== */
+[data-theme-mode="light"] .ultra-topbar {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.02), 0 4px 12px -2px rgba(15, 23, 42, 0.03);
+}
+
+[data-theme-mode="light"] .search-field-input {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme-mode="light"] .search-field-input::placeholder {
+  color: #94a3b8;
+}
+
+[data-theme-mode="light"] .action-icon-trigger {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme-mode="light"] .action-icon-trigger:hover {
+  background: #f8fafc;
+  color: var(--accent, #4f46e5);
+  border-color: var(--borderGlow, rgba(79, 70, 229, 0.35));
+}
+
+[data-theme-mode="light"] .profile-pill-trigger {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme-mode="light"] .profile-pill-trigger:hover {
+  background: #f8fafc;
+  border-color: var(--borderGlow, rgba(79, 70, 229, 0.35));
+}
+
+[data-theme-mode="light"] .pill-user-name {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .floating-popover {
+  background: #ffffff !important;
+  border: 1px solid rgba(15, 23, 42, 0.1) !important;
+  box-shadow: 0 20px 45px -4px rgba(15, 23, 42, 0.12), 0 0 1px rgba(0, 0, 0, 0.1) !important;
+}
+
+[data-theme-mode="light"] .popover-heading {
+  color: #64748b;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+[data-theme-mode="light"] .theme-swatch-item {
+  color: #334155;
+}
+
+[data-theme-mode="light"] .theme-swatch-item:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .theme-swatch-item.is-selected {
+  background: rgba(79, 70, 229, 0.1);
+  color: #4f46e5;
+}
+
+[data-theme-mode="light"] .merchant-selector-trigger {
+  background: #ffffff;
+  border: 1px solid rgba(79, 70, 229, 0.25);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme-mode="light"] .merchant-selector-name {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .merchant-search-input {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .merchant-search-input:focus {
+  background: #ffffff;
+  border-color: var(--accent, #4f46e5);
+}
+
+[data-theme-mode="light"] .merchant-dropdown-item {
+  color: #334155;
+}
+
+[data-theme-mode="light"] .merchant-dropdown-item:hover {
+  background: rgba(79, 70, 229, 0.08);
+  border-color: rgba(79, 70, 229, 0.2);
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .merchant-dropdown-item.is-selected {
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.12), rgba(6, 182, 212, 0.08));
+  border-color: rgba(79, 70, 229, 0.35);
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .stream-item-card:hover {
+  background: #f8fafc;
+}
+
+[data-theme-mode="light"] .stream-message {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .popover-footer-action {
+  background: #f8fafc;
+  border-top: 1px solid #f1f5f9;
+}
+
+[data-theme-mode="light"] .popover-nav-item {
+  color: #334155;
+}
+
+[data-theme-mode="light"] .popover-nav-item:hover {
+  background: #f1f5f9;
+  color: #0f172a;
 }

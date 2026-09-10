@@ -34,12 +34,25 @@ export const NotificationProvider = ({ children }) => {
   useEffect(() => {
     refreshNotifications();
 
-    // Periodic telemetry sync every 45s
+    // Event listeners for domain events (e.g. when transactions occur or wallet updates)
+    const handleDomainEvent = () => refreshNotifications();
+    window.addEventListener('transaction_created', handleDomainEvent);
+    window.addEventListener('wallet_updated', handleDomainEvent);
+    window.addEventListener('merchant_changed', handleDomainEvent);
+    window.addEventListener('notifications_updated', handleDomainEvent);
+
+    // Periodic telemetry sync every 30s
     const interval = setInterval(() => {
       refreshNotifications();
-    }, 45000);
+    }, 30000);
 
-    return () => clearInterval(interval);
+    return () => {
+      window.removeEventListener('transaction_created', handleDomainEvent);
+      window.removeEventListener('wallet_updated', handleDomainEvent);
+      window.removeEventListener('merchant_changed', handleDomainEvent);
+      window.removeEventListener('notifications_updated', handleDomainEvent);
+      clearInterval(interval);
+    };
   }, [refreshNotifications]);
 
   // Mark single as read

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bar, Line, Doughnut } from 'react-chartjs-2';
 import {
@@ -17,6 +17,7 @@ import {
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
 import { dashboardApi, transactionApi } from '../../services/api';
+import { getDayShiftState, saveDayShiftState, calculateDayEndSummary, runGoLivePreFlightCheck } from '../../services/dayOperationsService';
 import './BranchDashboard.css';
 
 ChartJS.register(
@@ -127,9 +128,17 @@ const BranchDashboard = () => {
       return {};
     }
   })();
+  const authUser = user;
 
   const rawRole = localStorage.getItem('user_role') || localStorage.getItem('role') || 'branchadmin';
   const branchId = user?.branchId || user?.BranchId || user?.branch_id || localStorage.getItem('branchId') || user?.id || 1;
+
+  // Integration Status check (Model Y = Integrated CBS, Model N = Standalone Ledger)
+  const isIntegratedMode = useMemo(() => {
+    const rawInteg = localStorage.getItem('integrationStatus') || user?.integrationStatus || user?.IntegrationStatus || 'No';
+    return String(rawInteg).toUpperCase() === 'Y' || String(rawInteg).toUpperCase() === 'YES' || rawInteg === true;
+  }, [user]);
+  const isNonIntegrated = !isIntegratedMode;
 
   const [profile, setProfile] = useState({
     name: user?.branchName || user?.branch || 'Branch Operations Hub',
@@ -154,6 +163,77 @@ const BranchDashboard = () => {
   const [revenueDataLabels, setRevenueDataLabels] = useState([]);
   const [revenueDataValues, setRevenueDataValues] = useState([]);
   const [paymentBreakdown, setPaymentBreakdown] = useState([]);
+
+  // Day Operations & Shift State
+  const [isDayOpsModalOpen, setIsDayOpsModalOpen] = useState(false);
+  const [dayOpsTab, setDayOpsTab] = useState('BOD');
+  const [dayShiftState, setDayShiftState] = useState(() => getDayShiftState());
+  const [dayOpsNotes, setDayOpsNotes] = useState('');
+
+  useEffect(() => {
+    const handleShiftEvent = (e) => {
+      if (e?.detail) {
+        setDayShiftState(e.detail);
+      } else {
+        setDayShiftState(getDayShiftState());
+      }
+    };
+    window.addEventListener('ecollect:day_shift_changed', handleShiftEvent);
+    window.addEventListener('storage', handleShiftEvent);
+    return () => {
+      window.removeEventListener('ecollect:day_shift_changed', handleShiftEvent);
+      window.removeEventListener('storage', handleShiftEvent);
+    };
+  }, []);
+
+  const eodSummary = useMemo(() => {
+    return calculateDayEndSummary({
+      accounts: [],
+      transactions: recentTxns || []
+    });
+  }, [recentTxns]);
+
+  const goLiveReport = useMemo(() => {
+    return runGoLivePreFlightCheck({
+      merchantId: authUser?.merchantId || 4,
+      accounts: [],
+      user: authUser,
+      isNonIntegrated: true
+    });
+  }, [authUser]);
+
+  const handleStartBodShift = () => {
+    const updated = {
+      date: new Date().toISOString().slice(0, 10),
+      shiftStatus: 'OPEN',
+      openedAt: new Date().toISOString(),
+      closedAt: null,
+      openedBy: authUser?.fullName || authUser?.name || 'Branch Manager',
+      closedBy: null,
+      notes: dayOpsNotes || 'Daily field collection operations active.'
+    };
+    setDayShiftState(updated);
+    saveDayShiftState(updated);
+  };
+
+  const handleCompleteEodSettlement = () => {
+    const updated = {
+      ...dayShiftState,
+      shiftStatus: 'CLOSED',
+      closedAt: new Date().toISOString(),
+      closedBy: authUser?.fullName || authUser?.name || 'Branch Manager',
+      reconciledSummary: eodSummary,
+      notes: dayOpsNotes || 'Daily collections reconciled and shift closed.'
+    };
+
+    setDayShiftState(updated);
+    saveDayShiftState(updated);
+    setDayOpsTab('CERTIFICATE');
+  };
+
+  const handlePrintEodCertificate = () => {
+    window.print();
+  };
 
   const fetchBranchTelemetry = useCallback(async () => {
     if (!branchId) {
@@ -230,7 +310,7 @@ const BranchDashboard = () => {
       }
 
       if (Array.isArray(data.recentTransactions) && data.recentTransactions.length > 0) {
-        setRecentTxns(data.recentTransactions.map(tx => ({
+        setRecentTxns(data.recentTransactions.slice(0, 5).map(tx => ({
           id: tx.id,
           merchant: tx.merchant || 'Merchant',
           customer: tx.customer || 'Customer',
@@ -240,7 +320,7 @@ const BranchDashboard = () => {
           time: tx.time || tx.timeAgo || 'Recently'
         })));
       } else if (txList.length > 0) {
-        setRecentTxns(txList.slice(0, 8));
+        setRecentTxns(txList.slice(0, 5));
       } else {
         setRecentTxns([]);
       }
@@ -390,6 +470,38 @@ const BranchDashboard = () => {
           </div>
 
           <div className="branch-header-actions">
+            {isNonIntegrated && (
+              <>
+                <button 
+                  type="button"
+                  className="branch-export-btn"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    background: dayShiftState?.shiftStatus === 'OPEN'
+                      ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(5, 150, 105, 0.25))'
+                      : 'linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(185, 28, 28, 0.25))',
+                    borderColor: dayShiftState?.shiftStatus === 'OPEN'
+                      ? 'rgba(16, 185, 129, 0.4)'
+                      : 'rgba(239, 68, 68, 0.4)',
+                    color: dayShiftState?.shiftStatus === 'OPEN' ? '#10b981' : '#f87171',
+                    fontWeight: 800
+                  }}
+                  onClick={() => setIsDayOpsModalOpen(true)}
+                  title="Open Day Begin (BOD), Day End (EOD) Settlement Suite"
+                >
+                  <span>{dayShiftState?.shiftStatus === 'OPEN' ? '☀️ Shift: OPEN' : '🌙 Shift: CLOSED'}</span>
+                </button>
+
+                <button className="branch-export-btn" onClick={() => navigate('/due-list')} title="View Daily Due List & Demand Ledger" style={{ background: 'rgba(99, 102, 241, 0.15)', borderColor: 'rgba(99, 102, 241, 0.35)', color: '#818cf8', fontWeight: 800 }}>
+                  <span>📋 Daily Due List</span>
+                </button>
+                <button className="branch-export-btn" onClick={() => navigate('/buckets')} title="View Delinquency Aging & Recovery Buckets" style={{ background: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239, 68, 68, 0.35)', color: '#f87171', fontWeight: 800 }}>
+                  <span>🗂️ Delinquency Buckets</span>
+                </button>
+              </>
+            )}
             <button className="branch-export-btn" onClick={fetchBranchTelemetry} title="Refresh Telemetry">
               <BranchIcons.Refresh />
               <span>Refresh</span>
@@ -427,6 +539,58 @@ const BranchDashboard = () => {
             <span className="font-mono">{stats.revenueChange || '0%'} Velocity</span>
           </div>
         </div>
+
+        {/* 🔒 Mandatory Day Begin (BOD) Shift Closed Alert Banner (Model N Only) */}
+        {isNonIntegrated && dayShiftState?.shiftStatus !== 'OPEN' && (
+          <div style={{
+            padding: '14px 20px',
+            borderRadius: '14px',
+            background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.18), rgba(185, 28, 28, 0.28))',
+            border: '1px solid #ef4444',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '14px',
+            boxShadow: '0 8px 24px rgba(239, 68, 68, 0.2)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <span style={{ fontSize: '28px' }}>🔒</span>
+              <div>
+                <div style={{ fontSize: '15px', fontWeight: 800, color: '#fff' }}>
+                  Daily Collection Shift is Currently CLOSED (Action Required)
+                </div>
+                <div style={{ fontSize: '12.5px', color: '#fca5a5', marginTop: '2px' }}>
+                  Please perform <strong>Day Begin (BOD)</strong> to activate field agent cash handling, dynamic QR billing, and daily ledger collections.
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setDayOpsTab('BOD');
+                setIsDayOpsModalOpen(true);
+              }}
+              style={{
+                padding: '10px 18px',
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, #10b981, #059669)',
+                color: '#fff',
+                fontWeight: 800,
+                fontSize: '13px',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+              }}
+            >
+              <span>☀️ Start Day Begin (BOD) Now</span>
+            </button>
+          </div>
+        )}
 
         {/* 4 Primary KPI Stats Grid */}
         <div className="branch-kpi-grid">
@@ -642,7 +806,7 @@ const BranchDashboard = () => {
                   No recent transaction records for this branch yet.
                 </div>
               ) : (
-                recentTxns.map((tx, idx) => (
+                recentTxns.slice(0, 5).map((tx, idx) => (
                   <div key={idx} className="feed-item-card">
                     <div className="feed-left">
                       <span className="feed-id-chip font-mono">#{tx.id}</span>
@@ -666,6 +830,263 @@ const BranchDashboard = () => {
           </div>
 
         </div>
+
+        {/* DAY OPERATIONS (BOD / EOD) SUITE MODAL (Model N Only) */}
+        {isNonIntegrated && isDayOpsModalOpen && (
+          <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+            <div className="modal-card" style={{ background: '#0f172a', border: '1px solid rgba(255, 255, 255, 0.12)', borderRadius: '20px', width: '100%', maxWidth: '780px', maxHeight: '90vh', overflowY: 'auto', padding: '28px', color: '#f8fafc', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)' }}>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '16px' }}>
+                <div>
+                  <h2 style={{ fontSize: '20px', fontWeight: 900, color: '#fff', margin: 0 }}>☀️ Day Begin (BOD) & 🌙 Day End (EOD) Operations</h2>
+                  <p style={{ fontSize: '12.5px', color: '#94a3b8', margin: '4px 0 0 0' }}>Manage daily collection shift lifecycle and perform manual Day-End (EOD) settlement</p>
+                </div>
+                <button type="button" onClick={() => setIsDayOpsModalOpen(false)} style={{ background: 'rgba(255, 255, 255, 0.05)', border: 'none', color: '#94a3b8', fontSize: '20px', cursor: 'pointer', borderRadius: '50%', width: '36px', height: '36px' }}>✕</button>
+              </div>
+
+              {/* TABS */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', background: 'rgba(255, 255, 255, 0.03)', padding: '6px', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                <button
+                  type="button"
+                  onClick={() => setDayOpsTab('BOD')}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    background: dayOpsTab === 'BOD' ? '#10b981' : 'transparent',
+                    color: '#fff',
+                    border: 'none',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  ☀️ 1. Day Begin (BOD)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDayOpsTab('EOD')}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    background: dayOpsTab === 'EOD' ? '#ef4444' : 'transparent',
+                    color: '#fff',
+                    border: 'none',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  🌙 2. Day End (EOD) Settlement
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDayOpsTab('CERTIFICATE')}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    background: dayOpsTab === 'CERTIFICATE' ? '#3b82f6' : 'transparent',
+                    color: '#fff',
+                    border: 'none',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  📜 3. Settlement Scroll
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDayOpsTab('GOLIVE')}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    background: dayOpsTab === 'GOLIVE' ? '#6366f1' : 'transparent',
+                    color: '#fff',
+                    border: 'none',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  🚀 4. Go-Live Audit ({goLiveReport.percentage}%)
+                </button>
+              </div>
+
+              {/* TAB 1: BOD */}
+              {dayOpsTab === 'BOD' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{
+                    padding: '16px 20px',
+                    borderRadius: '14px',
+                    background: dayShiftState?.shiftStatus === 'OPEN' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                    border: dayShiftState?.shiftStatus === 'OPEN' ? '1px solid #10b981' : '1px solid #ef4444',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}>
+                    <div>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#94a3b8' }}>CURRENT SHIFT STATUS</div>
+                      <div style={{ fontSize: '20px', fontWeight: 900, color: dayShiftState?.shiftStatus === 'OPEN' ? '#34d399' : '#f87171' }}>
+                        {dayShiftState?.shiftStatus === 'OPEN' ? '☀️ SHIFT IS OPEN & ACTIVE' : '🌙 SHIFT IS CURRENTLY CLOSED'}
+                      </div>
+                      {dayShiftState?.openedAt && (
+                        <div style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '4px' }}>
+                          Opened at: {new Date(dayShiftState.openedAt).toLocaleTimeString()} by {dayShiftState.openedBy || 'Manager'}
+                        </div>
+                      )}
+                    </div>
+                    <span style={{ fontSize: '32px' }}>{dayShiftState?.shiftStatus === 'OPEN' ? '🟢' : '🔒'}</span>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12.5px', color: '#94a3b8', fontWeight: 700, marginBottom: '6px' }}>Morning Shift Operational Notes</label>
+                    <input
+                      type="text"
+                      value={dayOpsNotes}
+                      onChange={e => setDayOpsNotes(e.target.value)}
+                      placeholder="e.g. Standard morning field collection run"
+                      style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.15)', color: '#fff', fontSize: '13px', outline: 'none' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={handleStartBodShift}
+                      style={{
+                        padding: '12px 24px',
+                        borderRadius: '12px',
+                        background: 'linear-gradient(135deg, #10b981, #059669)',
+                        color: '#fff',
+                        fontWeight: 800,
+                        fontSize: '14px',
+                        border: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {dayShiftState?.shiftStatus === 'OPEN' ? '✓ Shift Already Active (Click to Refresh)' : '☀️ Start Day Begin (BOD) & Unlock Operations'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: EOD */}
+              {dayOpsTab === 'EOD' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+                    <div style={{ padding: '14px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                      <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700 }}>DOORSTEP CASH</div>
+                      <div style={{ fontSize: '18px', fontWeight: 900, color: '#34d399', fontFamily: 'monospace' }}>₹{eodSummary.cashCollectedAmount.toLocaleString('en-IN')}</div>
+                    </div>
+                    <div style={{ padding: '14px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                      <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700 }}>DYNAMIC UPI QR</div>
+                      <div style={{ fontSize: '18px', fontWeight: 900, color: '#818cf8', fontFamily: 'monospace' }}>₹{eodSummary.upiCollectedAmount.toLocaleString('en-IN')}</div>
+                    </div>
+                    <div style={{ padding: '14px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                      <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700 }}>PAYMENT LINKS</div>
+                      <div style={{ fontSize: '18px', fontWeight: 900, color: '#f59e0b', fontFamily: 'monospace' }}>₹{(eodSummary.linkCollectedAmount || 0).toLocaleString('en-IN')}</div>
+                    </div>
+                    <div style={{ padding: '14px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
+                      <div style={{ fontSize: '11px', color: '#6ee7b7', fontWeight: 700 }}>TOTAL COLLECTED</div>
+                      <div style={{ fontSize: '18px', fontWeight: 900, color: '#10b981', fontFamily: 'monospace' }}>₹{eodSummary.totalCollectedAmount.toLocaleString('en-IN')}</div>
+                    </div>
+                  </div>
+
+                  <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.07)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 800, color: '#fff' }}>Manual Day-End Settlement</div>
+                      <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
+                        Review today's total collections ({eodSummary.totalTransactionsCount} transactions) and seal the daily ledger.
+                      </div>
+                    </div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#38bdf8' }}>
+                      Efficiency: {eodSummary.collectionEfficiencyPercent}%
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={handleCompleteEodSettlement}
+                      style={{
+                        padding: '12px 24px',
+                        borderRadius: '12px',
+                        background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                        color: '#fff',
+                        fontWeight: 800,
+                        fontSize: '14px',
+                        border: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🌙 Complete Day-End (EOD) Settlement & Close Shift
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: CERTIFICATE */}
+              {dayOpsTab === 'CERTIFICATE' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ background: '#fff', color: '#000', padding: '24px', borderRadius: '12px', fontFamily: 'serif' }}>
+                    <div style={{ textAlign: 'center', borderBottom: '2px solid #000', paddingBottom: '12px', marginBottom: '16px' }}>
+                      <h2 style={{ margin: 0, fontSize: '20px', textTransform: 'uppercase' }}>FINWIN eCollect - Enterprise Settlement Certificate</h2>
+                      <div style={{ fontSize: '12px', color: '#555' }}>Daily Treasury & Doorstep Collection Reconciliation Dossier</div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '13px', marginBottom: '16px' }}>
+                      <div>Date: <strong>{dayShiftState?.date || new Date().toLocaleDateString('en-IN')}</strong></div>
+                      <div>Branch Node: <strong>{profile.code} - {branchName}</strong></div>
+                      <div>Shift Status: <strong>{dayShiftState?.shiftStatus || 'CLOSED'}</strong></div>
+                      <div>Reconciled By: <strong>{dayShiftState?.closedBy || authUser?.name || 'Manager'}</strong></div>
+                      <div>Total Collections: <strong>₹{eodSummary.totalCollectedAmount.toLocaleString('en-IN')}</strong></div>
+                      <div>Doorstep Cash: <strong>₹{eodSummary.cashCollectedAmount.toLocaleString('en-IN')}</strong></div>
+                      <div>UPI QR Collections: <strong>₹{eodSummary.upiCollectedAmount.toLocaleString('en-IN')}</strong></div>
+                      <div>Payment Link Collections: <strong>₹{(eodSummary.linkCollectedAmount || 0).toLocaleString('en-IN')}</strong></div>
+                    </div>
+
+                    <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '11px', color: '#777', borderTop: '1px dashed #aaa', paddingTop: '10px' }}>
+                      Autonomous Verification Signed • eCollect Core Ledger Security Protocol
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={handlePrintEodCertificate}
+                      style={{ padding: '10px 20px', borderRadius: '10px', background: '#3b82f6', color: '#fff', fontWeight: 800, border: 'none', cursor: 'pointer' }}
+                    >
+                      🖨️ Print Certificate
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 4: GO-LIVE AUDIT */}
+              {dayOpsTab === 'GOLIVE' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderRadius: '12px', background: 'rgba(99, 102, 241, 0.15)', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 800, color: '#818cf8' }}>Pre-Flight Readiness Score: {goLiveReport.score} ({goLiveReport.percentage}%)</div>
+                      <div style={{ fontSize: '12px', color: '#94a3b8' }}>{goLiveReport.isReadyForGoLive ? '✓ System meets all compliance standards for field go-live' : '⚠️ Action required before field go-live'}</div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '350px', overflowY: 'auto' }}>
+                    {goLiveReport.checks.map(chk => (
+                      <div key={chk.id} style={{ padding: '10px 14px', borderRadius: '10px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.07)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>{chk.title}</div>
+                          <div style={{ fontSize: '11.5px', color: '#94a3b8' }}>{chk.desc}</div>
+                        </div>
+                        <span style={{ fontSize: '11px', fontWeight: 800, padding: '4px 8px', borderRadius: '6px', background: chk.status.startsWith('PASSED') ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)', color: chk.status.startsWith('PASSED') ? '#34d399' : '#f87171' }}>
+                          {chk.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </div>
+        )}
 
       </div>
     </DashboardLayout>

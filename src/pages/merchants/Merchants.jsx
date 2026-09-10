@@ -544,7 +544,6 @@ const Merchants = () => {
                       const legalName = m.companyLegalName || '';
                       const isGatewayLive = m.integrationStatus === 'Y' || m.IntegrationStatus === 'Y' || m.integrationStatus === 'Yes' || m.isActive;
                       const isKycApproved = m.isApproved !== false;
-                      const isActive = m.isActive !== false;
 
                       return (
                         <tr key={m.id || index} className="merch-table-row">

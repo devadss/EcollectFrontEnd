@@ -77,6 +77,20 @@
   filter: brightness(1.08);
 }
 
+.settle-export-btn.is-csv {
+  background: var(--bgCard, #111827);
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.12));
+  color: var(--textPrimary, #ffffff);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.settle-export-btn.is-csv:hover {
+  background: var(--bgHover, #1f2937);
+  border-color: #10b981;
+  color: #10b981;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.25);
+}
+
 /* Error banner */
 .settle-error-banner {
   display: flex;
@@ -587,4 +601,72 @@
   .filter-clear-btn {
     flex: 1;
   }
+}
+
+/* ==========================================================================
+   ULTRA-PREMIUM LIGHT MODE SETTLEMENTS OVERRIDES
+   ========================================================================== */
+[data-theme-mode="light"] .settle-kpi-card,
+[data-theme-mode="light"] .settle-chart-card,
+[data-theme-mode="light"] .settle-table-card,
+[data-theme-mode="light"] .settle-filter-strip {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 6px 18px -2px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme-mode="light"] .settle-kpi-value {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .settle-kpi-label {
+  color: #64748b;
+}
+
+[data-theme-mode="light"] .status-filter-tabs {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme-mode="light"] .status-tab-btn {
+  color: #64748b;
+}
+
+[data-theme-mode="light"] .status-tab-btn.is-active {
+  background: #ffffff;
+  color: var(--accent, #4f46e5);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme-mode="light"] .filter-select-dropdown,
+[data-theme-mode="light"] .filter-date-input {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .settle-data-table thead th {
+  background: #f8fafc !important;
+  color: #475569 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+[data-theme-mode="light"] .settle-data-table tbody td {
+  color: #0f172a !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+[data-theme-mode="light"] .settle-table-row:hover td {
+  background: #f8fafc !important;
+}
+
+[data-theme-mode="light"] .table-row-action-btn {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+[data-theme-mode="light"] .table-row-action-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
 }

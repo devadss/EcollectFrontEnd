@@ -16,7 +16,7 @@ import {
 } from 'chart.js';
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
-import { dashboardApi, transactionApi, walletApi, branchApi } from '../../services/api';
+import { dashboardApi, transactionApi, walletApi, branchApi, merchantApi } from '../../services/api';
 import './MerchantDashboard.css';
 
 ChartJS.register(
@@ -150,7 +150,20 @@ const MerchantDashboard = () => {
     mid: merchantId ? `MRC-${merchantId}` : '',
     payoutCycle: 'T+1 Settlement',
     account: '',
+    integrationStatus: authUser.integrationStatus || authUser.IntegrationStatus || localStorage.getItem('integrationStatus') || 'N'
   });
+
+  // Boolean flag for Integration Status ('Y' = API Integrated Mode, 'N' = Manual Non-Integrated Mode)
+  const isIntegrated = useMemo(() => {
+    const raw = String(
+      profile.integrationStatus || 
+      authUser.integrationStatus || 
+      authUser.IntegrationStatus || 
+      localStorage.getItem('integrationStatus') || 
+      'N'
+    ).trim().toUpperCase();
+    return raw === 'Y' || raw === 'YES' || raw === 'INTEGRATED' || raw === 'TRUE';
+  }, [profile.integrationStatus, authUser.integrationStatus, authUser.IntegrationStatus]);
 
   const [stats, setStats] = useState({
     totalRevenue: 0,
@@ -193,8 +206,9 @@ const MerchantDashboard = () => {
   const [isRechargingWallet, setIsRechargingWallet] = useState(false);
   const [selectedBranchConfig, setSelectedBranchConfig] = useState(null);
 
-  // Load Wallet and Multi-Branch Allocations
+  // Load Wallet and Multi-Branch Allocations (Only relevant for Non-Integrated mode)
   const loadWalletAndBranchAllocations = useCallback(async () => {
+    if (isIntegrated) return;
     try {
       const mId = Number(merchantId || 1);
       const [balRes, txRes, brRes] = await Promise.allSettled([
@@ -257,7 +271,7 @@ const MerchantDashboard = () => {
     } catch (err) {
       console.warn('Wallet/Branch allocations load note:', err);
     }
-  }, [merchantId]);
+  }, [merchantId, isIntegrated]);
 
   useEffect(() => {
     loadWalletAndBranchAllocations();
@@ -331,7 +345,26 @@ const MerchantDashboard = () => {
           mid: `MRC-${data.profile.merchantId || merchantId}`,
           payoutCycle: data.profile.payoutCycle || 'T+1 Settlement',
           account: data.profile.account || 'No Bank Account Configured',
+          integrationStatus: data.profile.integrationStatus || data.profile.IntegrationStatus || authUser.integrationStatus || authUser.IntegrationStatus || localStorage.getItem('integrationStatus') || 'N'
         });
+      }
+
+      // Also query live merchant configuration to ensure accurate integrationStatus
+      try {
+        const mRes = await merchantApi.getById(merchantId);
+        const mData = mRes?.data?.data || mRes?.data;
+        if (mData) {
+          const status = mData.integrationStatus || mData.IntegrationStatus;
+          if (status) {
+            setProfile(prev => ({
+              ...prev,
+              integrationStatus: status
+            }));
+            localStorage.setItem('integrationStatus', status);
+          }
+        }
+      } catch (mErr) {
+        // Fallback silently to existing profile/authUser status
       }
 
       if (data.stats) {
@@ -402,8 +435,9 @@ const MerchantDashboard = () => {
         console.warn('Could not load extra transaction records for merchant:', txErr.message);
       }
 
+      // Show ONLY latest 5 transactions in Merchant Dashboard
       if (Array.isArray(data.recentTransactions) && data.recentTransactions.length > 0) {
-        setRecentTransactions(data.recentTransactions.slice(0, 10).map(tx => ({
+        setRecentTransactions(data.recentTransactions.slice(0, 5).map(tx => ({
           id: tx.id,
           customer: tx.customer || 'Customer',
           amount: Number(tx.amount) || 0,
@@ -412,7 +446,7 @@ const MerchantDashboard = () => {
           time: tx.time || tx.timeAgo || 'Recently'
         })));
       } else if (txList.length > 0) {
-        setRecentTransactions(txList.slice(0, 10));
+        setRecentTransactions(txList.slice(0, 5));
       } else {
         setRecentTransactions([]);
       }
@@ -483,7 +517,7 @@ const MerchantDashboard = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [merchantId, activePeriod, fromDate, toDate, authUser.merchantName, authUser.company, authUser.fullName]);
+  }, [merchantId, activePeriod, fromDate, toDate, authUser.merchantName, authUser.company, authUser.fullName, authUser.integrationStatus, authUser.IntegrationStatus]);
 
   useEffect(() => {
     fetchMerchantTelemetry();
@@ -609,18 +643,20 @@ const MerchantDashboard = () => {
           </div>
 
           <div className="merchant-header-actions">
-            <button 
-              type="button"
-              className={`merchant-wallet-btn ${walletData.balance <= 0 ? 'is-empty' : (walletData.balance < (walletData.lowBalanceThreshold || 100) ? 'is-low' : 'is-healthy')}`}
-              onClick={() => {
-                loadWalletAndBranchAllocations();
-                setIsWalletModalOpen(true);
-              }}
-              title="Manage Communication Credits Wallet & Configure All Branches"
-            >
-              <MerchantIcons.CreditCard />
-              <span>Credits Wallet: <strong>₹{walletData.balance.toFixed(2)}</strong></span>
-            </button>
+            {!isIntegrated && (
+              <button 
+                type="button"
+                className={`merchant-wallet-btn ${walletData.balance <= 0 ? 'is-empty' : (walletData.balance < (walletData.lowBalanceThreshold || 100) ? 'is-low' : 'is-healthy')}`}
+                onClick={() => {
+                  loadWalletAndBranchAllocations();
+                  setIsWalletModalOpen(true);
+                }}
+                title="Manage Communication Credits Wallet & Configure All Branches"
+              >
+                <MerchantIcons.CreditCard />
+                <span>Credits Wallet: <strong>₹{walletData.balance.toFixed(2)}</strong></span>
+              </button>
+            )}
 
             <button className={`merchant-export-btn ${refreshing ? 'is-spinning' : ''}`} onClick={handleManualRefresh} title="Refresh Merchant Telemetry">
               <MerchantIcons.Refresh />
@@ -759,7 +795,7 @@ const MerchantDashboard = () => {
           <div className="meta-strip-sep"></div>
           <div className="meta-strip-item">
             <MerchantIcons.ShieldCheck />
-            <span>Settlement Route: <strong>{profile.account}</strong></span>
+            <span>Gateway Mode: <strong className={isIntegrated ? 'text-green' : 'text-cyan'}>{isIntegrated ? 'API Integrated (Y)' : 'Standard Manual (N)'}</strong></span>
           </div>
           <div className="meta-strip-sep"></div>
           <div className="meta-strip-item is-growth">
@@ -768,8 +804,8 @@ const MerchantDashboard = () => {
           </div>
         </div>
 
-        {/* 5 Primary KPI Stats Grid */}
-        <div className="merchant-kpi-grid is-5col">
+        {/* Primary KPI Stats Grid */}
+        <div className={`merchant-kpi-grid ${isIntegrated ? 'is-4col' : 'is-5col'}`}>
           
           {/* 1. Period Volume */}
           <div className="merchant-kpi-card">
@@ -801,20 +837,22 @@ const MerchantDashboard = () => {
             </div>
           </div>
 
-          {/* 3. Communication Credits Wallet */}
-          <div className="merchant-kpi-card is-wallet-kpi" onClick={() => { loadWalletAndBranchAllocations(); setIsWalletModalOpen(true); }} style={{ cursor: 'pointer' }}>
-            <div className="merchant-kpi-glow" style={{ background: 'radial-gradient(circle, rgba(16, 185, 129, 0.25) 0%, transparent 70%)' }}></div>
-            <div className="merchant-kpi-header">
-              <span className="merchant-kpi-label">Credits Wallet (All Branches)</span>
-              <div className="merchant-kpi-icon is-emerald"><MerchantIcons.CreditCard /></div>
+          {/* 3. Communication Credits Wallet (Only shown in Non-Integrated Mode 'N') */}
+          {!isIntegrated && (
+            <div className="merchant-kpi-card is-wallet-kpi" onClick={() => { loadWalletAndBranchAllocations(); setIsWalletModalOpen(true); }} style={{ cursor: 'pointer' }}>
+              <div className="merchant-kpi-glow" style={{ background: 'radial-gradient(circle, rgba(16, 185, 129, 0.25) 0%, transparent 70%)' }}></div>
+              <div className="merchant-kpi-header">
+                <span className="merchant-kpi-label">Credits Wallet (All Branches)</span>
+                <div className="merchant-kpi-icon is-emerald"><MerchantIcons.CreditCard /></div>
+              </div>
+              <div className="merchant-kpi-value font-mono text-green">₹{(walletData.balance || 0).toFixed(2)}</div>
+              <div className="merchant-kpi-footer">
+                <span className="merchant-trend-tag is-up">
+                  <MerchantIcons.Sparkles /> ~{Math.floor(walletData.balance / 0.45)} WhatsApp / {Math.floor(walletData.balance / 0.20)} SMS
+                </span>
+              </div>
             </div>
-            <div className="merchant-kpi-value font-mono text-green">₹{(walletData.balance || 0).toFixed(2)}</div>
-            <div className="merchant-kpi-footer">
-              <span className="merchant-trend-tag is-up">
-                <MerchantIcons.Sparkles /> ~{Math.floor(walletData.balance / 0.45)} WhatsApp / {Math.floor(walletData.balance / 0.20)} SMS
-              </span>
-            </div>
-          </div>
+          )}
 
           {/* 4. Branch Outlets */}
           <div className="merchant-kpi-card" onClick={() => navigate('/branches')} style={{ cursor: 'pointer' }}>
@@ -961,7 +999,7 @@ const MerchantDashboard = () => {
                 <tbody>
                   {branches.length === 0 ? (
                     <tr>
-                      <td colSpan="4" style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>
+                      <td colSpan="4" style={{ textAlign: 'center', padding: '24px', color: 'var(--textMuted, #64748b)' }}>
                         No branch outlets registered under this merchant yet.
                       </td>
                     </tr>
@@ -991,12 +1029,12 @@ const MerchantDashboard = () => {
             </div>
           </div>
 
-          {/* Real-Time Inbound Transactions Stream */}
+          {/* Real-Time Inbound Transactions Stream (Showing Latest 5 Transactions) */}
           <div className="merchant-chart-panel is-col-6">
             <div className="panel-header-zone">
               <div>
                 <h3 className="panel-title">Inbound Transaction Stream</h3>
-                <span className="panel-subtitle">Latest payment records in active horizon</span>
+                <span className="panel-subtitle">Latest 5 payment records in active horizon</span>
               </div>
               <button className="view-all-link-btn" onClick={() => navigate('/transactions')}>
                 Full History →
@@ -1005,11 +1043,11 @@ const MerchantDashboard = () => {
 
             <div className="merchant-activity-feed-wrap">
               {recentTransactions.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '36px 16px', color: '#94a3b8' }}>
+                <div style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--textMuted, #64748b)' }}>
                   No transaction records found for this merchant in the selected period.
                 </div>
               ) : (
-                recentTransactions.map((tx, idx) => (
+                recentTransactions.slice(0, 5).map((tx, idx) => (
                   <div key={idx} className="feed-item-card">
                     <div className="feed-left">
                       <span className="feed-id-chip font-mono">#{tx.id}</span>
@@ -1034,126 +1072,128 @@ const MerchantDashboard = () => {
 
         </div>
 
-        {/* Row 3: Multi-Branch Communication Credits & Auto-Reminder Operations Panel */}
-        <div className="merchant-chart-panel is-col-12 merchant-branches-wallet-panel">
-          <div className="panel-header-zone">
-            <div>
-              <div className="branch-wallet-tag">
-                <MerchantIcons.CreditCard />
-                <span>Multi-Branch Communication Hub</span>
+        {/* Row 3: Multi-Branch Communication Credits & Auto-Reminder Operations Panel (Only for Non-Integrated Mode) */}
+        {!isIntegrated && (
+          <div className="merchant-chart-panel is-col-12 merchant-branches-wallet-panel">
+            <div className="panel-header-zone">
+              <div>
+                <div className="branch-wallet-tag">
+                  <MerchantIcons.CreditCard />
+                  <span>Multi-Branch Communication Hub</span>
+                </div>
+                <h3 className="panel-title">Branch-Wise Reminder Credits & Allocation Matrix</h3>
+                <span className="panel-subtitle">Manage prepaid SMS, WhatsApp & Voice call quotas across all active regional branches</span>
               </div>
-              <h3 className="panel-title">Branch-Wise Reminder Credits & Allocation Matrix</h3>
-              <span className="panel-subtitle">Manage prepaid SMS, WhatsApp & Voice call quotas across all active regional branches</span>
+              
+              <div className="panel-ctrl-group">
+                <button 
+                  className="merchant-wallet-cta-btn" 
+                  onClick={() => {
+                    loadWalletAndBranchAllocations();
+                    setIsWalletModalOpen(true);
+                    setActiveWalletTab('recharge');
+                  }}
+                >
+                  <MerchantIcons.Plus />
+                  <span>Top-Up Central Wallet</span>
+                </button>
+                <button 
+                  className="merchant-export-btn" 
+                  onClick={() => {
+                    loadWalletAndBranchAllocations();
+                    setIsWalletModalOpen(true);
+                    setActiveWalletTab('branches');
+                  }}
+                >
+                  <span>⚙️ Configure All Branch Quotas</span>
+                </button>
+              </div>
             </div>
-            
-            <div className="panel-ctrl-group">
-              <button 
-                className="merchant-wallet-cta-btn" 
-                onClick={() => {
-                  loadWalletAndBranchAllocations();
-                  setIsWalletModalOpen(true);
-                  setActiveWalletTab('recharge');
-                }}
-              >
-                <MerchantIcons.Plus />
-                <span>Top-Up Central Wallet</span>
-              </button>
-              <button 
-                className="merchant-export-btn" 
-                onClick={() => {
-                  loadWalletAndBranchAllocations();
-                  setIsWalletModalOpen(true);
-                  setActiveWalletTab('branches');
-                }}
-              >
-                <span>⚙️ Configure All Branch Quotas</span>
-              </button>
-            </div>
-          </div>
 
-          <div className="merchant-leaderboard-table-wrap">
-            <table className="merchant-mini-table font-mono">
-              <thead>
-                <tr>
-                  <th>Branch Outlet</th>
-                  <th>Integration Status</th>
-                  <th>Allocated Quota</th>
-                  <th>Credits Consumed</th>
-                  <th>WhatsApp Sent</th>
-                  <th>SMS Sent</th>
-                  <th>Voice Calls</th>
-                  <th>Auto-Reminder Status</th>
-                  <th style={{ textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {branchAllocations.length === 0 ? (
+            <div className="merchant-leaderboard-table-wrap">
+              <table className="merchant-mini-table font-mono">
+                <thead>
                   <tr>
-                    <td colSpan="9" style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>
-                      No branches found for this merchant.
-                    </td>
+                    <th>Branch Outlet</th>
+                    <th>Integration Status</th>
+                    <th>Allocated Quota</th>
+                    <th>Credits Consumed</th>
+                    <th>WhatsApp Sent</th>
+                    <th>SMS Sent</th>
+                    <th>Voice Calls</th>
+                    <th>Auto-Reminder Status</th>
+                    <th style={{ textAlign: 'right' }}>Actions</th>
                   </tr>
-                ) : (
-                  branchAllocations.map((br) => (
-                    <tr key={br.branchCode} className="mini-table-row">
-                      <td>
-                        <div className="branch-cell-stack">
-                          <span className="branch-name font-bold">{br.branchName}</span>
-                          <span className="branch-code text-muted">Code: {br.branchCode}</span>
-                        </div>
-                      </td>
-                      <td>
-                        <span className={`integration-pill ${br.isNonIntegrated ? 'is-non-integ' : 'is-integ'}`}>
-                          {br.integrationMode}
-                        </span>
-                      </td>
-                      <td>
-                        <span className="font-bold text-green">₹{br.allocatedCredits}</span>
-                      </td>
-                      <td>
-                        <span className="text-purple font-bold">₹{br.usedCredits}</span>
-                      </td>
-                      <td>
-                        <span className="font-bold">{br.whatsAppCount} msgs</span>
-                      </td>
-                      <td>
-                        <span>{br.smsCount} alerts</span>
-                      </td>
-                      <td>
-                        <span>{br.callCount} calls</span>
-                      </td>
-                      <td>
-                        <span className={`status-pill ${br.status === 'Active' ? 'is-active' : 'is-paused'}`}>
-                          {br.status === 'Active' ? '🟢 Auto Active' : '🔴 Paused'}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <button
-                          type="button"
-                          className="btn-branch-config-mini"
-                          onClick={() => {
-                            setSelectedBranchConfig(br);
-                            setIsWalletModalOpen(true);
-                            setActiveWalletTab('branches');
-                          }}
-                        >
-                          ⚙️ Configure
-                        </button>
+                </thead>
+                <tbody>
+                  {branchAllocations.length === 0 ? (
+                    <tr>
+                      <td colSpan="9" style={{ textAlign: 'center', padding: '24px', color: 'var(--textMuted, #64748b)' }}>
+                        No branches found for this merchant.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    branchAllocations.map((br) => (
+                      <tr key={br.branchCode} className="mini-table-row">
+                        <td>
+                          <div className="branch-cell-stack">
+                            <span className="branch-name font-bold">{br.branchName}</span>
+                            <span className="branch-code text-muted">Code: {br.branchCode}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <span className={`integration-pill ${br.isNonIntegrated ? 'is-non-integ' : 'is-integ'}`}>
+                            {br.integrationMode}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="font-bold text-green">₹{br.allocatedCredits}</span>
+                        </td>
+                        <td>
+                          <span className="text-purple font-bold">₹{br.usedCredits}</span>
+                        </td>
+                        <td>
+                          <span className="font-bold">{br.whatsAppCount} msgs</span>
+                        </td>
+                        <td>
+                          <span>{br.smsCount} alerts</span>
+                        </td>
+                        <td>
+                          <span>{br.callCount} calls</span>
+                        </td>
+                        <td>
+                          <span className={`status-pill ${br.status === 'Active' ? 'is-active' : 'is-paused'}`}>
+                            {br.status === 'Active' ? '🟢 Auto Active' : '🔴 Paused'}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <button
+                            type="button"
+                            className="btn-branch-config-mini"
+                            onClick={() => {
+                              setSelectedBranchConfig(br);
+                              setIsWalletModalOpen(true);
+                              setActiveWalletTab('branches');
+                            }}
+                          >
+                            ⚙️ Configure
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
 
       </div>
 
       {/* ============================================================
-          MERCHANT CREDITS WALLET & MULTI-BRANCH CONFIGURATION MODAL
+          MERCHANT CREDITS WALLET & MULTI-BRANCH CONFIGURATION MODAL (Only for Non-Integrated Mode)
          ============================================================ */}
-      {isWalletModalOpen && (
+      {!isIntegrated && isWalletModalOpen && (
         <div className="merchant-modal-overlay" onClick={() => setIsWalletModalOpen(false)}>
           <div className="merchant-modal-container" onClick={e => e.stopPropagation()}>
             <div className="merchant-modal-head">

@@ -957,3 +957,102 @@
     width: 100%;
   }
 }
+
+/* ==========================================================================
+   ULTRA-PREMIUM LIGHT MODE MERCHANTS DIRECTORY OVERRIDES
+   ========================================================================== */
+[data-theme-mode="light"] .merch-kpi-card,
+[data-theme-mode="light"] .merch-card,
+[data-theme-mode="light"] .merch-directory-card {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 6px 18px -2px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme-mode="light"] .merch-kpi-val {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .merch-kpi-label {
+  color: #64748b;
+}
+
+[data-theme-mode="light"] .merch-name {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .merch-card-details {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme-mode="light"] .detail-val {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .detail-label {
+  color: #64748b;
+}
+
+[data-theme-mode="light"] .merch-status-tabs {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme-mode="light"] .merch-tab-btn {
+  color: #64748b;
+}
+
+[data-theme-mode="light"] .merch-tab-btn.is-active {
+  background: #ffffff;
+  color: var(--accent, #4f46e5);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme-mode="light"] .search-input-box {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+}
+
+[data-theme-mode="light"] .search-input-box input {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .city-filter-dropdown {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .merch-table thead th {
+  background: #f8fafc !important;
+  color: #475569 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+[data-theme-mode="light"] .merch-table tbody td {
+  color: #0f172a !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+[data-theme-mode="light"] .merch-table-row:hover td {
+  background: #f8fafc !important;
+}
+
+[data-theme-mode="light"] .btn-action.is-view {
+  background: rgba(79, 70, 229, 0.1);
+  color: #4f46e5;
+  border: 1px solid rgba(79, 70, 229, 0.3);
+}
+
+[data-theme-mode="light"] .btn-action.is-config {
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+[data-theme-mode="light"] .btn-action.is-edit {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+}

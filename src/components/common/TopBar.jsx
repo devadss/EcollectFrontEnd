@@ -120,13 +120,11 @@ const TopBar = ({
 }) => {
   const navigate = useNavigate();
   
-  let theme = 'dark';
   let currentTheme = 'dark';
   let changeTheme = () => {};
   
   try {
     const themeContext = useTheme();
-    theme = themeContext.theme || 'dark';
     currentTheme = themeContext.currentTheme || 'dark';
     changeTheme = themeContext.changeTheme || (() => {});
   } catch (error) {
@@ -138,6 +136,7 @@ const TopBar = ({
   let unreadCount = 0;
   let markAsRead = () => {};
   let markAllAsRead = () => {};
+  let refreshNotifications = () => {};
 
   try {
     const notifContext = useNotifications();
@@ -145,6 +144,7 @@ const TopBar = ({
     unreadCount = notifContext.unreadCount || 0;
     markAsRead = notifContext.markAsRead || (() => {});
     markAllAsRead = notifContext.markAllAsRead || (() => {});
+    refreshNotifications = notifContext.refreshNotifications || (() => {});
   } catch (err) {
     console.warn('NotificationContext not mounted yet');
   }
@@ -167,7 +167,9 @@ const TopBar = ({
     selectedMerchantId,
     selectedMerchant,
     setSelectedMerchantId,
-    isSoftwareAdmin
+    isSoftwareAdmin,
+    isMerchantUser,
+    subscription
   } = useMerchantContext();
 
   const getUserData = () => {
@@ -193,22 +195,6 @@ const TopBar = ({
     agent: 'Field Agent',
     customer: 'Customer'
   }[role] || 'User';
-
-  const themeLabels = {
-    dark: 'Midnight Slate (Dark)',
-    light: 'Enterprise Clean (Light)',
-    lightPlatinum: 'Stripe Platinum Luxe (Light)',
-    titanium: 'Titanium Obsidian (Neo-Fintech)',
-    sovereign: 'Sovereign Sapphire (Private Banking)',
-    aurora: 'Nordic Aurora (Neo-Bank)',
-    bloomberg: 'Bloomberg Quantum (Trading Desk)',
-    green: 'Fintech Emerald (Green)',
-    gold: 'Wealth Management (Gold)',
-    roseGold: 'Rose Gold Prestige (Private Client)',
-    mercury: 'Mercury Silicon Luxe (Matte Slate)',
-    blue: 'Corporate Banking (Blue)',
-    charcoal: 'Graphite Slate (Neutral)',
-  };
 
   const [branchName, setBranchName] = useState(
     user?.branchName || user?.branch || localStorage.getItem('branchName') || ''
@@ -331,6 +317,21 @@ const TopBar = ({
               <span className="branch-emblem-prefix">Branch:</span>
               <strong className="branch-emblem-bold-name">
                 {displayBranchTitle}
+              </strong>
+            </div>
+          ) : null}
+
+          {isMerchantUser && (subscription?.planName || localStorage.getItem('ecollect_active_plan_name')) ? (
+            <div 
+              className="topbar-branch-emblem-badge" 
+              onClick={() => navigate('/select-plan')} 
+              style={{ cursor: 'pointer', background: 'var(--accentLight, rgba(99, 102, 241, 0.12))', borderColor: 'var(--borderGlow, rgba(99, 102, 241, 0.3))' }}
+              title="Click to view or upgrade subscription plan"
+            >
+              <span>✨</span>
+              <span className="branch-emblem-prefix" style={{ color: 'var(--accent, #6366f1)' }}>Plan:</span>
+              <strong className="branch-emblem-bold-name" style={{ color: 'var(--accent, #6366f1)' }}>
+                {subscription?.planName || localStorage.getItem('ecollect_active_plan_name') || 'Active Plan'}
               </strong>
             </div>
           ) : null}
@@ -460,6 +461,24 @@ const TopBar = ({
           <span className="search-key-badge">⌘K</span>
         </form>
 
+        {/* Quick Light / Dark Mode Toggle */}
+        <div className="topbar-action-item">
+          <button 
+            className="action-icon-trigger"
+            onClick={() => {
+              if (currentTheme.startsWith('light')) {
+                changeTheme('dark');
+              } else {
+                changeTheme('lightPlatinum');
+              }
+            }}
+            title={currentTheme.startsWith('light') ? "Switch to Midnight Dark Theme" : "Switch to Crisp Platinum Light Theme"}
+            style={{ fontSize: '15px' }}
+          >
+            {currentTheme.startsWith('light') ? '🌙' : '☀️'}
+          </button>
+        </div>
+
         {/* Theme Picker Dropdown */}
         <div className="topbar-action-item" ref={themeMenuRef}>
           <button 
@@ -471,19 +490,37 @@ const TopBar = ({
           </button>
 
           {showThemeMenu && (
-            <div className="floating-popover theme-popover">
-              <div className="popover-heading">
-                <span>Color Palettes</span>
+            <div className="floating-popover theme-popover" style={{ width: '280px', maxHeight: '460px', overflowY: 'auto' }}>
+              <div className="popover-heading" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span>Theme & Color System</span>
               </div>
               <div className="theme-swatch-list">
-                {Object.keys(themes).map((key) => (
+                <div style={{ fontSize: '10px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--accent, #4f46e5)', padding: '6px 8px 2px 8px' }}>
+                  ☀️ Ultra-Premium Light Themes
+                </div>
+                {Object.keys(themes).filter(k => k.startsWith('light')).map((key) => (
+                  <button
+                    key={key}
+                    className={`theme-swatch-item ${currentTheme === key ? 'is-selected' : ''}`}
+                    onClick={() => { changeTheme(key); setShowThemeMenu(false); }}
+                  >
+                    <span className="swatch-color-bubble" style={{ background: themes[key]?.accent || '#6366f1', boxShadow: '0 0 8px ' + (themes[key]?.accentLight || 'rgba(0,0,0,0.1)') }}></span>
+                    <span className="swatch-name-label">{themes[key]?.name || key}</span>
+                    {currentTheme === key && <span className="swatch-check">✓</span>}
+                  </button>
+                ))}
+
+                <div style={{ fontSize: '10px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--textMuted, #64748b)', padding: '12px 8px 2px 8px', borderTop: '1px solid var(--borderLight, rgba(255,255,255,0.05))', marginTop: '4px' }}>
+                  🌙 Executive Dark Themes
+                </div>
+                {Object.keys(themes).filter(k => !k.startsWith('light')).map((key) => (
                   <button
                     key={key}
                     className={`theme-swatch-item ${currentTheme === key ? 'is-selected' : ''}`}
                     onClick={() => { changeTheme(key); setShowThemeMenu(false); }}
                   >
                     <span className="swatch-color-bubble" style={{ background: themes[key]?.accent || '#6366f1' }}></span>
-                    <span className="swatch-name-label">{themeLabels[key] || themes[key]?.name || key}</span>
+                    <span className="swatch-name-label">{themes[key]?.name || key}</span>
                     {currentTheme === key && <span className="swatch-check">✓</span>}
                   </button>
                 ))}
@@ -526,10 +563,10 @@ const TopBar = ({
           </button>
 
           {showNotifications && (
-            <div className="floating-popover notifications-popover" style={{ width: '360px', maxHeight: '480px', display: 'flex', flexDirection: 'column', background: 'var(--bgCard, #111827)', border: '1px solid var(--borderColor, rgba(255,255,255,0.08))' }}>
+            <div className="floating-popover notifications-popover" style={{ width: '370px', maxHeight: '500px', display: 'flex', flexDirection: 'column', background: 'var(--bgCard, #111827)', border: '1px solid var(--borderColor, rgba(255,255,255,0.08))' }}>
               <div className="popover-heading-split" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--borderColor, rgba(255,255,255,0.08))' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span className="heading-title" style={{ fontWeight: '700', fontSize: '13.5px', color: 'var(--textPrimary, #f8fafc)' }}>System Alerts</span>
+                  <span className="heading-title" style={{ fontWeight: '700', fontSize: '13.5px', color: 'var(--textPrimary, #f8fafc)' }}>Live Alerts</span>
                   {unreadCount > 0 && (
                     <span className="unread-counter-tag" style={{
                       fontSize: '11px',
@@ -544,24 +581,44 @@ const TopBar = ({
                     </span>
                   )}
                 </div>
-                {unreadCount > 0 && (
-                  <button 
-                    onClick={markAllAsRead}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); refreshNotifications(); }}
                     style={{
                       background: 'transparent',
                       border: 'none',
-                      color: 'var(--accent, #6366f1)',
-                      fontSize: '11.5px',
-                      fontWeight: '600',
+                      color: 'var(--textMuted, #64748b)',
+                      fontSize: '12px',
                       cursor: 'pointer',
-                      padding: '2px 6px',
-                      borderRadius: '4px'
+                      padding: '2px 4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
                     }}
-                    title="Mark all as read"
+                    title="Refresh live alerts stream"
                   >
-                    ✓ Mark all read
+                    <span>↻</span>
                   </button>
-                )}
+                  {unreadCount > 0 && (
+                    <button 
+                      onClick={markAllAsRead}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--accent, #6366f1)',
+                        fontSize: '11.5px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        padding: '2px 6px',
+                        borderRadius: '4px'
+                      }}
+                      title="Mark all as read"
+                    >
+                      ✓ Mark all read
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="notifications-stream" style={{ flex: 1, overflowY: 'auto', padding: '8px 0', maxHeight: '320px' }}>

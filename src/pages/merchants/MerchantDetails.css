@@ -908,3 +908,116 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   ULTRA-PREMIUM LIGHT MODE MERCHANT DETAILS OVERRIDES
+   ========================================================================== */
+[data-theme-mode="light"] .details-back-btn {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .trail-current {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .merchant-hero-card {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 8px 24px -2px rgba(15, 23, 42, 0.08);
+}
+
+[data-theme-mode="light"] .hero-merchant-name {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .hero-legal-name {
+  color: #64748b;
+}
+
+[data-theme-mode="light"] .merchant-id-badge {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+[data-theme-mode="light"] .metric-strip-val {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .hero-metrics-strip {
+  border-top: 1px solid #f1f5f9;
+}
+
+[data-theme-mode="light"] .merchant-tab-nav-bar {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme-mode="light"] .merchant-tab-item {
+  color: #64748b;
+}
+
+[data-theme-mode="light"] .merchant-tab-item:hover {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .merchant-tab-item.active {
+  background: #ffffff;
+  color: var(--accent, #4f46e5);
+  border: 1px solid rgba(79, 70, 229, 0.25);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme-mode="light"] .glass-info-card {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 6px 18px -2px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme-mode="light"] .card-main-title {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .card-top-header {
+  border-bottom: 1px solid #f1f5f9;
+}
+
+[data-theme-mode="light"] .field-val {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .address-block,
+[data-theme-mode="light"] .copyable-field-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .copy-btn-mini {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+[data-theme-mode="light"] .copy-btn-mini:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .bank-card-showcase {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
+}
+
+[data-theme-mode="light"] .gateway-stat-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .gw-val {
+  color: #0f172a;
+}

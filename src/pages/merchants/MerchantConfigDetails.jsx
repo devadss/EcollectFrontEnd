@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import DashboardLayout from '../../components/layouts/DashboardLayout'; 
 import { merchantApi } from '../../services/api'; 
@@ -11,43 +11,21 @@ const MerchantConfigDetails = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
 
-  useEffect(() => {
-    loadMerchant();
-  }, [id]);
-
-  const loadMerchant = async () => {
+  const loadMerchant = useCallback(async () => {
     try {
       setLoading(true);
       const res = await merchantApi.getAllMerchantConfigById(id);
-      //console.log(res.data);
-
       setMerchant(res.data);
     } catch (error) {
       console.error('Error loading merchant:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  const handleToggleStatus = async () => {
-    try {
-      await merchantApi.toggleStatus(id);
-      loadMerchant();
-    } catch (error) {
-      console.error('Error toggling status:', error);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (window.confirm('Are you sure you want to delete this merchant?')) {
-      try {
-        await merchantApi.delete(id);
-        navigate('/merchants');
-      } catch (error) {
-        console.error('Error deleting merchant:', error);
-      }
-    }
-  };
+  useEffect(() => {
+    loadMerchant();
+  }, [loadMerchant]);
 
   if (loading) {
     return (

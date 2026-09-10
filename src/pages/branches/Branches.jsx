@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
@@ -185,11 +185,7 @@ const Branches = () => {
     }
   }, [selectedMerchantId, isSoftwareAdmin]);
 
-  useEffect(() => {
-    loadBranches();
-  }, [merchantSelfId, isSoftwareAdmin]);
-
-  const loadBranches = async () => {
+  const loadBranches = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -215,7 +211,11 @@ const Branches = () => {
         setLoading(false);
       }, 350);
     }
-  };
+  }, [isSoftwareAdmin, merchantSelfId]);
+
+  useEffect(() => {
+    loadBranches();
+  }, [loadBranches]);
 
   const handleToggleStatus = async (id, name, currentIsActive) => {
     try {

@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://localhost:7256/api';
-
+//const API_BASE = process.env.REACT_APP_API_URL || 'https://dev.collect.org.in/api';
+//const API_BASE = process.env.REACT_APP_API_URL || 'https://api.collect.org.in/api';
 console.log('🔗 API Base URL:', API_BASE);
 
 const api = axios.create({
@@ -17,21 +18,21 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-    
+
     console.log('🔑 Request Interceptor:', {
       url: config.url,
       method: config.method,
       hasToken: !!token,
       tokenPreview: token ? token.substring(0, 20) + '...' : 'null'
     });
-    
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
       console.log('✅ Token added to request headers');
     } else {
       console.warn('⚠️ No token found for request');
     }
-    
+
     return config;
   },
   (error) => {
@@ -54,20 +55,43 @@ api.interceptors.response.use(
       message: error.message,
       data: error.response?.data
     });
-    
-    // Only redirect if explicitly validating an expired token
+
+    // Handle 401 Unauthorized (Expired or invalid token)
     if (error.response && error.response.status === 401) {
       console.warn('⚠️ 401 Unauthorized received for:', error.config?.url);
-      
-      if (error.config?.url?.includes('/Auth/validate-token')) {
+
+      const isAuthAttempt = error.config?.url?.includes('/Auth/login') ||
+        error.config?.url?.includes('/Auth/verify-otp') ||
+        error.config?.url?.includes('/Auth/forgot-password') ||
+        error.config?.url?.includes('/Auth/reset-password');
+
+      if (!isAuthAttempt) {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('token');
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('auth_user');
+        localStorage.removeItem('user');
+        localStorage.removeItem('user_role');
+        localStorage.removeItem('role');
+        localStorage.removeItem('userRole');
+        localStorage.removeItem('branchId');
+        localStorage.removeItem('branchName');
+        localStorage.removeItem('branchCode');
+        localStorage.removeItem('merchantId');
+        localStorage.removeItem('agentId');
+        localStorage.removeItem('integrationStatus');
+        localStorage.removeItem('auth_permissions');
+        localStorage.removeItem('permissions');
+        localStorage.removeItem('auth_menus');
+        sessionStorage.clear();
+
         if (window.location.pathname !== '/login') {
           window.location.href = '/login';
         }
       }
     }
-    
+
     return Promise.reject(error);
   }
 );
@@ -117,30 +141,51 @@ export const dashboardApi = {
 // ============================================================
 const formatTxFilterParams = (params = {}) => {
   const p = typeof params === 'object' && params !== null ? params : {};
-  const user = (() => {
-    try {
-      return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
-    } catch {
-      return {};
-    }
-  })();
+  const clean = {};
 
-  const rawSearch = (p.Search && p.Search.trim() !== '') ? p.Search.trim() : ((p.search && p.search.trim() !== '') ? p.search.trim() : 'ALL');
-  const rawStatus = (p.Status && p.Status !== '') ? p.Status : ((p.status && p.status !== '') ? p.status : ((p.statusTab && p.statusTab !== '') ? p.statusTab : 'ALL'));
-  const rawBankCode = p.BankCode || p.bankCode || p.branchCode || user.branchCode || localStorage.getItem('branchCode') || 'ALL';
-  const rawPaymentMode = p.PaymentMode || p.paymentMode || p.mode || 'ALL';
+  const rawSearch = (p.Search || p.search || '').trim();
+  if (rawSearch && rawSearch.toUpperCase() !== 'ALL') {
+    clean.Search = rawSearch;
+    clean.search = rawSearch;
+  }
 
-  return {
-    Search: rawSearch,
-    Status: rawStatus,
-    BankCode: rawBankCode,
-    PaymentMode: rawPaymentMode,
-    search: rawSearch,
-    status: rawStatus,
-    bankCode: rawBankCode,
-    paymentMode: rawPaymentMode,
-    ...p
-  };
+  const rawStatus = (p.Status || p.status || p.statusTab || '').trim();
+  if (rawStatus && rawStatus.toUpperCase() !== 'ALL') {
+    clean.Status = rawStatus;
+    clean.status = rawStatus;
+  }
+
+  const rawBankCode = (p.BankCode || p.bankCode || '').trim();
+  if (rawBankCode && rawBankCode.toUpperCase() !== 'ALL') {
+    clean.BankCode = rawBankCode;
+    clean.bankCode = rawBankCode;
+  }
+
+  const rawPaymentMode = (p.PaymentMode || p.paymentMode || p.mode || '').trim();
+  if (rawPaymentMode && rawPaymentMode.toUpperCase() !== 'ALL') {
+    clean.PaymentMode = rawPaymentMode;
+    clean.paymentMode = rawPaymentMode;
+  }
+
+  if (p.merchantId && p.merchantId !== 'ALL' && !isNaN(p.merchantId)) {
+    clean.MerchantId = Number(p.merchantId);
+    clean.merchantId = Number(p.merchantId);
+  }
+  if (p.branchId && p.branchId !== 'ALL' && !isNaN(p.branchId)) {
+    clean.BranchId = Number(p.branchId);
+    clean.branchId = Number(p.branchId);
+  }
+  if (p.agentId && p.agentId !== 'ALL' && !isNaN(p.agentId)) {
+    clean.AgentId = Number(p.agentId);
+    clean.agentId = Number(p.agentId);
+  }
+
+  const page = Number(p.page || p.Page || 1);
+  const pageSize = Number(p.pageSize || p.PageSize || p.count || 500);
+  clean.Page = page > 0 ? page : 1;
+  clean.PageSize = pageSize > 0 ? pageSize : 500;
+
+  return { ...p, ...clean };
 };
 
 export const transactionApi = {
@@ -161,12 +206,12 @@ export const transactionApi = {
   getTransactions: (params = {}) => {
     return transactionApi.getAll(params);
   },
-  
+
   // Get transaction history
   getHistory: (params = {}) => {
     return transactionApi.getAll(params);
   },
-  
+
   // Get single transaction by ID
   getById: (id) => {
     console.log('📡 transactionApi.getById called for id:', id);
@@ -177,37 +222,37 @@ export const transactionApi = {
     console.log('📡 transactionApi.getChart called');
     return api.get('/Transaction/chart', { params });
   },
-  
+
   // Get transaction summary
   getSummary: (params) => {
     console.log('📡 transactionApi.getSummary called');
     return api.get('/Transaction/summary', { params });
   },
-  
+
   // Get chart data
   getChartData: (params) => {
     console.log('📡 transactionApi.getChartData called');
     return api.get('/Transaction/chart', { params });
   },
-  
+
   // Update transaction status (Admin only)
   updateStatus: (id, data) => {
     console.log('📡 transactionApi.updateStatus called for id:', id);
     return api.patch(`/Transaction/${id}/status`, data);
   },
-  
+
   // Get transactions by merchant
   getByMerchant: (merchantId) => {
     console.log('📡 transactionApi.getByMerchant called for merchantId:', merchantId);
     return api.get(`/Transaction/merchant/${merchantId}`);
   },
-  
+
   // Get transactions by branch
   getByBranch: (branchId) => {
     console.log('📡 transactionApi.getByBranch called for branchId:', branchId);
     return api.get(`/Transaction/branch/${branchId}`);
   },
-  
+
   // Get transactions by agent
   getByAgent: (agentId) => {
     console.log('📡 transactionApi.getByAgent called for agentId:', agentId);
@@ -363,6 +408,38 @@ export const branchApi = {
     return api.get('/Branch/fetch-rd-customers', { params })
       .catch(() => api.get('/Branch/fetch-account-list', { params }));
   },
+  fetchLoanCustomers: (params) => {
+    console.log('📡 branchApi.fetchLoanCustomers called with params:', params);
+    return api.get('/Branch/fetch-loan-customers', { params })
+      .catch(() => api.get('/Branch/fetch-rd-customers', { params: { ...params, productType: 'LOAN', collectionType: 'LOAN' } }));
+  },
+};
+
+// ============================================================
+// DYNAMIC ENDPOINT HELPER (Model Y & Model N Unified Routing)
+// ============================================================
+export const getCollectionEndpoint = (operation = 'accounts', productType = 'LOAN') => {
+  try {
+    const listUrlStr = localStorage.getItem('list_url');
+    if (listUrlStr) {
+      const listUrl = JSON.parse(listUrlStr);
+      if (listUrl && listUrl[operation] && listUrl[operation][productType]) {
+        return listUrl[operation][productType];
+      }
+    }
+  } catch (e) {}
+
+  const API_BASE = process.env.REACT_APP_API_URL || 'https://localhost:7256/api';
+  if (operation === 'accounts') {
+    return `${API_BASE}/Account/get-all?type=${productType}`;
+  }
+  if (operation === 'dues') {
+    return `${API_BASE}/Account/agent-due-list?type=${productType}`;
+  }
+  if (operation === 'postTransaction') {
+    return `${API_BASE}/Payment/Cash_Collection`;
+  }
+  return `${API_BASE}/Account/get-all`;
 };
 
 // ============================================================
@@ -371,30 +448,28 @@ export const branchApi = {
 export const accountApi = {
   getAll: (params) => {
     console.log('📡 accountApi.getAll called with params:', params);
-    const prod = (params?.productType || params?.ProductType || 'RD').toString().toUpperCase();
-    
+    const prod = (params?.productType || params?.ProductType || params?.collectionType || params?.CollectionType || 'RD').toString().toUpperCase();
+
+    const enrichedParams = {
+      ...params,
+      productType: prod,
+      ProductType: prod,
+      collectionType: prod,
+      CollectionType: prod,
+    };
+
     if (prod === 'LOAN') {
-      return api.get('/Branch/fetch-loan-customers', { params })
-        .catch(() => api.get('/Branch/fetch-rd-customers', { params: { ...params, productType: 'LOAN', ProductType: 'LOAN' } }))
-        .catch(() => api.get('/Branch/fetch-account-list', { params: { ...params, productType: 'LOAN' } }))
-        .catch(() => api.get('/Customer/fetch-rd-customers', { params: { ...params, productType: 'LOAN' } }))
-        .catch(() => api.get('/Account/get-all', { params }))
-        .catch(() => api.get('/Account', { params }));
+      return api.get('/Branch/fetch-loan-customers', { params: enrichedParams })
+        .catch(() => api.get('/Branch/fetch-rd-customers', { params: enrichedParams }))
+        .catch(() => api.get('/Customer/fetch-rd-customers', { params: enrichedParams }))
+        .catch(() => api.get('/Account/get-all', { params: enrichedParams }))
+        .catch(() => api.get('/Account', { params: enrichedParams }));
     }
 
-    if (prod === 'FD') {
-      return api.get('/Branch/fetch-fd-customers', { params })
-        .catch(() => api.get('/Branch/fetch-rd-customers', { params: { ...params, productType: 'FD', ProductType: 'FD' } }))
-        .catch(() => api.get('/Branch/fetch-account-list', { params: { ...params, productType: 'FD' } }))
-        .catch(() => api.get('/Account/get-all', { params }))
-        .catch(() => api.get('/Account', { params }));
-    }
-
-    return api.get('/Branch/fetch-rd-customers', { params })
-      .catch(() => api.get('/Branch/fetch-account-list', { params }))
-      .catch(() => api.get('/Customer/fetch-rd-customers', { params }))
-      .catch(() => api.get('/Account/get-all', { params }))
-      .catch(() => api.get('/Account', { params }));
+    return api.get('/Branch/fetch-rd-customers', { params: enrichedParams })
+      .catch(() => api.get('/Customer/fetch-rd-customers', { params: enrichedParams }))
+      .catch(() => api.get('/Account/get-all', { params: enrichedParams }))
+      .catch(() => api.get('/Account', { params: enrichedParams }));
   },
   getStandaloneAccounts: (params) => {
     console.log('📡 accountApi.getStandaloneAccounts called with params:', params);
@@ -439,6 +514,18 @@ export const accountApi = {
     console.log('📡 accountApi.update called for id:', id);
     return api.put(`/Account/${id}`, data);
   },
+  savePtp: (id, ptpData) => {
+    console.log('📡 accountApi.savePtp called for id:', id, ptpData);
+    return api.put(`/Account/${id}/ptp`, ptpData).catch(() => api.put(`/Account/${id}`, ptpData));
+  },
+  saveCallOutcome: (id, callData) => {
+    console.log('📡 accountApi.saveCallOutcome called for id:', id, callData);
+    return api.put(`/Account/${id}/call-outcome`, callData).catch(() => api.put(`/Account/${id}`, callData));
+  },
+  saveCustomerDetails: (id, customerData) => {
+    console.log('📡 accountApi.saveCustomerDetails called for id:', id, customerData);
+    return api.put(`/Account/${id}/customer-details`, customerData).catch(() => api.put(`/Account/${id}`, customerData));
+  },
   delete: (id) => {
     console.log('📡 accountApi.delete called for id:', id);
     return api.delete(`/Account/${id}`);
@@ -453,6 +540,10 @@ export const accountApi = {
 // PAYMENT API
 // ============================================================
 export const paymentApi = {
+  processCashCollection: (data) => {
+    console.log('📡 paymentApi.processCashCollection called with data:', data);
+    return api.post('/Payment/Cash_Collection', data);
+  },
   processPaymentLink: (data) => {
     console.log('📡 paymentApi.processPaymentLink called with data:', data);
     return api.post('/Payment/PaymentLink', data)
@@ -489,7 +580,9 @@ export const paymentApi = {
   },
   getStatus: (orderId) => {
     console.log('📡 paymentApi.getStatus called for orderId:', orderId);
-    return api.get(`/payment/status?orderId=${orderId}`).catch(() => api.get(`/Payment/status?orderId=${orderId}`));
+    return api.get(`/Payment/status?orderId=${encodeURIComponent(orderId)}`)
+      .catch(() => api.get(`/Payment/order-status?orderId=${encodeURIComponent(orderId)}`))
+      .catch(() => api.get(`/Payment/transaction-history?orderId=${encodeURIComponent(orderId)}`));
   },
   generateLink: (data) => {
     console.log('📡 paymentApi.generateLink called with data:', data);
@@ -550,22 +643,39 @@ export const customerApi = {
 // ============================================================
 export const settlementApi = {
   getAll: (params) => {
-    console.log('📡 settlementApi.getAll called');
-    return api.get('/Settlement/get-all', { params: typeof params === 'object' ? params : undefined })
-      .catch(() => api.get('/Settlement', { params: typeof params === 'object' ? params : undefined }))
-      .catch(() => api.get('/settlement', { params: typeof params === 'object' ? params : undefined }));
+    console.log('📡 settlementApi.getAll called with:', params);
+    const payload = typeof params === 'object' ? params : {};
+    return api.post('/Payment/settlements', payload)
+      .catch(() => api.get('/Payment/settlements', { params: payload }))
+      .catch(() => api.get('/Settlement/get-all', { params: payload }))
+      .catch(() => api.get('/Settlement', { params: payload }))
+      .catch(() => api.get('/settlement', { params: payload }));
   },
-  getById: (id) => {
+  getSettlementDetails: (params = {}) => {
+    console.log('📡 settlementApi.getSettlementDetails called with:', params);
+    return api.post('/Payment/settlement-details', params)
+      .catch(() => api.get('/Payment/settlement-details', { params }))
+      .catch(() => api.get('/Settlement/details', { params }));
+  },
+  getById: (id, params = {}) => {
     console.log('📡 settlementApi.getById called for id:', id);
-    return api.get(`/settlement/${id}`);
+    const numericId = parseInt(id, 10);
+    const payload = {
+      settlement_id: !isNaN(numericId) ? numericId : undefined,
+      transaction_id: isNaN(numericId) ? String(id) : undefined,
+      ...(typeof params === 'object' ? params : {})
+    };
+    return api.post('/Payment/settlement-details', payload)
+      .catch(() => api.get('/Payment/settlement-details', { params: { settlementId: id } }))
+      .catch(() => api.get(`/settlement/${id}`));
   },
   export: () => {
     console.log('📡 settlementApi.export called');
     return api.get('/settlement/export', { responseType: 'blob' });
   },
-  getStats: () => {
+  getStats: (params) => {
     console.log('📡 settlementApi.getStats called');
-    return api.get('/settlement/stats');
+    return api.get('/settlement/stats', { params });
   },
 };
 
@@ -621,9 +731,9 @@ export const reportsApi = {
   },
   export: (type, params) => {
     console.log('📡 reportsApi.export called for type:', type);
-    return api.get(`/reports/export/${type}`, { 
-      params, 
-      responseType: 'blob' 
+    return api.get(`/reports/export/${type}`, {
+      params,
+      responseType: 'blob'
     });
   },
 };
@@ -690,17 +800,27 @@ export const authApi = {
       Username: cred
     });
   },
-  requestOtp: (mobileNumber) => {
-    console.log('📱 authApi.requestOtp called for:', mobileNumber);
-    return api.post('/Auth/request-otp', { MobileNumber: mobileNumber });
+  requestOtp: (data) => {
+    const mob = typeof data === 'string' ? data : (data?.MobileNo || data?.MobileNumber || data?.mobile || '');
+    console.log('📱 authApi.requestOtp called for:', mob);
+    return api.post('/RequestOTP', { MobileNo: mob, MobileNumber: mob })
+      .catch(() => api.post('/Auth/RequestOTP', { MobileNo: mob, MobileNumber: mob }))
+      .catch(() => api.post('/Auth/request-otp', { MobileNo: mob, MobileNumber: mob }));
   },
   verifyOtp: (data) => {
-    console.log('📱 authApi.verifyOtp called');
-    return api.post('/Auth/verify-otp', data);
+    const mob = data?.MobileNo || data?.MobileNumber || data?.mobile || '';
+    const otp = data?.OTP || data?.otp || data?.Code || data?.code || '';
+    console.log('📱 authApi.verifyOtp called for:', mob);
+    return api.post('/VerifyOTP', { MobileNo: mob, MobileNumber: mob, OTP: Number(otp) || otp })
+      .catch(() => api.post('/Auth/VerifyOTP', { MobileNo: mob, MobileNumber: mob, OTP: Number(otp) || otp }))
+      .catch(() => api.post('/Auth/verify-otp', { MobileNo: mob, MobileNumber: mob, OTP: Number(otp) || otp }));
   },
-  resendOtp: (userId) => {
-    console.log('📱 authApi.resendOtp called for userId:', userId);
-    return api.post('/Auth/resend-otp', { UserId: userId });
+  resendOtp: (data) => {
+    const mob = typeof data === 'string' ? data : (data?.MobileNo || data?.MobileNumber || data?.mobile || '');
+    console.log('📱 authApi.resendOtp called for:', mob);
+    return api.post('/RequestOTP', { MobileNo: mob, MobileNumber: mob })
+      .catch(() => api.post('/Auth/RequestOTP', { MobileNo: mob, MobileNumber: mob }))
+      .catch(() => api.post('/Auth/resend-otp', { MobileNo: mob, MobileNumber: mob }));
   },
   register: (data) => {
     console.log('📝 authApi.register called');
@@ -937,7 +1057,7 @@ export const walletApi = {
       const key = walletApi.getStorageKey(merchantId);
       const currentRes = await walletApi.getBalance(merchantId);
       const current = currentRes.data.data;
-      
+
       const newBalance = Number((current.balance + topUpAmount).toFixed(2));
       const updatedWallet = {
         ...current,
@@ -980,7 +1100,7 @@ export const walletApi = {
     console.log('💳 walletApi.deductCredits called with:', { merchantId, channel, recipientCount });
     const count = Math.max(1, Number(recipientCount || 1));
     const channels = channel.split(',').map(c => c.trim().toLowerCase());
-    
+
     let unitCost = 0;
     if (channels.includes('sms')) unitCost += walletApi.RATES.SMS;
     if (channels.includes('whatsapp')) unitCost += walletApi.RATES.WhatsApp;
@@ -1135,6 +1255,24 @@ export const walletApi = {
       localStorage.setItem(key, JSON.stringify(updated));
       return { data: { success: true, message: `Branch ${branchCode} quota saved successfully.`, data: { branchCode, allocatedCredits } } };
     }
+  }
+};
+
+// ============================================================
+// WHATSAPP API (Telinfy WhatsApp Messaging Engine)
+// ============================================================
+export const whatsAppApi = {
+  getTemplates: () => {
+    console.log('💬 whatsAppApi.getTemplates called');
+    return api.get('/WhatsApp/templates');
+  },
+  sendTemplateMessage: (data) => {
+    console.log('💬 whatsAppApi.sendTemplateMessage called with:', data);
+    return api.post('/WhatsApp/send-template', data);
+  },
+  sendTestMessage: (data) => {
+    console.log('💬 whatsAppApi.sendTestMessage called with:', data);
+    return api.post('/WhatsApp/test-message', data);
   }
 };
 

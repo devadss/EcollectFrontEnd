@@ -63,25 +63,50 @@ const AddAgent = () => {
 
   const [errors, setErrors] = useState({});
 
-  // Single-flight fetch external agents with deduplication
-  const loadExternalAgents = useCallback(async (mid = null, force = false) => {
+  // Refs to prevent infinite render loops in useCallback / useEffect
+  const formDataRef = useRef(formData);
+  formDataRef.current = formData;
+
+  const branchesRef = useRef(branches);
+  branchesRef.current = branches;
+
+  const externalAgentsRef = useRef(externalAgents);
+  externalAgentsRef.current = externalAgents;
+
+  // Single-flight fetch external agents with deduplication and branch code support
+  const loadExternalAgents = useCallback(async (mid = null, force = false, bCode = null) => {
     if (isFetchingAgentsRef.current) {
       console.log('⏳ Agent fetch already in-flight. Skipping duplicate call.');
       return;
     }
 
-    const targetMid = mid !== null ? String(mid) : (formData.merchantId ? String(formData.merchantId) : '');
-    if (!force && fetchedAgentMerchantIdRef.current === targetMid && externalAgents.length > 0) {
-      console.log(`📦 Agents already loaded for merchant ${targetMid}. Skipping redundant call.`);
+    const currentForm = formDataRef.current;
+    const currentBranches = branchesRef.current;
+    const currentExternalAgents = externalAgentsRef.current;
+
+    const targetMid = mid !== null ? String(mid) : (currentForm.merchantId ? String(currentForm.merchantId) : '');
+    const currentBranch = currentBranches.find(b => String(b.id) === String(currentForm.branchId));
+    const targetBranchCode = bCode || currentBranch?.code || currentBranch?.external_branch_id || '01';
+
+    const cacheKey = `${targetMid}_${targetBranchCode}`;
+    if (!force && fetchedAgentMerchantIdRef.current === cacheKey && currentExternalAgents.length > 0) {
+      console.log(`📦 Agents already loaded for ${cacheKey}. Skipping redundant call.`);
       return;
     }
 
     try {
       isFetchingAgentsRef.current = true;
       setFetchingAgents(true);
-      console.log(`📡 Fetching external agents for merchant: ${targetMid || 'all'}...`);
+      console.log(`📡 Fetching external agents for merchant: ${targetMid || 'all'}, branchCode: ${targetBranchCode}...`);
       
-      const res = await agentApi.fetchAgentList(targetMid ? { merchantId: targetMid } : undefined);
+      const queryParams = {
+        brcode: targetBranchCode,
+        branch_code: targetBranchCode,
+        branchCode: targetBranchCode,
+        ...(targetMid ? { merchantId: targetMid } : {})
+      };
+
+      const res = await agentApi.fetchAgentList(queryParams);
       let agents = [];
       
       if (res && typeof res === 'object') {
@@ -89,6 +114,8 @@ const AddAgent = () => {
           agents = res.data.data.Agentlist.data; 
         } else if (res.data && res.data.data && Array.isArray(res.data.data)) {
           agents = res.data.data; 
+        } else if (res.data && res.data.Agentlist && Array.isArray(res.data.Agentlist.data)) {
+          agents = res.data.Agentlist.data;
         } else if (res.data && Array.isArray(res.data)) {
           agents = res.data; 
         } else if (Array.isArray(res)) {
@@ -98,10 +125,10 @@ const AddAgent = () => {
       
       if (agents && agents.length > 0) {
         setExternalAgents(agents);
-        fetchedAgentMerchantIdRef.current = targetMid;
+        fetchedAgentMerchantIdRef.current = cacheKey;
       } else {
         setExternalAgents([]);
-        fetchedAgentMerchantIdRef.current = targetMid;
+        fetchedAgentMerchantIdRef.current = cacheKey;
       }
     } catch (error) {
       console.error('🔴 Error in external agent API call:', error);
@@ -110,7 +137,7 @@ const AddAgent = () => {
       isFetchingAgentsRef.current = false;
       setFetchingAgents(false);
     }
-  }, [formData.merchantId, externalAgents.length]);
+  }, []);
 
   // Initial page initialization (runs once on mount)
   useEffect(() => {
@@ -233,7 +260,7 @@ const AddAgent = () => {
     return () => {
       isMounted = false;
     };
-  }, [id, isEdit, isSoftwareAdmin, isBranchUser, navigate, currentMerchantId, loadExternalAgents]);
+  }, [id, isEdit, isSoftwareAdmin, isBranchUser, currentMerchantId]);
 
   // Handle Merchant Selection & Sync Integration Status Dynamically
   const handleMerchantChange = (e) => {
@@ -246,23 +273,46 @@ const AddAgent = () => {
     setFormData(prev => ({
       ...prev,
       merchantId: selectedMid,
+      branchId: '',
       agentName: '',
       agentCode: '',
-      branchId: '',
       email: '',
       phone: ''
     }));
     setSelectedAgentId('');
+    setExternalAgents([]);
+    fetchedAgentMerchantIdRef.current = null;
 
     if (errors.merchantId) {
       setErrors(prev => ({ ...prev, merchantId: null }));
     }
 
     setIntegrationStatus(mStatus);
+  };
 
-    if ((mStatus === 'Y' || mStatus === 'Yes') && !isEdit) {
-      // Force fetch for the newly selected merchant
-      loadExternalAgents(selectedMid, true);
+  // Handle Branch Selection & Trigger External Agent Fetch for this specific branch
+  const handleBranchChange = (e) => {
+    const selectedBid = e.target.value;
+    
+    setFormData(prev => ({
+      ...prev,
+      branchId: selectedBid,
+      agentName: '',
+      agentCode: '',
+      selectedAgentId: '',
+      email: '',
+      phone: ''
+    }));
+    setSelectedAgentId('');
+
+    if (errors.branchId) {
+      setErrors(prev => ({ ...prev, branchId: null }));
+    }
+
+    if (selectedBid && (integrationStatus === 'Y' || integrationStatus === 'Yes') && !isEdit) {
+      const selectedB = branches.find(b => String(b.id) === String(selectedBid));
+      const bCode = selectedB?.code || selectedB?.external_branch_id || '01';
+      loadExternalAgents(formData.merchantId, true, bCode);
     } else {
       setExternalAgents([]);
       fetchedAgentMerchantIdRef.current = null;
@@ -281,28 +331,17 @@ const AddAgent = () => {
     if (selectedAgent) {
       const aName = selectedAgent.Agent_NAME || selectedAgent.agentName || selectedAgent.name || '';
       const aCode = selectedAgent.Agent_ID || selectedAgent.agentId || selectedAgent.id || '';
-      const bCode = String(selectedAgent.BRANCH_CODE || selectedAgent.branchCode || selectedAgent.branchId || '').trim();
-
-      // Match branch by external_branch_id, code, ID, or name
-      const matchedBranch = branches.find(b => 
-        (b.external_branch_id && String(b.external_branch_id).trim() === bCode) ||
-        (b.code && String(b.code).trim() === bCode) ||
-        String(b.id) === bCode ||
-        (b.name && String(b.name).trim().toLowerCase() === bCode.toLowerCase())
-      ) || (filteredBranches.length === 1 ? filteredBranches[0] : null);
 
       setFormData(prev => ({
         ...prev,
         agentName: aName,
         agentCode: aCode,
-        branchId: matchedBranch ? String(matchedBranch.id) : (prev.branchId || (filteredBranches.length === 1 ? String(filteredBranches[0].id) : '')),
         phone: selectedAgent.phone || selectedAgent.Phone || prev.phone,
         email: selectedAgent.email || selectedAgent.Email || prev.email,
       }));
 
       if (errors.agentName) setErrors(prev => ({ ...prev, agentName: null }));
       if (errors.agentCode) setErrors(prev => ({ ...prev, agentCode: null }));
-      if (matchedBranch && errors.branchId) setErrors(prev => ({ ...prev, branchId: null }));
     }
   };
 
@@ -348,6 +387,7 @@ const AddAgent = () => {
   const validate = () => {
     let tempErrors = {};
     if (isSoftwareAdmin && !formData.merchantId) tempErrors.merchantId = "Please select the respective merchant partner first";
+    if (!formData.branchId) tempErrors.branchId = "Branch assignment is required";
     if (!formData.agentName?.trim()) tempErrors.agentName = "Agent Full Name is required";
     
     // Strict Email Validation
@@ -367,7 +407,6 @@ const AddAgent = () => {
     }
 
     if (!formData.agentCode?.trim()) tempErrors.agentCode = "Agent Identification Code is required";
-    if (!formData.branchId) tempErrors.branchId = "Branch assignment is required";
     if (!formData.address?.trim()) tempErrors.address = "Residential / Operational Address is required";
     if (!formData.city?.trim()) tempErrors.city = "City / District is required";
     if (!formData.state?.trim()) tempErrors.state = "State jurisdiction is required";
@@ -430,8 +469,9 @@ const AddAgent = () => {
   };
 
   const isIntegrationActive = integrationStatus === 'Y' || integrationStatus === 'Yes';
-  const showExternalDropdown = isIntegrationActive && !isEdit && externalAgents.length > 0;
+  const showExternalDropdown = isIntegrationActive && !isEdit && formData.branchId && externalAgents.length > 0;
   const selectedMerchantObj = merchants.find(m => String(m.id) === String(formData.merchantId));
+  const selectedBranchObj = branches.find(b => String(b.id) === String(formData.branchId));
 
   // Filter branches belonging to the chosen merchant
   const filteredBranches = formData.merchantId
@@ -455,7 +495,7 @@ const AddAgent = () => {
               <span className="gradient-text">{isEdit ? 'Edit' : 'Add'} Agent</span>
             </h1>
             <p className="page-subtitle">
-              {isEdit ? 'Update agent information' : 'Register a new field agent for selected merchant partner'}
+              {isEdit ? 'Update agent information' : 'Register a new field agent for selected partner and branch'}
             </p>
           </div>
           <button className="btn-outline" onClick={() => navigate('/agents')}>← Back</button>
@@ -488,10 +528,10 @@ const AddAgent = () => {
 
         <form onSubmit={handleSubmit} className="agent-form">
           
-          {/* STEP 1: MERCHANT SELECTION (FIRST STEP AT THE TOP) */}
+          {/* STEP 1: MERCHANT & BRANCH SELECTION (SELECT BRANCH FIRST) */}
           <div className="form-section" style={{ borderLeft: '4px solid #06b6d4' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-              <h3 style={{ margin: 0 }}>Step 1: Select Merchant Partner <span style={{ color: '#ef4444' }}>*</span></h3>
+              <h3 style={{ margin: 0 }}>Step 1: Partner & Branch Assignment <span style={{ color: '#ef4444' }}>*</span></h3>
               {formData.merchantId && (
                 <span style={{
                   fontSize: '11.5px',
@@ -508,9 +548,10 @@ const AddAgent = () => {
             </div>
 
             <div className="form-grid">
+              {/* Merchant Partner Selection */}
               {isSoftwareAdmin ? (
-                <div className="form-group full-width">
-                  <label>Assign to Merchant Partner <span style={{ color: '#ef4444' }}>*</span></label>
+                <div className="form-group">
+                  <label>Merchant Partner <span style={{ color: '#ef4444' }}>*</span></label>
                   <select
                     name="merchantId"
                     value={formData.merchantId || ''}
@@ -519,7 +560,7 @@ const AddAgent = () => {
                     style={errors.merchantId ? { borderColor: '#ef4444' } : {}}
                     disabled={isEdit}
                   >
-                    <option value="">-- Choose Merchant to Load Configuration & Agents --</option>
+                    <option value="">-- Choose Merchant Partner --</option>
                     {merchants.map((m) => {
                       const isLive = m.integrationStatus === 'Y' || m.IntegrationStatus === 'Y';
                       return (
@@ -536,7 +577,7 @@ const AddAgent = () => {
                   )}
                 </div>
               ) : (
-                <div className="form-group full-width">
+                <div className="form-group">
                   <label>Merchant Partner</label>
                   <input
                     type="text"
@@ -546,6 +587,30 @@ const AddAgent = () => {
                   />
                 </div>
               )}
+
+              {/* Branch Selection (Right next to Merchant) */}
+              <div className="form-group">
+                <label>Assign to Branch <span style={{ color: '#ef4444' }}>*</span></label>
+                <select
+                  name="branchId"
+                  value={formData.branchId || ''}
+                  onChange={handleBranchChange}
+                  className={`branch-select-dropdown ${errors.branchId ? 'input-error' : ''}`}
+                  disabled={isEdit || (isSoftwareAdmin && !formData.merchantId)}
+                >
+                  <option value="">
+                    {isSoftwareAdmin && !formData.merchantId 
+                      ? '-- Select Merchant First --' 
+                      : '-- Choose Branch --'}
+                  </option>
+                  {Array.isArray(filteredBranches) && filteredBranches.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name} ({branch.code || `ID: #${branch.id}`})
+                    </option>
+                  ))}
+                </select>
+                {errors.branchId && <p className="error-text">{errors.branchId}</p>}
+              </div>
             </div>
           </div>
 
@@ -554,11 +619,19 @@ const AddAgent = () => {
             <span className="banner-icon">{isIntegrationActive ? '🔗' : '📝'}</span>
             <span className="banner-text">
               {!formData.merchantId ? (
-                '👉 Please select a Merchant above to determine API integration and load agent roster.'
+                '👉 Please select a Merchant Partner above.'
+              ) : !formData.branchId ? (
+                '👉 Please select a Branch above to load external agent roster from Core Banking API.'
               ) : isIntegrationActive ? (
-                `Dynamic Integration Active for ${selectedMerchantObj?.merchantName || 'Merchant'}. ${externalAgents.length > 0 ? `✅ Loaded ${externalAgents.length} agents from external API!` : 'Loading agents from external CBS API...'}`
+                fetchingAgents ? (
+                  `⏳ Fetching agent list from CBS for branch "${selectedBranchObj?.name || formData.branchId}"...`
+                ) : externalAgents.length > 0 ? (
+                  `✅ Live API Active: Loaded ${externalAgents.length} agents for branch "${selectedBranchObj?.name || formData.branchId}" (Code: ${selectedBranchObj?.code || '01'})`
+                ) : (
+                  `ℹ️ No external agents returned from CBS for branch "${selectedBranchObj?.name || formData.branchId}". You may enter agent details manually below.`
+                )
               ) : (
-                `Standard Mode (Integration: N) for ${selectedMerchantObj?.merchantName || 'Merchant'}. Please enter Agent Name and Agent Code manually in text boxes.`
+                `Standard Mode (Integration: N) for ${selectedMerchantObj?.merchantName || 'Merchant'}. Please enter Agent Name and Agent Code manually.`
               )}
             </span>
             <span className="banner-status">
@@ -567,7 +640,7 @@ const AddAgent = () => {
             {fetchingAgents && <span className="banner-loader">⏳ Loading...</span>}
           </div>
 
-          {/* STEP 3: AGENT PERSONAL INFORMATION (DROPDOWN IF 'Y', TEXT BOX IF 'N') */}
+          {/* STEP 3: AGENT PERSONAL INFORMATION (DROPDOWN SHOWN ONLY AFTER BRANCH IS CHOSEN) */}
           <div className="form-section">
             <h3>Step 2: Agent Identification & Personal Details</h3>
             <div className="form-grid">
@@ -575,28 +648,43 @@ const AddAgent = () => {
               {/* Agent Name Input / Dropdown */}
               <div className="form-group">
                 <label>Agent Name <span style={{ color: '#ef4444' }}>*</span></label>
-                {showExternalDropdown ? (
-                  <select
-                    name="agentName"
-                    value={selectedAgentId}
-                    onChange={handleExternalAgentSelect}
-                    className={`branch-select-dropdown ${errors.agentName ? 'input-error' : ''}`}
-                  >
-                    <option value="">-- Select Agent from External API --</option>
-                    {externalAgents.map((agent, index) => {
-                      const idVal = agent.Agent_ID || agent.agentId || agent.id;
-                      const nameVal = agent.Agent_NAME || agent.agentName || agent.name;
-                      return (
-                        <option key={index} value={idVal}>
-                          {nameVal} (Code: {idVal})
-                        </option>
-                      );
-                    })}
-                  </select>
-                ) : isIntegrationActive && fetchingAgents ? (
-                  <div className="loading-input">
-                    <span className="spinner-small"></span> Loading external agents...
-                  </div>
+                {isIntegrationActive && !isEdit ? (
+                  !formData.branchId ? (
+                    <select disabled className="branch-select-dropdown" style={{ background: 'rgba(255,255,255,0.03)', color: '#64748b' }}>
+                      <option>-- Select a Branch in Step 1 first to view agents --</option>
+                    </select>
+                  ) : fetchingAgents ? (
+                    <div className="loading-input">
+                      <span className="spinner-small"></span> Loading agents for selected branch...
+                    </div>
+                  ) : externalAgents.length > 0 ? (
+                    <select
+                      name="agentName"
+                      value={selectedAgentId}
+                      onChange={handleExternalAgentSelect}
+                      className={`branch-select-dropdown ${errors.agentName ? 'input-error' : ''}`}
+                    >
+                      <option value="">-- Select Agent from External API ({externalAgents.length} available) --</option>
+                      {externalAgents.map((agent, index) => {
+                        const idVal = agent.Agent_ID || agent.agentId || agent.id;
+                        const nameVal = agent.Agent_NAME || agent.agentName || agent.name;
+                        return (
+                          <option key={index} value={idVal}>
+                            {nameVal} (Code: {idVal})
+                          </option>
+                        );
+                      })}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      name="agentName"
+                      value={formData.agentName || ''}
+                      onChange={handleChange}
+                      placeholder="Enter agent name manually (e.g. Rahul Sharma)"
+                      className={errors.agentName ? 'input-error' : ''}
+                    />
+                  )
                 ) : (
                   <input
                     type="text"
@@ -620,7 +708,7 @@ const AddAgent = () => {
                     name="agentCode"
                     value={formData.agentCode || ''}
                     onChange={handleChange}
-                    placeholder={fetchingAgents ? "Fetching agent code..." : "Auto-filled from agent selection"}
+                    placeholder={fetchingAgents ? "Fetching agent code..." : (!formData.branchId ? "Select branch first" : "Auto-filled from agent selection")}
                     readOnly={showExternalDropdown && !!formData.agentCode}
                     className={errors.agentCode ? 'input-error font-mono' : 'font-mono'}
                   />
@@ -663,32 +751,9 @@ const AddAgent = () => {
                 />
                 {errors.phone && <p className="error-text">{errors.phone}</p>}
               </div>
-            </div>
-          </div>
 
-          {/* STEP 4: ASSIGNMENT & COMMISSION */}
-          <div className="form-section">
-            <h3>Step 3: Branch Assignment & Commission</h3>
-            <div className="form-grid">
-              <div className="form-group">
-                <label>Assign to Branch <span style={{ color: '#ef4444' }}>*</span></label>
-                <select
-                  name="branchId"
-                  value={formData.branchId || ''}
-                  onChange={handleChange}
-                  className={errors.branchId ? 'input-error' : ''}
-                >
-                  <option value="">-- Choose Branch for this Merchant --</option>
-                  {Array.isArray(filteredBranches) && filteredBranches.map((branch) => (
-                    <option key={branch.id} value={branch.id}>
-                      {branch.name} ({branch.code || `ID: #${branch.id}`})
-                    </option>
-                  ))}
-                </select>
-                {errors.branchId && <p className="error-text">{errors.branchId}</p>}
-              </div>
-
-              <div className="form-group">
+              {/* Commission Rate */}
+              <div className="form-group full-width">
                 <label>Commission Rate (%)</label>
                 <input
                   type="text"
@@ -711,9 +776,9 @@ const AddAgent = () => {
             </div>
           </div>
 
-          {/* STEP 5: ADDRESS & LOCATION */}
+          {/* STEP 4: ADDRESS & LOCATION */}
           <div className="form-section">
-            <h3>Step 4: Agent Residential / Operating Address</h3>
+            <h3>Step 3: Agent Residential / Operating Address</h3>
             <div className="form-grid">
               <div className="form-group full-width">
                 <label>Street Address <span style={{ color: '#ef4444' }}>*</span></label>
@@ -758,9 +823,9 @@ const AddAgent = () => {
             </div>
           </div>
 
-          {/* STEP 6: ADDITIONAL INFORMATION */}
+          {/* STEP 5: ADDITIONAL INFORMATION */}
           <div className="form-section">
-            <h3>Additional Information</h3>
+            <h3>Step 4: Additional Information & KYC Notes</h3>
             <div className="form-grid">
               <div className="form-group full-width">
                 <label>Description & KYC Notes <span style={{ color: '#ef4444' }}>*</span></label>

@@ -610,9 +610,14 @@
   transition: all var(--transition-fast);
 }
 
-.range-pill-btn.is-active {
-  background: var(--accent, #6366f1);
-  color: #ffffff;
+.chart-canvas-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .doughnut-container {
@@ -885,4 +890,138 @@
   .merchant-scope-select {
     max-width: 220px;
   }
+}
+
+/* ==========================================================================
+   ULTRA-PREMIUM LIGHT MODE SOFTWARE ADMIN DASHBOARD OVERRIDES
+   ========================================================================== */
+[data-theme-mode="light"] .merchant-scope-selector-box {
+  background: #ffffff;
+  border: 1px solid rgba(79, 70, 229, 0.25);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme-mode="light"] .merchant-scope-select {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .merchant-scope-select option {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .date-indicator-pill,
+[data-theme-mode="light"] .dash-refresh-btn {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+[data-theme-mode="light"] .dash-refresh-btn:hover {
+  background: #f8fafc;
+  color: var(--accent, #4f46e5);
+  border-color: var(--borderGlow, rgba(79, 70, 229, 0.35));
+}
+
+[data-theme-mode="light"] .merchant-focused-hero-card {
+  background: #ffffff;
+  border: 1px solid rgba(79, 70, 229, 0.25);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 8px 24px -2px rgba(15, 23, 42, 0.08);
+}
+
+[data-theme-mode="light"] .focused-trade-name {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .focused-info-grid {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme-mode="light"] .info-value {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .kpi-glass-card {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 6px 18px -2px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme-mode="light"] .kpi-glass-card:hover {
+  border-color: var(--borderGlow, rgba(79, 70, 229, 0.35));
+  box-shadow: 0 14px 32px -4px rgba(15, 23, 42, 0.12), 0 0 20px -2px var(--accentGlow);
+}
+
+[data-theme-mode="light"] .kpi-metric-number {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .kpi-label-text {
+  color: #64748b;
+}
+
+[data-theme-mode="light"] .chart-card-wrapper {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 6px 18px -2px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme-mode="light"] .chart-card-title {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .table-card-container {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 6px 18px -2px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme-mode="light"] .table-card-title {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .custom-table thead th {
+  background: #f8fafc !important;
+  color: #475569 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+[data-theme-mode="light"] .custom-table tbody tr:hover td {
+  background: #f8fafc !important;
+}
+
+[data-theme-mode="light"] .custom-table tbody td {
+  border-bottom: 1px solid #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+[data-theme-mode="light"] .btn-merchant-action.is-branch {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #047857;
+}
+
+[data-theme-mode="light"] .btn-merchant-action.is-agent {
+  background: rgba(6, 182, 212, 0.1);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  color: #0891b2;
+}
+
+[data-theme-mode="light"] .btn-merchant-action.is-view {
+  background: rgba(79, 70, 229, 0.1);
+  border: 1px solid rgba(79, 70, 229, 0.3);
+  color: #4f46e5;
+}
+
+[data-theme-mode="light"] .btn-merchant-action.is-reset {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+[data-theme-mode="light"] .btn-merchant-action.is-reset:hover {
+  background: #e2e8f0;
+  color: #0f172a;
 }

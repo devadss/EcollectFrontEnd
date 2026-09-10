@@ -218,7 +218,7 @@ const SoftwareAdminDashboard = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { currentTheme } = useTheme();
-  const { showConfirm, showSuccess, showError } = useDialog();
+  const { showConfirm } = useDialog();
 
   // Global Merchant Scope from MerchantContext
   const { 
@@ -660,16 +660,7 @@ const SoftwareAdminDashboard = () => {
           data: dataPoints,
           borderColor: '#6366f1',
           borderWidth: 3,
-          backgroundColor: (context) => {
-            const chart = context.chart;
-            const { ctx, chartArea } = chart;
-            if (!chartArea) return 'rgba(99, 102, 241, 0.2)';
-            const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-            gradient.addColorStop(0, 'rgba(99, 102, 241, 0.45)');
-            gradient.addColorStop(0.5, 'rgba(99, 102, 241, 0.15)');
-            gradient.addColorStop(1, 'rgba(99, 102, 241, 0.0)');
-            return gradient;
-          },
+          backgroundColor: 'rgba(99, 102, 241, 0.18)',
           tension: 0.45,
           fill: true,
           pointBackgroundColor: '#6366f1',
@@ -686,15 +677,7 @@ const SoftwareAdminDashboard = () => {
       datasets: [{
         label: 'Revenue (₹)',
         data: dataPoints,
-        backgroundColor: (context) => {
-          const chart = context.chart;
-          const { ctx, chartArea } = chart;
-          if (!chartArea) return 'rgba(99, 102, 241, 0.8)';
-          const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-          gradient.addColorStop(0, '#6366f1');
-          gradient.addColorStop(1, '#a855f7');
-          return gradient;
-        },
+        backgroundColor: 'rgba(99, 102, 241, 0.85)',
         borderColor: '#6366f1',
         borderWidth: 1,
         borderRadius: 8,
@@ -720,14 +703,15 @@ const SoftwareAdminDashboard = () => {
 
     const total = Object.values(counts).reduce((a, b) => a + b, 0);
 
-    // If no transactions yet, show clean distribution
+    // If no transactions yet, show clean initial distribution
     const labels = Object.keys(counts).filter(k => total === 0 || counts[k] > 0);
-    const data = labels.map(k => total === 0 ? 0 : counts[k]);
+    const data = total === 0 ? [60, 25, 15] : labels.map(k => counts[k]);
+    const displayLabels = total === 0 ? ['UPI (No Data)', 'Cards', 'NetBanking'] : labels;
 
     return {
-      labels: labels.length > 0 ? labels : ['UPI Intent', 'Cards', 'Net Banking'],
+      labels: displayLabels,
       datasets: [{
-        data: data.length > 0 ? data : [60, 25, 15],
+        data: data,
         backgroundColor: ['#6366f1', '#06b6d4', '#10b981', '#a855f7', '#ec4899', '#8b5cf6'],
         borderColor: 'rgba(17, 24, 39, 0.9)',
         borderWidth: 4,
@@ -780,16 +764,7 @@ const SoftwareAdminDashboard = () => {
         label: 'Transactions',
         data: buckets,
         borderColor: '#06b6d4',
-        backgroundColor: (context) => {
-          const chart = context.chart;
-          const { ctx, chartArea } = chart;
-          if (!chartArea) return 'rgba(6, 182, 212, 0.1)';
-          const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-          gradient.addColorStop(0, 'rgba(6, 182, 212, 0.4)');
-          gradient.addColorStop(0.6, 'rgba(6, 182, 212, 0.1)');
-          gradient.addColorStop(1, 'rgba(6, 182, 212, 0.0)');
-          return gradient;
-        },
+        backgroundColor: 'rgba(6, 182, 212, 0.15)',
         tension: 0.45,
         fill: true,
         pointBackgroundColor: '#06b6d4',
@@ -807,7 +782,7 @@ const SoftwareAdminDashboard = () => {
     const counts = { Success: 0, Pending: 0, Failed: 0, Refunded: 0 };
 
     scopedTransactions.forEach(t => {
-      const st = t.statusNorm;
+      const st = (t.statusNorm || t.status || '').toUpperCase();
       if (st.includes('SUCCESS') || st.includes('COMPLETED') || st.includes('SETTLED')) counts.Success++;
       else if (st.includes('PEND') || st.includes('PROCESS')) counts.Pending++;
       else if (st.includes('FAIL') || st.includes('DECLINE')) counts.Failed++;
@@ -815,10 +790,12 @@ const SoftwareAdminDashboard = () => {
       else counts.Success++;
     });
 
+    const total = counts.Success + counts.Pending + counts.Failed + counts.Refunded;
+
     return {
       labels: ['Success', 'Pending', 'Failed', 'Refunded'],
       datasets: [{
-        data: [counts.Success, counts.Pending, counts.Failed, counts.Refunded],
+        data: total > 0 ? [counts.Success, counts.Pending, counts.Failed, counts.Refunded] : [1, 0, 0, 0],
         backgroundColor: ['#10b981', '#a855f7', '#ef4444', '#8b5cf6'],
         borderColor: 'rgba(17, 24, 39, 0.9)',
         borderWidth: 4,

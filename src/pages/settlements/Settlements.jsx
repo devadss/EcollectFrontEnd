@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import {
@@ -16,6 +16,8 @@ import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
 import { settlementApi } from '../../services/api';
 import { useMerchantContext } from '../../context/MerchantContext';
+import { exportToCsv } from '../../utils/exportLedger';
+import SettlementPrintLedger from '../../components/ledger/SettlementPrintLedger';
 import './Settlements.css';
 
 ChartJS.register(
@@ -98,6 +100,13 @@ const SettleIcons = {
       <line x1="18" y1="18" x2="18" y2="11" />
       <polygon points="12 2 2 7 22 7 12 2" />
     </svg>
+  ),
+  Print: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="6 9 6 2 18 2 18 9" />
+      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+      <rect x="6" y="14" width="12" height="8" />
+    </svg>
   )
 };
 
@@ -129,23 +138,62 @@ const Settlements = () => {
     dateTo: '',
   });
 
-  useEffect(() => {
-    loadSettlements();
-  }, [selectedMerchantId]);
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
 
-  const loadSettlements = async () => {
+  const calculateStats = useCallback((data) => {
+    const total = data.reduce((sum, s) => sum + (Number(s.amount || s.saleAmount) || 0), 0);
+    const pending = data.filter(s => (s.status || '').toLowerCase() === 'pending').length;
+    const completed = data.filter(s => (s.status || '').toLowerCase() === 'completed' || (s.status || '').toLowerCase() === 'success').length;
+    const month = data.filter(s => {
+      if (!s.date) return false;
+      const d = new Date(s.date);
+      return d.getMonth() === new Date().getMonth();
+    }).reduce((sum, s) => sum + (Number(s.amount || s.saleAmount) || 0), 0);
+
+    setStats({
+      totalSettled: completed,
+      pendingSettlements: pending,
+      totalAmount: total,
+      thisMonth: month || total,
+    });
+  }, []);
+
+  const loadSettlements = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const queryParams = selectedMerchantId && selectedMerchantId !== 'ALL' 
-        ? { merchantId: selectedMerchantId } 
+        ? { merchantId: selectedMerchantId, merchant_id: selectedMerchantId } 
         : {};
       const res = await settlementApi.getAll(queryParams);
-      const data = res?.data?.data || res?.data || [];
-      const safeData = Array.isArray(data) ? data : [];
+      const rawData = res?.data?.data || res?.data || [];
+      const safeData = Array.isArray(rawData) ? rawData : [];
 
-      setSettlements(safeData);
-      calculateStats(safeData);
+      console.log('📦 Loaded settlements data from API:', safeData.length, safeData);
+
+      // Normalize settlement fields from Payment Gateway Spec (Section 10.1)
+      const formatted = safeData.map((item, idx) => ({
+        id: item.settlement_id || item.id || `SET-${10075 + idx}`,
+        merchant: item.account_name || selectedMerchant?.name || 'Primary Merchant',
+        merchantId: item.merchant_id || selectedMerchantId,
+        amount: Number(item.payout_amount !== undefined && item.payout_amount !== null ? item.payout_amount : (item.sale_amount || item.amount || 0)),
+        saleAmount: Number(item.sale_amount || item.amount || 0),
+        chargebackAmount: Number(item.chargeback_amount || 0),
+        refundAmount: Number(item.refund_amount || 0),
+        date: item.settlement_datetime || item.date || new Date().toISOString(),
+        bankRef: item.bank_reference || item.bankRef || 'NA',
+        bankName: item.bank_name || 'Bank Destination',
+        bankBranch: item.bank_branch || '',
+        accountNumber: item.account_number || '',
+        ifsc: item.ifsc_code || '',
+        vendorCode: item.vendor_code || null,
+        status: (item.completed === 'y' || item.completed === true || String(item.status).toLowerCase() === 'completed' || String(item.status).toLowerCase() === 'success') ? 'Completed' : 'Pending'
+      }));
+
+      setSettlements(formatted);
+      calculateStats(formatted);
     } catch (err) {
       console.error('Error loading settlements:', err);
       setError(err?.response?.data?.message || err.message || 'Failed to load settlements');
@@ -156,25 +204,11 @@ const Settlements = () => {
         setLoading(false);
       }, 350);
     }
-  };
+  }, [selectedMerchantId, selectedMerchant?.name, calculateStats]);
 
-  const calculateStats = (data) => {
-    const total = data.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
-    const pending = data.filter(s => (s.status || '').toLowerCase() === 'pending').length;
-    const completed = data.filter(s => (s.status || '').toLowerCase() === 'completed' || (s.status || '').toLowerCase() === 'success').length;
-    const month = data.filter(s => {
-      if (!s.date) return false;
-      const d = new Date(s.date);
-      return d.getMonth() === new Date().getMonth();
-    }).reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
-
-    setStats({
-      totalSettled: completed,
-      pendingSettlements: pending,
-      totalAmount: total,
-      thisMonth: month || total * 0.45,
-    });
-  };
+  useEffect(() => {
+    loadSettlements();
+  }, [loadSettlements]);
 
   // Settlement Bar Chart Data
   const chartData = useMemo(() => ({
@@ -281,29 +315,49 @@ const Settlements = () => {
 
   const filteredSettlements = useMemo(() => {
     return settlements.filter(s => {
-      const searchStr = filter.search.toLowerCase().trim();
+      const searchStr = (filter.search || '').toLowerCase().trim();
       const matchesSearch = !searchStr || 
-        (s.merchant || '').toLowerCase().includes(searchStr) ||
-        (s.id || '').toLowerCase().includes(searchStr) ||
-        (s.bankRef || '').toLowerCase().includes(searchStr);
+        String(s.merchant || '').toLowerCase().includes(searchStr) ||
+        String(s.id || '').toLowerCase().includes(searchStr) ||
+        String(s.bankRef || '').toLowerCase().includes(searchStr) ||
+        String(s.bankName || '').toLowerCase().includes(searchStr) ||
+        String(s.accountNumber || '').toLowerCase().includes(searchStr);
       
       const matchesStatus = !filter.status || (s.status || '').toLowerCase() === filter.status.toLowerCase();
 
-      const matchesMerchant = !selectedMerchantId || selectedMerchantId === 'ALL'
-        ? true
-        : (String(s.merchantId || s.MerchantId) === String(selectedMerchantId) ||
-           (s.merchant && selectedMerchant && s.merchant.toLowerCase().includes((selectedMerchant.merchantName || selectedMerchant.businessName || '').toLowerCase())));
-
-      return matchesSearch && matchesStatus && matchesMerchant;
+      return matchesSearch && matchesStatus;
     });
-  }, [settlements, filter, selectedMerchantId, selectedMerchant]);
+  }, [settlements, filter]);
 
-  const handleExport = () => {
-    try {
-      settlementApi.export();
-    } catch (e) {
-      console.error('Export failed:', e);
+  // Pagination Computations
+  const totalPages = Math.max(1, Math.ceil(filteredSettlements.length / pageSize));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
     }
+  }, [currentPage, totalPages]);
+
+  const paginatedSettlements = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredSettlements.slice(start, start + pageSize);
+  }, [filteredSettlements, currentPage, pageSize]);
+
+  const handleExportCsv = () => {
+    const columns = [
+      { key: '#sno', label: 'S.No' },
+      { key: 'id', label: 'Settlement ID' },
+      { key: 'bankRef', label: 'Bank Reference / UTR' },
+      { key: 'date', label: 'Settlement Date' },
+      { key: 'merchant', label: 'Beneficiary Name' },
+      { key: 'bankName', label: 'Bank Name' },
+      { key: 'accountNumber', label: 'Account Number' },
+      { key: 'ifsc', label: 'IFSC Code' },
+      { key: 'amount', label: 'Payout Amount (INR)' },
+      { key: 'saleAmount', label: 'Sale Amount (INR)' },
+      { key: 'status', label: 'Status' }
+    ];
+    exportToCsv('Merchant_Settlements_Ledger', filteredSettlements, columns);
   };
 
   const handleResetFilter = () => {
@@ -332,10 +386,16 @@ const Settlements = () => {
             </p>
           </div>
 
-          <button className="settle-export-btn" onClick={handleExport}>
-            <SettleIcons.Download />
-            <span>Export Settlement Report</span>
-          </button>
+          <div className="settle-header-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button className="settle-export-btn is-csv" onClick={handleExportCsv} title="Download CSV Spreadsheet">
+              <SettleIcons.Download />
+              <span>Export to CSV</span>
+            </button>
+            <button className="settle-export-btn" onClick={() => window.print()} title="Print or Save Official PDF Statement">
+              <SettleIcons.Print />
+              <span>Export to PDF Ledger</span>
+            </button>
+          </div>
         </div>
 
         {/* Error Notification */}
@@ -547,7 +607,7 @@ const Settlements = () => {
                     </td>
                   </tr>
                 ) : (
-                  filteredSettlements.map((s) => {
+                  paginatedSettlements.map((s) => {
                     const statusKey = (s.status || 'pending').toLowerCase();
 
                     return (
@@ -560,14 +620,19 @@ const Settlements = () => {
                         <td>
                           <div className="settle-merchant-chip">
                             <div className="merchant-avatar-bubble">
-                              {(s.merchant || 'M').charAt(0)}
+                              {(s.merchant || 'M').charAt(0).toUpperCase()}
                             </div>
-                            <span className="merchant-title">{s.merchant || 'Unknown Partner'}</span>
+                            <div>
+                              <span className="merchant-title">{s.merchant || 'Merchant Partner'}</span>
+                              {s.bankName && s.bankName !== 'DUMMY' && (
+                                <span style={{ display: 'block', fontSize: '11px', color: 'var(--textMuted)' }}>{s.bankName}</span>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td>
                           <span className="settle-amount-val font-mono">
-                            ₹{Number(s.amount || 0).toLocaleString('en-IN')}
+                            ₹{Number(s.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                         </td>
                         <td>
@@ -577,13 +642,13 @@ const Settlements = () => {
                         </td>
                         <td>
                           <span className="bank-ref-badge font-mono">
-                            <SettleIcons.Building /> {s.bankRef || 'UTIB0009817'}
+                            <SettleIcons.Building /> {s.bankRef || 'NA'}
                           </span>
                         </td>
                         <td>
                           <span className={`settle-status-badge is-${statusKey}`}>
                             <span className="status-dot"></span>
-                            <span>{s.status || 'Pending'}</span>
+                            <span>{s.status || 'Completed'}</span>
                           </span>
                         </td>
                         <td style={{ textAlign: 'right' }}>
@@ -604,7 +669,96 @@ const Settlements = () => {
             </table>
           </div>
 
+          {/* Pagination Controls */}
+          <div className="settle-pagination-bar">
+            <div className="settle-page-info">
+              <span>
+                Showing {filteredSettlements.length > 0 ? (currentPage - 1) * pageSize + 1 : 0} to {Math.min(currentPage * pageSize, filteredSettlements.length)} of {filteredSettlements.length} settlements
+              </span>
+              
+              <div className="settle-size-picker">
+                <span>Show:</span>
+                <select 
+                  value={pageSize} 
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="settle-size-select"
+                >
+                  <option value={5}>5 entries</option>
+                  <option value={10}>10 entries</option>
+                  <option value={20}>20 entries</option>
+                  <option value={50}>50 entries</option>
+                </select>
+              </div>
+            </div>
+
+            {totalPages > 1 && (
+              <div className="settle-page-btn-group">
+                <button 
+                  className="settle-page-btn" 
+                  onClick={() => setCurrentPage(1)} 
+                  disabled={currentPage === 1}
+                  title="First Page"
+                >
+                  «
+                </button>
+                <button 
+                  className="settle-page-btn" 
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} 
+                  disabled={currentPage === 1}
+                  title="Previous Page"
+                >
+                  ‹
+                </button>
+
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(page => page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1)
+                  .map((page, idx, arr) => {
+                    const prev = arr[idx - 1];
+                    return (
+                      <React.Fragment key={page}>
+                        {prev && page - prev > 1 && <span className="settle-page-ellipsis">…</span>}
+                        <button
+                          className={`settle-page-num-btn ${currentPage === page ? 'is-active' : ''}`}
+                          onClick={() => setCurrentPage(page)}
+                        >
+                          {page}
+                        </button>
+                      </React.Fragment>
+                    );
+                  })
+                }
+
+                <button 
+                  className="settle-page-btn" 
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} 
+                  disabled={currentPage === totalPages}
+                  title="Next Page"
+                >
+                  ›
+                </button>
+                <button 
+                  className="settle-page-btn" 
+                  onClick={() => setCurrentPage(totalPages)} 
+                  disabled={currentPage === totalPages}
+                  title="Last Page"
+                >
+                  »
+                </button>
+              </div>
+            )}
+          </div>
+
         </div>
+
+        {/* Official Printable Statement for PDF Export */}
+        <SettlementPrintLedger 
+          settlements={filteredSettlements}
+          stats={stats}
+          merchantName={selectedMerchant?.merchantName || 'Primary Merchant'}
+        />
 
       </div>
     </DashboardLayout>

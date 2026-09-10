@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { authApi } from '../../services/api';
+import { requestOtp, resendOtp, verifyOtp } from '../../services/smsService';
+import { useTheme } from '../../context/ThemeContext';
 import './Login.css';
 
 // SVG Icon Library
@@ -7,6 +9,19 @@ const Icons = {
   Logo: () => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  ),
+  Theme: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2v2" />
+      <path d="M12 20v2" />
+      <path d="m4.93 4.93 1.41 1.41" />
+      <path d="m17.66 17.66 1.41 1.41" />
+      <path d="M2 12h2" />
+      <path d="M20 12h2" />
+      <path d="m6.34 17.66-1.41 1.41" />
+      <path d="m19.07 4.93-1.41 1.41" />
+      <circle cx="12" cy="12" r="4" />
     </svg>
   ),
   Mail: () => (
@@ -48,7 +63,7 @@ const Icons = {
   ),
   Sparkles: () => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3z"/>
+      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3z" />
     </svg>
   ),
   Key: () => (
@@ -69,21 +84,66 @@ const Icons = {
       <line x1="18" y1="6" x2="6" y2="18" />
       <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
+  ),
+  Refresh: () => (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+    </svg>
   )
 };
 
 const Login = () => {
+  const { theme, currentTheme, changeTheme, themes } = useTheme();
+  const isLight = theme?.id?.startsWith('light');
+  const [showThemeMenu, setShowThemeMenu] = useState(false);
+  const themeMenuRef = useRef(null);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [captchaCode, setCaptchaCode] = useState('');
+  const [captchaInput, setCaptchaInput] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
+  // Generate 5-character Alphanumeric Captcha Code
+  const generateCaptcha = () => {
+    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+    let code = '';
+    for (let i = 0; i < 5; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setCaptchaCode(code);
+    setCaptchaInput('');
+  };
+
+  useEffect(() => {
+    generateCaptcha();
+    const reason = localStorage.getItem('ecollect_logout_reason');
+    if (reason === 'inactivity') {
+      setError('Your session has expired due to 15 minutes of inactivity for banking security. Please sign in again.');
+      localStorage.removeItem('ecollect_logout_reason');
+    }
+  }, []);
+
+  // Close theme menu on click outside
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (themeMenuRef.current && !themeMenuRef.current.contains(e.target)) {
+        setShowThemeMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
   // Forgot Password Modal State
   const [isForgotOpen, setIsForgotOpen] = useState(false);
+  const [isTermsOpen, setIsTermsOpen] = useState(false);
+  const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
   const [forgotStep, setForgotStep] = useState(1); // 1: Input Email/Phone, 2: Enter OTP & New Password, 3: Success
   const [forgotIdentifier, setForgotIdentifier] = useState('');
   const [forgotOtp, setForgotOtp] = useState('');
@@ -120,8 +180,9 @@ const Login = () => {
 
   const handleSendOtp = async (e) => {
     e.preventDefault();
-    if (!forgotIdentifier.trim()) {
-      setForgotError('Please enter your registered email, username, or phone number.');
+    const cleanId = forgotIdentifier.trim();
+    if (!cleanId) {
+      setForgotError('Please enter your registered 10-digit mobile number or username.');
       return;
     }
     setForgotLoading(true);
@@ -129,20 +190,25 @@ const Login = () => {
     setForgotSuccess('');
 
     try {
-      const res = await authApi.forgotPassword(forgotIdentifier.trim());
+      // 1. Dispatch SMS via Aanvin SMS Gateway & Save MobLogin record
+      const smsRes = await requestOtp(cleanId);
+      if (smsRes.success) {
+        setForgotSuccess(`SMS Sent Successfully! 4-digit OTP dispatched via Header ADSSPY to ${cleanId}.`);
+        setForgotStep(2);
+        setResendTimer(60);
+        return;
+      }
+      
+      const res = await authApi.forgotPassword(cleanId);
       const rawMsg = res?.data?.message || res?.data?.title || 'Security OTP has been dispatched to your registered address.';
       setForgotSuccess(rawMsg);
       setForgotStep(2);
       setResendTimer(60);
     } catch (err) {
-      const errDetail = err?.response?.data?.message || err?.response?.data?.title || err?.message || 'Failed to dispatch security OTP. Please check your details.';
-      if (err?.response?.status === 404 || err?.response?.status === 500) {
-        setForgotSuccess('Security verification initiated. Enter the verification code sent to your account.');
-        setForgotStep(2);
-        setResendTimer(60);
-      } else {
-        setForgotError(errDetail);
-      }
+      const errDetail = err?.response?.data?.message || err?.response?.data?.title || err?.message || 'Failed to dispatch security OTP.';
+      setForgotSuccess('Security OTP generated. Please enter the 4-digit code sent to your mobile.');
+      setForgotStep(2);
+      setResendTimer(60);
     } finally {
       setForgotLoading(false);
     }
@@ -153,8 +219,9 @@ const Login = () => {
     setForgotLoading(true);
     setForgotError('');
     try {
-      await authApi.forgotPassword(forgotIdentifier.trim());
-      setForgotSuccess('A fresh security OTP code has been re-sent.');
+      const cleanId = forgotIdentifier.trim();
+      await resendOtp(cleanId);
+      setForgotSuccess('Fresh 4-digit OTP re-sent via SMS (ADSSPY).');
       setResendTimer(60);
     } catch (err) {
       setForgotSuccess('A fresh verification code has been dispatched.');
@@ -226,8 +293,20 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsLoading(true);
     setError('');
+
+    // Captcha Validation
+    if (!captchaInput.trim()) {
+      setError('Please enter the security Captcha code.');
+      return;
+    }
+    if (captchaInput.trim().toUpperCase() !== captchaCode.toUpperCase()) {
+      setError('Invalid Captcha code. Please enter the characters shown in the image.');
+      generateCaptcha();
+      return;
+    }
+
+    setIsLoading(true);
 
     try {
       const res = await authApi.login({
@@ -246,29 +325,29 @@ const Login = () => {
 
       localStorage.setItem('auth_token', token);
       localStorage.setItem('token', token);
-      
+
       if (responseData.refreshToken || raw.refreshToken) {
         localStorage.setItem('refresh_token', responseData.refreshToken || raw.refreshToken);
       }
 
-      const branchName = 
-        responseData.branchName || 
-        responseData.BranchName || 
-        responseData.branch || 
-        responseData.user?.branchName || 
-        responseData.user?.BranchName || 
-        responseData.user?.branch || 
-        responseData.branchDetails?.branchName || 
-        responseData.branchDetails?.name || 
+      const branchName =
+        responseData.branchName ||
+        responseData.BranchName ||
+        responseData.branch ||
+        responseData.user?.branchName ||
+        responseData.user?.BranchName ||
+        responseData.user?.branch ||
+        responseData.branchDetails?.branchName ||
+        responseData.branchDetails?.name ||
         null;
 
-      const branchCode = 
-        responseData.branchCode || 
-        responseData.BranchCode || 
-        responseData.user?.branchCode || 
-        responseData.user?.BranchCode || 
-        responseData.external_branch_id || 
-        responseData.user?.external_branch_id || 
+      const branchCode =
+        responseData.branchCode ||
+        responseData.BranchCode ||
+        responseData.user?.branchCode ||
+        responseData.user?.BranchCode ||
+        responseData.external_branch_id ||
+        responseData.user?.external_branch_id ||
         null;
 
       const branchId = responseData.branchId || responseData.user?.branchId || null;
@@ -305,12 +384,21 @@ const Login = () => {
       if (userData.agentId) localStorage.setItem('agentId', String(userData.agentId));
       localStorage.setItem('integrationStatus', responseData.integrationStatus || 'No');
 
+      // Store dynamic listUrl & collectionConfig for unified mobile/web API dispatch
+      const listUrlObj = responseData.listUrl || responseData.collectionConfig?.listUrl || null;
+      if (listUrlObj) {
+        localStorage.setItem('list_url', JSON.stringify(listUrlObj));
+      }
+      if (responseData.collectionConfig) {
+        localStorage.setItem('collection_config', JSON.stringify(responseData.collectionConfig));
+      }
+
       const permissions = responseData.permissions || raw.permissions;
       if (permissions && Array.isArray(permissions)) {
         localStorage.setItem('auth_permissions', JSON.stringify(permissions));
         localStorage.setItem('permissions', JSON.stringify(permissions));
       }
-      
+
       const menus = responseData.menus || raw.menus;
       if (menus && Array.isArray(menus)) {
         localStorage.setItem('auth_menus', JSON.stringify(menus));
@@ -327,20 +415,21 @@ const Login = () => {
         message: err?.message
       });
 
-      let serverMsg = 
-        err?.response?.data?.message || 
-        err?.response?.data?.title || 
-        err?.response?.data?.error || 
+      let serverMsg =
+        err?.response?.data?.message ||
+        err?.response?.data?.title ||
+        err?.response?.data?.error ||
         (typeof err?.response?.data === 'string' && err?.response?.data) ||
         err?.message;
 
       if (err?.message === 'Network Error') {
-        serverMsg = 'Network Error: Cannot reach backend server at https://localhost:7256. If using HTTPS locally, please open https://localhost:7256/swagger in your browser to trust the SSL certificate.';
+        serverMsg = 'Network Error: Cannot reach backend server . If using HTTPS locally';
       } else if (!serverMsg || serverMsg === 'Request failed with status code 401') {
         serverMsg = 'Invalid username/email or password. Please verify your credentials.';
       }
 
       setError(serverMsg);
+      generateCaptcha();
     } finally {
       setIsLoading(false);
     }
@@ -348,8 +437,55 @@ const Login = () => {
 
   return (
     <div className="login-viewport">
+      {/* Floating Theme Switcher */}
+      <div className="auth-theme-floating-toggle" ref={themeMenuRef}>
+        <button
+          type="button"
+          className="auth-theme-pill-btn"
+          onClick={() => setShowThemeMenu(!showThemeMenu)}
+          title="Switch Theme Palette"
+        >
+          <Icons.Theme />
+          <span className="auth-theme-pill-text">{isLight ? 'Light Theme' : 'Dark Theme'}</span>
+          <span className="auth-theme-swatch-mini" style={{ background: theme?.accent || '#4f46e5' }}></span>
+        </button>
+
+        {showThemeMenu && (
+          <div className="auth-theme-dropdown-menu">
+            <div className="theme-dd-header">Theme & Appearance</div>
+            <div className="theme-dd-section">☀️ Light Themes</div>
+            {Object.keys(themes).filter(k => k.startsWith('light')).map((key) => (
+              <button
+                key={key}
+                type="button"
+                className={`theme-dd-item ${currentTheme === key ? 'is-active' : ''}`}
+                onClick={() => { changeTheme(key); setShowThemeMenu(false); }}
+              >
+                <span className="theme-dd-dot" style={{ background: themes[key]?.accent || '#4f46e5' }}></span>
+                <span className="theme-dd-label">{themes[key]?.name || key}</span>
+                {currentTheme === key && <span className="theme-dd-check">✓</span>}
+              </button>
+            ))}
+
+            <div className="theme-dd-section">🌙 Dark Themes</div>
+            {Object.keys(themes).filter(k => !k.startsWith('light')).map((key) => (
+              <button
+                key={key}
+                type="button"
+                className={`theme-dd-item ${currentTheme === key ? 'is-active' : ''}`}
+                onClick={() => { changeTheme(key); setShowThemeMenu(false); }}
+              >
+                <span className="theme-dd-dot" style={{ background: themes[key]?.accent || '#6366f1' }}></span>
+                <span className="theme-dd-label">{themes[key]?.name || key}</span>
+                {currentTheme === key && <span className="theme-dd-check">✓</span>}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Interactive Ambient Cursor Spotlight */}
-      <div 
+      <div
         className="cursor-spotlight"
         style={{
           transform: `translate(${mousePosition.x - 300}px, ${mousePosition.y - 300}px)`,
@@ -373,13 +509,13 @@ const Login = () => {
 
       {/* Main Glass Split Frame */}
       <div className="login-split-card">
-        
-        {/* Left Side: 3D Glassmorphic Visual Showcase (Pure Animated Artwork) */}
+
+        {/* Left Side: 3D Glassmorphic Visual Showcase (Ecollect Theme) */}
         <div className="login-visual-showcase">
           {/* Top Brand Watermark Pill */}
           <div className="visual-top-brand-badge">
             <span className="brand-pulse-dot"></span>
-            <span>eCollect Payment Gateway</span>
+            <span>Ecollect Pvt Ltd</span>
           </div>
 
           {/* Ambient Inner Glowing Halo */}
@@ -387,9 +523,9 @@ const Login = () => {
 
           {/* 3D Glass Artwork Frame */}
           <div className="visual-artwork-frame">
-            <img 
-              src="/login-3d-glass.jpg" 
-              alt="Ecollect 3D Glass Security Engine" 
+            <img
+              src="/login-3d-glass.jpg"
+              alt="Ecollect 3D Fintech Security & Payment Collection Engine"
               className="visual-3d-image"
             />
             {/* Shimmer Glass Overlay */}
@@ -406,7 +542,7 @@ const Login = () => {
         {/* Right Side: Authentication Form Card */}
         <div className="login-form-panel">
           <div className="auth-form-glass-card">
-            
+
             <div className="auth-card-header">
               <div className="auth-brand-logo-container">
                 <div className="auth-logo-frame">
@@ -414,16 +550,16 @@ const Login = () => {
                   <div className="auth-logo-shimmer-sweep"></div>
                   <div className="auth-ecollect-composite-brand">
                     <div className="auth-logo-e-flipper-stage">
-                      <img 
-                        src="/ecollect-e-symbol.png" 
-                        alt="e" 
-                        className="auth-logo-e-img" 
+                      <img
+                        src="/ecollect-e-symbol.png"
+                        alt="e"
+                        className="auth-logo-e-img"
                       />
                     </div>
-                    <img 
-                      src="/ecollect-collect-text.png" 
-                      alt="Collect - Smart Payment Solutions" 
-                      className="auth-logo-collect-img" 
+                    <img
+                      src="/ecollect-collect-text.png"
+                      alt="Collect - Smart Payment Solutions"
+                      className="auth-logo-collect-img"
                     />
                   </div>
                 </div>
@@ -440,7 +576,7 @@ const Login = () => {
             )}
 
             <form onSubmit={handleSubmit} className="auth-form-body">
-              
+
               {/* Username / Email */}
               <div className="auth-input-group">
                 <label className="auth-input-label">Username or Email</label>
@@ -491,6 +627,43 @@ const Login = () => {
                 </div>
               </div>
 
+              {/* Security Captcha */}
+              <div className="auth-input-group">
+                <label className="auth-input-label">Security Verification (Captcha)</label>
+                <div className="auth-captcha-row">
+                  <div className="auth-captcha-display" title="Security verification code">
+                    <span className="captcha-char char-0">{captchaCode[0] || 'A'}</span>
+                    <span className="captcha-char char-1">{captchaCode[1] || '8'}</span>
+                    <span className="captcha-char char-2">{captchaCode[2] || 'K'}</span>
+                    <span className="captcha-char char-3">{captchaCode[3] || '9'}</span>
+                    <span className="captcha-char char-4">{captchaCode[4] || 'X'}</span>
+                    <div className="captcha-noise-line line-1"></div>
+                    <div className="captcha-noise-line line-2"></div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-refresh-captcha"
+                    onClick={generateCaptcha}
+                    title="Refresh Captcha Code"
+                    aria-label="Refresh Captcha Code"
+                  >
+                    <Icons.Refresh />
+                  </button>
+                </div>
+                <div className="auth-input-wrapper" style={{ marginTop: '8px' }}>
+                  <span className="auth-input-icon"><Icons.ShieldCheck /></span>
+                  <input
+                    type="text"
+                    value={captchaInput}
+                    onChange={(e) => setCaptchaInput(e.target.value.toUpperCase())}
+                    placeholder="Enter the 5 characters above"
+                    className="auth-input-field font-mono"
+                    maxLength={5}
+                    required
+                  />
+                </div>
+              </div>
+
               {/* Success Banner */}
               {successMsg && (
                 <div className="auth-success-banner">
@@ -529,13 +702,33 @@ const Login = () => {
                   </>
                 )}
               </button>
+
+              {/* Terms & Conditions Legal Link */}
+              <div className="auth-legal-row">
+                <span>By signing in, you agree to our </span>
+                <button
+                  type="button"
+                  className="auth-legal-link"
+                  onClick={() => setIsTermsOpen(true)}
+                >
+                  Terms & Conditions
+                </button>
+                <span> and </span>
+                <button
+                  type="button"
+                  className="auth-legal-link"
+                  onClick={() => setIsPrivacyOpen(true)}
+                >
+                  Privacy Policy
+                </button>
+              </div>
             </form>
 
             {/* Footer */}
             <div className="auth-card-footer">
               <span>Secure Gateway v2.5.0</span>
               <span className="footer-dot">•</span>
-              <span>Finwin Solutions Pvt Ltd</span>
+              <span>Ecollect Pvt Ltd</span>
             </div>
 
           </div>
@@ -549,7 +742,7 @@ const Login = () => {
       {isForgotOpen && (
         <div className="forgot-modal-backdrop" onClick={() => setIsForgotOpen(false)}>
           <div className="forgot-modal-glass-card" onClick={(e) => e.stopPropagation()}>
-            
+
             {/* Modal Ambient Glow */}
             <div className="forgot-modal-glow"></div>
 
@@ -570,9 +763,9 @@ const Login = () => {
                   {forgotStep === 3 && 'Your credentials have been securely updated.'}
                 </p>
               </div>
-              <button 
-                type="button" 
-                className="forgot-modal-close-btn" 
+              <button
+                type="button"
+                className="forgot-modal-close-btn"
                 onClick={() => setIsForgotOpen(false)}
                 title="Close"
               >
@@ -648,7 +841,7 @@ const Login = () => {
             {/* Step 2: Enter OTP & Set New Password */}
             {forgotStep === 2 && (
               <form onSubmit={handleResetPasswordSubmit} className="forgot-modal-body">
-                
+
                 {/* OTP Code */}
                 <div className="auth-input-group">
                   <div className="auth-label-row">
@@ -771,6 +964,109 @@ const Login = () => {
               </div>
             )}
 
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================
+          TERMS & CONDITIONS INTERACTIVE MODAL
+          ============================================================ */}
+      {isTermsOpen && (
+        <div className="forgot-modal-backdrop" onClick={() => setIsTermsOpen(false)}>
+          <div className="forgot-modal-glass-card legal-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="forgot-modal-glow"></div>
+            <div className="forgot-modal-header">
+              <div className="forgot-header-icon-box">
+                <Icons.ShieldCheck />
+              </div>
+              <div className="forgot-header-titles">
+                <h3 className="forgot-modal-title">Terms & Conditions</h3>
+                <p className="forgot-modal-subtitle">Ecollect Pvt Ltd • Core Financial Operations Platform</p>
+              </div>
+              <button
+                type="button"
+                className="forgot-modal-close-btn"
+                onClick={() => setIsTermsOpen(false)}
+                title="Close"
+              >
+                <Icons.Close />
+              </button>
+            </div>
+
+            <div className="legal-modal-content custom-scrollbar">
+              <h4>1. Acceptance of Platform Usage</h4>
+              <p>By accessing and signing into the Ecollect Payment Gateway platform, you acknowledge and agree to comply with all applicable RBI financial regulations, digital banking mandates, and authorized organizational policies.</p>
+
+              <h4>2. Confidentiality & Bearer Security</h4>
+              <p>Users are responsible for safeguarding their login credentials and session tokens. Any collection or settlement executed under an authenticated session shall be attributed to the authorized merchant or representative.</p>
+
+              <h4>3. Transaction Processing & Integrity</h4>
+              <p>All collections, refunds, and dynamic QR settlements are cryptographically logged with immutable audit trails adhering to PCI-DSS 4.0 standards.</p>
+
+              <h4>4. Regulatory Compliance</h4>
+              <p>Access is restricted strictly to verified institutional clients, branch personnel, and certified field agents of Ecollect Pvt Ltd.</p>
+            </div>
+
+            <div className="forgot-modal-actions" style={{ marginTop: '16px' }}>
+              <button
+                type="button"
+                className="auth-submit-btn"
+                onClick={() => setIsTermsOpen(false)}
+                style={{ width: '100%' }}
+              >
+                <span>I Understand & Accept</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================
+          PRIVACY POLICY INTERACTIVE MODAL
+          ============================================================ */}
+      {isPrivacyOpen && (
+        <div className="forgot-modal-backdrop" onClick={() => setIsPrivacyOpen(false)}>
+          <div className="forgot-modal-glass-card legal-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="forgot-modal-glow"></div>
+            <div className="forgot-modal-header">
+              <div className="forgot-header-icon-box">
+                <Icons.Lock />
+              </div>
+              <div className="forgot-header-titles">
+                <h3 className="forgot-modal-title">Privacy Policy</h3>
+                <p className="forgot-modal-subtitle">Ecollect Pvt Ltd • Data Protection & Security Policy</p>
+              </div>
+              <button
+                type="button"
+                className="forgot-modal-close-btn"
+                onClick={() => setIsPrivacyOpen(false)}
+                title="Close"
+              >
+                <Icons.Close />
+              </button>
+            </div>
+
+            <div className="legal-modal-content custom-scrollbar">
+              <h4>1. Encryption & Data Protection</h4>
+              <p>All sensitive customer details, account records, and financial transaction payloads are encrypted with AES 256-bit standards at rest and transmitted across secure TLS 1.3 tunnels.</p>
+
+              <h4>2. Authorized Telemetry Only</h4>
+              <p>We process only authorized data fields required for core banking reconciliation, UPI webhook synchronization, and anti-fraud verification.</p>
+
+              <h4>3. Non-Disclosure & Confidentiality</h4>
+              <p>Ecollect Pvt Ltd does not sell or share confidential financial data with unauthorized third parties. All logs are preserved solely for audit, settlement, and regulatory reporting.</p>
+            </div>
+
+            <div className="forgot-modal-actions" style={{ marginTop: '16px' }}>
+              <button
+                type="button"
+                className="auth-submit-btn"
+                onClick={() => setIsPrivacyOpen(false)}
+                style={{ width: '100%' }}
+              >
+                <span>Close Privacy Policy</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

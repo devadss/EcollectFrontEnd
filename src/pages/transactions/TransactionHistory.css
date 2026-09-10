@@ -112,6 +112,20 @@
   box-shadow: 0 8px 24px var(--accentGlow, rgba(99, 102, 241, 0.5));
 }
 
+.tx-export-btn.is-csv {
+  background: var(--bgCard, #111827);
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.12));
+  color: var(--textPrimary, #ffffff);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.tx-export-btn.is-csv:hover {
+  background: var(--bgHover, #1f2937);
+  border-color: #10b981;
+  color: #10b981;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.25);
+}
+
 /* Error Banner */
 .tx-error-banner {
   display: flex;
@@ -1227,4 +1241,85 @@
   .tx-reset-filters-btn {
     width: 100%;
   }
+}
+
+/* ==========================================================================
+   ULTRA-PREMIUM LIGHT MODE TRANSACTION HISTORY OVERRIDES
+   ========================================================================== */
+[data-theme-mode="light"] .tx-kpi-card,
+[data-theme-mode="light"] .tx-chart-card,
+[data-theme-mode="light"] .tx-table-card,
+[data-theme-mode="light"] .tx-filter-bar {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 6px 18px -2px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme-mode="light"] .tx-kpi-card:hover,
+[data-theme-mode="light"] .tx-chart-card:hover {
+  border-color: var(--borderGlow, rgba(79, 70, 229, 0.35));
+  box-shadow: 0 14px 32px -4px rgba(15, 23, 42, 0.12), 0 0 20px -2px var(--accentGlow);
+}
+
+[data-theme-mode="light"] .tx-kpi-val {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .tx-kpi-label {
+  color: #64748b;
+}
+
+[data-theme-mode="light"] .status-segmented-tabs {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme-mode="light"] .status-seg-btn {
+  color: #64748b;
+}
+
+[data-theme-mode="light"] .status-seg-btn.is-active {
+  background: #ffffff;
+  color: var(--accent, #4f46e5);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme-mode="light"] .tx-search-input,
+[data-theme-mode="light"] .tx-mode-select,
+[data-theme-mode="light"] .tx-date-input {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .tx-refresh-btn {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .tx-refresh-btn:hover {
+  background: #f8fafc;
+  border-color: var(--borderGlow);
+}
+
+[data-theme-mode="light"] .tx-table thead th {
+  background: #f8fafc !important;
+  color: #475569 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+[data-theme-mode="light"] .tx-table tbody td {
+  color: #0f172a !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+[data-theme-mode="light"] .tx-table tbody tr:hover td {
+  background: #f8fafc !important;
+}
+
+[data-theme-mode="light"] .tx-detail-modal-card {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
 }

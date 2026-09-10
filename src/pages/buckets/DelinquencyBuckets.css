@@ -1,0 +1,368 @@
+/* ============================================================
+   eCollect Enterprise Delinquency Buckets & NPA Recovery Hub CSS
+   Ultra-Premium Theme-Adaptive Styling (Light & Dark Compatible)
+   ============================================================ */
+
+.buckets-page-container {
+  padding: 24px;
+  max-width: 1600px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  color: var(--textPrimary, #f8fafc);
+}
+
+/* ============================================================
+   1. HERO HEADER
+   ============================================================ */
+.buckets-hero-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  background: var(--bgCardGlass, rgba(17, 24, 39, 0.75));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 28px 32px;
+  border-radius: 24px;
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.08));
+  box-shadow: var(--cardShadow, 0 10px 30px rgba(0, 0, 0, 0.25));
+  position: relative;
+  overflow: hidden;
+}
+
+.buckets-hero-header::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #10b981 0%, #38bdf8 20%, #fbbf24 45%, #f97316 70%, #ef4444 100%);
+}
+
+.buckets-badge-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 999px;
+  color: #ef4444;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.buckets-page-title {
+  font-size: 28px;
+  font-weight: 900;
+  color: var(--textPrimary, #ffffff);
+  margin: 0 0 6px 0;
+  letter-spacing: -0.6px;
+  line-height: 1.2;
+}
+
+.buckets-page-subtitle {
+  font-size: 14px;
+  color: var(--textSecondary, #94a3b8);
+  margin: 0;
+  max-width: 650px;
+}
+
+.buckets-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-buckets-export {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: var(--bgSecondary, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.12));
+  color: var(--textPrimary, #e2e8f0);
+  border-radius: 14px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-buckets-export:hover {
+  background: var(--bgHover, rgba(255, 255, 255, 0.1));
+  border-color: var(--accent, #6366f1);
+  color: var(--textPrimary, #ffffff);
+  transform: translateY(-1px);
+}
+
+/* ============================================================
+   2. BUCKET NAVIGATION TILES MATRIX
+   ============================================================ */
+.bucket-matrix-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+}
+
+.bucket-nav-tile {
+  padding: 18px 20px;
+  border-radius: 18px;
+  background: var(--bgCardGlass, rgba(17, 24, 39, 0.75));
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.08));
+  box-shadow: var(--cardShadow, 0 4px 18px rgba(0, 0, 0, 0.15));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
+}
+
+.bucket-nav-tile:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--cardShadowHover, 0 10px 25px rgba(0, 0, 0, 0.25));
+}
+
+.bucket-nav-tile.is-active {
+  border-width: 2px;
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+}
+
+.bucket-nav-tile::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+}
+
+.bucket-nav-tile.is-all::before { background: #6366f1; }
+.bucket-nav-tile.is-all.is-active { border-color: #6366f1; background: rgba(99, 102, 241, 0.12); }
+
+.bucket-nav-tile.is-b0::before { background: #10b981; }
+.bucket-nav-tile.is-b0.is-active { border-color: #10b981; background: rgba(16, 185, 129, 0.12); }
+
+.bucket-nav-tile.is-b1::before { background: #38bdf8; }
+.bucket-nav-tile.is-b1.is-active { border-color: #38bdf8; background: rgba(56, 189, 248, 0.12); }
+
+.bucket-nav-tile.is-b2::before { background: #fbbf24; }
+.bucket-nav-tile.is-b2.is-active { border-color: #fbbf24; background: rgba(251, 191, 36, 0.12); }
+
+.bucket-nav-tile.is-b3::before { background: #f97316; }
+.bucket-nav-tile.is-b3.is-active { border-color: #f97316; background: rgba(249, 115, 22, 0.12); }
+
+.bucket-nav-tile.is-npa::before { background: #ef4444; }
+.bucket-nav-tile.is-npa.is-active { border-color: #ef4444; background: rgba(239, 68, 68, 0.14); }
+
+.bucket-nav-tile.is-ptp::before { background: #a855f7; }
+.bucket-nav-tile.is-ptp.is-active { border-color: #a855f7; background: rgba(168, 85, 247, 0.12); }
+
+.bucket-nav-tile.is-call-queue::before { background: #ec4899; }
+.bucket-nav-tile.is-call-queue.is-active { border-color: #ec4899; background: rgba(236, 72, 153, 0.12); }
+
+.tile-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tile-icon {
+  font-size: 18px;
+}
+
+.tile-count-badge {
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 900;
+  background: var(--bgSecondary, rgba(255, 255, 255, 0.1));
+  color: var(--textPrimary, #fff);
+}
+
+.tile-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--textPrimary, #fff);
+}
+
+.tile-sub {
+  font-size: 11px;
+  color: var(--textMuted, #94a3b8);
+}
+
+.tile-amount {
+  font-size: 15px;
+  font-weight: 900;
+  margin-top: 4px;
+}
+
+/* ============================================================
+   3. TOOLBAR & CONTROLS
+   ============================================================ */
+.buckets-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  background: var(--bgCardGlass, rgba(17, 24, 39, 0.6));
+  backdrop-filter: blur(16px);
+  padding: 16px 22px;
+  border-radius: 18px;
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.08));
+}
+
+.buckets-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.buckets-search-input {
+  padding: 10px 16px 10px 38px;
+  border-radius: 12px;
+  background: var(--bgSecondary, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.12));
+  color: var(--textPrimary, #fff);
+  font-size: 13.5px;
+  width: 280px;
+  outline: none;
+}
+
+.buckets-search-input:focus {
+  border-color: var(--accent, #6366f1);
+  box-shadow: 0 0 0 3px var(--accentLight, rgba(99, 102, 241, 0.15));
+}
+
+.buckets-select-ctrl {
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: var(--bgSecondary, #0f172a);
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.14));
+  color: var(--textPrimary, #f8fafc);
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+}
+
+/* ============================================================
+   4. MASTER DELINQUENCY TABLE
+   ============================================================ */
+.buckets-table-card {
+  background: var(--bgCardGlass, rgba(17, 24, 39, 0.85));
+  backdrop-filter: blur(20px);
+  border-radius: 22px;
+  border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.08));
+  overflow: hidden;
+  box-shadow: var(--cardShadow, 0 10px 30px rgba(0, 0, 0, 0.2));
+}
+
+.buckets-master-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.buckets-master-table th {
+  padding: 16px 20px;
+  background: var(--bgSecondary, rgba(15, 23, 42, 0.95));
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--textMuted, #94a3b8);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  border-bottom: 1px solid var(--tableBorder, rgba(255, 255, 255, 0.1));
+}
+
+.buckets-master-table td {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--tableBorder, rgba(255, 255, 255, 0.05));
+  font-size: 13.5px;
+  color: var(--textPrimary, #e2e8f0);
+  vertical-align: middle;
+}
+
+.buckets-master-table tr:hover td {
+  background: var(--tableHover, rgba(99, 102, 241, 0.04));
+}
+
+.dpd-pill {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dpd-pill.is-b0 { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); }
+.dpd-pill.is-b1 { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); }
+.dpd-pill.is-b2 { background: rgba(251, 191, 36, 0.15); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.35); }
+.dpd-pill.is-b3 { background: rgba(249, 115, 22, 0.15); color: #f97316; border: 1px solid rgba(249, 115, 22, 0.35); }
+.dpd-pill.is-npa { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); }
+
+/* ============================================================
+   5. LIGHT THEME OVERRIDES
+   ============================================================ */
+[data-theme-mode="light"] .buckets-hero-header {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme-mode="light"] .bucket-nav-tile {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+}
+
+[data-theme-mode="light"] .buckets-toolbar {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+[data-theme-mode="light"] .buckets-table-card {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme-mode="light"] .buckets-master-table th {
+  background: #f8fafc;
+  color: #475569;
+  border-bottom-color: rgba(15, 23, 42, 0.08);
+}
+
+[data-theme-mode="light"] .buckets-master-table td {
+  color: #0f172a;
+  border-bottom-color: rgba(15, 23, 42, 0.06);
+}
+
+[data-theme-mode="light"] .buckets-select-ctrl {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+[data-theme-mode="light"] .buckets-search-input {
+  background: #f8fafc;
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.12);
+}

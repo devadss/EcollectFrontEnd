@@ -744,3 +744,105 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   ULTRA-PREMIUM LIGHT MODE AGENTS OVERRIDES
+   ========================================================================== */
+[data-theme-mode="light"] .agents-kpi-card,
+[data-theme-mode="light"] .agent-profile-card,
+[data-theme-mode="light"] .agents-directory-card {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 6px 18px -2px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme-mode="light"] .agents-kpi-value {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .agents-kpi-label {
+  color: #64748b;
+}
+
+[data-theme-mode="light"] .agent-name-text {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .agent-assignment-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme-mode="light"] .agent-metrics-row {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme-mode="light"] .metric-value {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .status-segmented-tabs {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme-mode="light"] .tab-btn {
+  color: #64748b;
+}
+
+[data-theme-mode="light"] .tab-btn.is-active {
+  background: #ffffff;
+  color: var(--accent, #4f46e5);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme-mode="light"] .agents-search-field,
+[data-theme-mode="light"] .branch-filter-select {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .layout-toggle-pill {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme-mode="light"] .layout-btn {
+  color: #64748b;
+}
+
+[data-theme-mode="light"] .layout-btn.is-active {
+  background: #ffffff;
+  color: var(--accent, #4f46e5);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme-mode="light"] .agents-data-table thead th {
+  background: #f8fafc !important;
+  color: #475569 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+[data-theme-mode="light"] .agents-data-table tbody td {
+  color: #0f172a !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+[data-theme-mode="light"] .agents-table-row:hover td {
+  background: #f8fafc !important;
+}
+
+[data-theme-mode="light"] .action-icon-btn,
+[data-theme-mode="light"] .table-action-btn {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+[data-theme-mode="light"] .action-icon-btn:hover,
+[data-theme-mode="light"] .table-action-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}

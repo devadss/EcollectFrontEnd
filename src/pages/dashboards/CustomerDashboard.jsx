@@ -1,8 +1,10 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import './CustomerDashboard.css';
 
 const CustomerDashboard = () => {
+  const navigate = useNavigate();
   const stats = [
     { label: 'Total Payments', value: '23', icon: '💳', color: 'gold' },
     { label: 'Total Spent', value: '₹12,450', icon: '💰', color: 'blue' },
@@ -31,18 +33,18 @@ const CustomerDashboard = () => {
         </div>
 
         <div className="quick-actions">
-          <a href="#" className="quick-action">
+          <button type="button" className="quick-action" onClick={() => navigate('/transactions')}>
             <span>💳</span> Make Payment
-          </a>
-          <a href="#" className="quick-action">
+          </button>
+          <button type="button" className="quick-action" onClick={() => navigate('/transactions')}>
             <span>📋</span> Payment History
-          </a>
-          <a href="#" className="quick-action">
+          </button>
+          <button type="button" className="quick-action" onClick={() => navigate('/settlements')}>
             <span>📄</span> Invoices
-          </a>
-          <a href="#" className="quick-action">
+          </button>
+          <button type="button" className="quick-action" onClick={() => navigate('/settings')}>
             <span>👤</span> Profile
-          </a>
+          </button>
         </div>
 
         <div className="payment-summary">

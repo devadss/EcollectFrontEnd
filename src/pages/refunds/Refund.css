@@ -522,3 +522,79 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   ULTRA-PREMIUM LIGHT MODE REFUNDS OVERRIDES
+   ========================================================================== */
+[data-theme-mode="light"] .refunds-kpi-card,
+[data-theme-mode="light"] .refunds-table-card,
+[data-theme-mode="light"] .refunds-filter-bar {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 6px 18px -2px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme-mode="light"] .refunds-kpi-value {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .refunds-kpi-label {
+  color: #64748b;
+}
+
+[data-theme-mode="light"] .status-segmented-tabs {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme-mode="light"] .tab-btn {
+  color: #64748b;
+}
+
+[data-theme-mode="light"] .tab-btn.is-active {
+  background: #ffffff;
+  color: var(--accent, #4f46e5);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme-mode="light"] .refunds-search-input,
+[data-theme-mode="light"] .refunds-filter-select,
+[data-theme-mode="light"] .refunds-date-input {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .refunds-data-table thead th {
+  background: #f8fafc !important;
+  color: #475569 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+[data-theme-mode="light"] .refunds-data-table tbody td {
+  color: #0f172a !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+[data-theme-mode="light"] .refunds-data-table tbody tr:hover td {
+  background: #f8fafc !important;
+}
+
+[data-theme-mode="light"] .refund-modal-container {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  box-shadow: 0 25px 60px rgba(15, 23, 42, 0.25);
+}
+
+[data-theme-mode="light"] .refund-modal-header {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+[data-theme-mode="light"] .refund-modal-header h3 {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .refund-modal-header p {
+  color: #64748b;
+}

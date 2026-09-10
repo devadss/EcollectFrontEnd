@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '../../services/api';
+import { useTheme } from '../../context/ThemeContext';
 import './Logout.css';
 
 // SVG Icons
@@ -8,6 +9,19 @@ const LogoutIcons = {
   Logo: () => (
     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  ),
+  Theme: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2v2" />
+      <path d="M12 20v2" />
+      <path d="m4.93 4.93 1.41 1.41" />
+      <path d="m17.66 17.66 1.41 1.41" />
+      <path d="M2 12h2" />
+      <path d="M20 12h2" />
+      <path d="m6.34 17.66-1.41 1.41" />
+      <path d="m19.07 4.93-1.41 1.41" />
+      <circle cx="12" cy="12" r="4" />
     </svg>
   ),
   LogOut: () => (
@@ -76,10 +90,26 @@ const LogoutIcons = {
 
 const Logout = () => {
   const navigate = useNavigate();
+  const { theme, currentTheme, changeTheme, themes } = useTheme();
+  const isLight = theme?.id?.startsWith('light');
+  const [showThemeMenu, setShowThemeMenu] = useState(false);
+  const themeMenuRef = useRef(null);
+
   const [status, setStatus] = useState('confirm'); // 'confirm' | 'logging_out' | 'logged_out'
   const [countdown, setCountdown] = useState(4);
   const [mousePosition, setMousePosition] = useState({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
   const [progressStep, setProgressStep] = useState(0);
+
+  // Close theme menu on click outside
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (themeMenuRef.current && !themeMenuRef.current.contains(e.target)) {
+        setShowThemeMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
 
   // Get current stored user identity
   const storedUser = (() => {
@@ -120,48 +150,104 @@ const Logout = () => {
     setProgressStep(2);
     await new Promise(r => setTimeout(r, 450));
 
-    // Step 3: Purging session storage
+    // Step 3: Clearing Local Data
     setProgressStep(3);
     localStorage.removeItem('auth_token');
     localStorage.removeItem('token');
+    localStorage.removeItem('accessToken');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('auth_user');
     localStorage.removeItem('user');
+    localStorage.removeItem('user_role');
+    localStorage.removeItem('role');
     localStorage.removeItem('userRole');
-    localStorage.removeItem('auth_permissions');
-    localStorage.removeItem('permissions');
-    localStorage.removeItem('auth_menus');
-    localStorage.removeItem('menus');
-    localStorage.removeItem('merchantId');
     localStorage.removeItem('branchId');
     localStorage.removeItem('branchName');
     localStorage.removeItem('branchCode');
+    localStorage.removeItem('merchantId');
     localStorage.removeItem('agentId');
-    localStorage.removeItem('admin_selected_merchant_id');
     localStorage.removeItem('integrationStatus');
+    localStorage.removeItem('auth_permissions');
+    localStorage.removeItem('permissions');
+    localStorage.removeItem('auth_menus');
     sessionStorage.clear();
-
     await new Promise(r => setTimeout(r, 400));
+
+    // Step 4: Completed
+    setProgressStep(4);
     setStatus('logged_out');
   };
 
+  // Redirect countdown when in 'logged_out' state
   useEffect(() => {
     let timer;
-    if (status === 'logged_out' && countdown > 0) {
+    if (status === 'logged_out') {
       timer = setInterval(() => {
-        setCountdown((prev) => prev - 1);
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            navigate('/login', { replace: true });
+            return 0;
+          }
+          return prev - 1;
+        });
       }, 1000);
-    } else if (status === 'logged_out' && countdown === 0) {
-      navigate('/login');
     }
     return () => clearInterval(timer);
-  }, [status, countdown, navigate]);
+  }, [status, navigate]);
 
   // Circle countdown progress (4s total)
   const strokeDashoffset = 125.6 - (125.6 * (countdown / 4));
 
   return (
     <div className="logout-root-viewport">
+      {/* Floating Theme Switcher */}
+      <div className="auth-theme-floating-toggle" ref={themeMenuRef}>
+        <button 
+          type="button"
+          className="auth-theme-pill-btn"
+          onClick={() => setShowThemeMenu(!showThemeMenu)}
+          title="Switch Theme Palette"
+        >
+          <LogoutIcons.Theme />
+          <span className="auth-theme-pill-text">{isLight ? 'Light Theme' : 'Dark Theme'}</span>
+          <span className="auth-theme-swatch-mini" style={{ background: theme?.accent || '#4f46e5' }}></span>
+        </button>
+
+        {showThemeMenu && (
+          <div className="auth-theme-dropdown-menu">
+            <div className="theme-dd-header">Theme & Appearance</div>
+            <div className="theme-dd-section">☀️ Light Themes</div>
+            {Object.keys(themes).filter(k => k.startsWith('light')).map((key) => (
+              <button
+                key={key}
+                type="button"
+                className={`theme-dd-item ${currentTheme === key ? 'is-active' : ''}`}
+                onClick={() => { changeTheme(key); setShowThemeMenu(false); }}
+              >
+                <span className="theme-dd-dot" style={{ background: themes[key]?.accent || '#4f46e5' }}></span>
+                <span className="theme-dd-label">{themes[key]?.name || key}</span>
+                {currentTheme === key && <span className="theme-dd-check">✓</span>}
+              </button>
+            ))}
+
+            <div className="theme-dd-section">🌙 Dark Themes</div>
+            {Object.keys(themes).filter(k => !k.startsWith('light')).map((key) => (
+              <button
+                key={key}
+                type="button"
+                className={`theme-dd-item ${currentTheme === key ? 'is-active' : ''}`}
+                onClick={() => { changeTheme(key); setShowThemeMenu(false); }}
+              >
+                <span className="theme-dd-dot" style={{ background: themes[key]?.accent || '#6366f1' }}></span>
+                <span className="theme-dd-label">{themes[key]?.name || key}</span>
+                {currentTheme === key && <span className="theme-dd-check">✓</span>}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Interactive Cursor Spotlight Glow */}
       <div 
         className="logout-ambient-cursor"
@@ -179,7 +265,11 @@ const Logout = () => {
 
       {/* Top Brand Emblem */}
       <div className="logout-top-branding" onClick={() => navigate('/dashboard')} title="eCollect • Smart Payment Solutions">
-        <img src="/ecollect-logo.png" alt="eCollect - Smart Payment Solutions" className="logout-brand-logo-img" />
+        <img 
+          src={isLight ? "/ecollect-logo-dark.png" : "/ecollect-logo.png"} 
+          alt="eCollect - Smart Payment Solutions" 
+          className="logout-brand-logo-img" 
+        />
       </div>
 
       {/* Main Glass Card Container */}
@@ -372,7 +462,7 @@ const Logout = () => {
           <span>AES 256-Bit SSL/TLS Encryption</span>
         </div>
         <span className="footer-sep">•</span>
-        <span>Finwin Solutions Pvt Ltd</span>
+        <span>Ecollect Pvt Ltd</span>
       </div>
 
     </div>

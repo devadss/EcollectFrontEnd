@@ -7,6 +7,7 @@ import { MerchantProvider } from './context/MerchantContext';
 import './App.css';
 import LoadingAnimation from './components/common/LoadingAnimation';
 import GlobalReminderWorker from './components/common/GlobalReminderWorker';
+import SessionTimeoutManager from './components/common/SessionTimeoutManager';
 
 // DASHBOARDS
 import SoftwareAdminDashboard from './pages/dashboards/SoftwareAdminDashboard';
@@ -21,6 +22,8 @@ import Notifications from './pages/notifications/Notifications';
 // AUTH
 import Login from './pages/auth/Login';
 import Logout from './pages/auth/Logout';
+import PlanSelection from './pages/subscription/PlanSelection';
+import CustomerPayDecision from './pages/customer/CustomerPayDecision';
 
 // MERCHANT PAGES
 import Merchants from './pages/merchants/Merchants';
@@ -42,6 +45,8 @@ import BranchDetails from './pages/branches/BranchDetails';
 
 // ACCOUNT PAGES
 import Accounts from './pages/accounts/Accounts';
+import DueList from './pages/dues/DueList';
+import DelinquencyBuckets from './pages/buckets/DelinquencyBuckets';
 
 // CUSTOMER PAGES
 import Customers from './pages/customers/Customers';
@@ -64,13 +69,98 @@ import Commission from './pages/commissions/Commission';
 import Settings from './pages/settings/Settings';
 
 // ============================================================
+// TOKEN VALIDATION & SESSION CLEANUP
+// ============================================================
+const isTokenExpired = (token) => {
+  if (!token || typeof token !== 'string') return true;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      return false;
+    }
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const payload = JSON.parse(jsonPayload);
+    if (payload?.exp) {
+      const isExp = payload.exp * 1000 < Date.now();
+      if (isExp) {
+        console.warn('⚠️ Session expired (JWT exp timestamp reached):', {
+          exp: new Date(payload.exp * 1000).toLocaleString(),
+          now: new Date().toLocaleString()
+        });
+      }
+      return isExp;
+    }
+  } catch (error) {
+    console.error('Error decoding token expiry:', error);
+  }
+  return false;
+};
+
+const clearAuthSession = () => {
+  localStorage.removeItem('auth_token');
+  localStorage.removeItem('token');
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('auth_user');
+  localStorage.removeItem('user');
+  localStorage.removeItem('user_role');
+  localStorage.removeItem('role');
+  localStorage.removeItem('userRole');
+  localStorage.removeItem('branchId');
+  localStorage.removeItem('branchName');
+  localStorage.removeItem('branchCode');
+  localStorage.removeItem('merchantId');
+  localStorage.removeItem('agentId');
+  localStorage.removeItem('integrationStatus');
+  localStorage.removeItem('auth_permissions');
+  localStorage.removeItem('permissions');
+  localStorage.removeItem('auth_menus');
+  sessionStorage.clear();
+};
+
+// ============================================================
 // PROTECTED ROUTE
 // ============================================================
-const ProtectedRoute = ({ children }) => {
+const ProtectedRoute = ({ children, allowedRoles, requireNonIntegrated = false, allowNoPlan = false }) => {
   const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
   
-  if (!token) {
+  if (!token || isTokenExpired(token)) {
+    clearAuthSession();
     return <Navigate to="/login" replace />;
+  }
+
+  const rawRole = (localStorage.getItem('user_role') || localStorage.getItem('role') || getRoleFromStorage() || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const isMerchant = rawRole.includes('merchant');
+
+  // Enforce mandatory plan selection for merchant role before accessing dashboard or operational features
+  if (isMerchant && !allowNoPlan) {
+    const authUser = (() => { try { return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user') || '{}'); } catch { return {}; } })();
+    const hasSelectedPlan = localStorage.getItem('ecollect_has_selected_plan') === 'true' || authUser?.hasSelectedPlan === true;
+    if (!hasSelectedPlan) {
+      return <Navigate to="/select-plan" replace />;
+    }
+  }
+
+  if (Array.isArray(allowedRoles) && allowedRoles.length > 0) {
+    const isAllowed = allowedRoles.some(r => rawRole.includes(r.toLowerCase().replace(/[^a-z0-9]/g, '')));
+    if (!isAllowed) {
+      return <Navigate to="/dashboard" replace />;
+    }
+  }
+
+  if (requireNonIntegrated) {
+    const rawInteg = localStorage.getItem('integrationStatus') || '';
+    const isIntegrated = String(rawInteg).toUpperCase() === 'Y' || String(rawInteg).toUpperCase() === 'YES' || rawInteg === 'true';
+    if (isIntegrated) {
+      return <Navigate to="/dashboard" replace />;
+    }
   }
   
   return children;
@@ -106,6 +196,12 @@ function App() {
   const [role, setRole] = useState('softwareadmin');
 
   useEffect(() => {
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+    if (token && isTokenExpired(token)) {
+      console.warn('⚠️ Token expired on app startup. Clearing session.');
+      clearAuthSession();
+    }
+
     const currentRole = getRoleFromStorage();
     setRole(currentRole);
     console.log('👤 App detected role:', currentRole);
@@ -137,12 +233,22 @@ function App() {
           <NotificationProvider>
             <MerchantProvider>
               <GlobalReminderWorker />
+              <SessionTimeoutManager />
               <Routes>
           {/* ============================================================
               AUTH ROUTES
               ============================================================ */}
           <Route path="/login" element={<Login />} />
           <Route path="/logout" element={<Logout />} />
+          <Route path="/customer-pay-decision" element={<CustomerPayDecision />} />
+          <Route 
+            path="/select-plan" 
+            element={
+              <ProtectedRoute allowNoPlan={true}>
+                <PlanSelection />
+              </ProtectedRoute>
+            } 
+          />
 
           {/* ============================================================
               DASHBOARD ROUTES
@@ -320,6 +426,38 @@ function App() {
               </ProtectedRoute>
             } 
           />
+          <Route 
+            path="/due-list" 
+            element={
+              <ProtectedRoute requireNonIntegrated={true}>
+                <DueList />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/dues" 
+            element={
+              <ProtectedRoute requireNonIntegrated={true}>
+                <DueList />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/buckets" 
+            element={
+              <ProtectedRoute requireNonIntegrated={true}>
+                <DelinquencyBuckets />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/delinquency-buckets" 
+            element={
+              <ProtectedRoute requireNonIntegrated={true}>
+                <DelinquencyBuckets />
+              </ProtectedRoute>
+            } 
+          />
 
           {/* ============================================================
               CUSTOMER & RD ROUTES
@@ -346,12 +484,12 @@ function App() {
           />
 
           {/* ============================================================
-              SETTLEMENT ROUTES
+              SETTLEMENT ROUTES (Accessible ONLY by Software Admin & Merchant)
               ============================================================ */}
           <Route 
             path="/settlements" 
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['softwareadmin', 'admin', 'superadmin', 'merchant', 'merchantadmin']}>
                 <Settlements />
               </ProtectedRoute>
             } 
@@ -359,19 +497,19 @@ function App() {
           <Route 
             path="/settlements/:id" 
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['softwareadmin', 'admin', 'superadmin', 'merchant', 'merchantadmin']}>
                 <SettlementDetails />
               </ProtectedRoute>
             } 
           />
 
           {/* ============================================================
-              REFUND ROUTES
+              REFUND ROUTES (Accessible ONLY by Software Admin & Merchant)
               ============================================================ */}
           <Route 
             path="/refunds" 
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['softwareadmin', 'admin', 'superadmin', 'merchant', 'merchantadmin']}>
                 <Refunds />
               </ProtectedRoute>
             } 

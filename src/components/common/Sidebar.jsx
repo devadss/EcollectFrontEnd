@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { authApi } from '../../services/api';
+import { useTheme } from '../../context/ThemeContext';
 import './Sidebar.css';
 
 // Crisp Geometric SVG Icons
@@ -41,6 +42,22 @@ const Icons = {
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  ),
+  DueList: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+      <polyline points="10 9 9 9 8 9" />
+    </svg>
+  ),
+  Buckets: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="12 2 2 7 12 12 22 7 12 2" />
+      <polyline points="2 17 12 22 22 17" />
+      <polyline points="2 12 12 17 22 12" />
     </svg>
   ),
   Transactions: () => (
@@ -158,9 +175,23 @@ const Sidebar = ({
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { theme } = useTheme();
+  const isLightSidebar = Boolean(theme?.id?.startsWith('light') && theme?.sidebarBg === '#ffffff');
+
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [userMenus, setUserMenus] = useState([]);
-  const [userRole, setUserRole] = useState('');
+  const [userRole, setUserRole] = useState(() => {
+    try {
+      const userDataStr = localStorage.getItem('auth_user') || localStorage.getItem('user');
+      if (userDataStr) {
+        const user = JSON.parse(userDataStr);
+        return user?.role?.toLowerCase() || localStorage.getItem('userRole')?.toLowerCase() || 'softwareadmin';
+      }
+      return localStorage.getItem('userRole')?.toLowerCase() || 'softwareadmin';
+    } catch {
+      return 'softwareadmin';
+    }
+  });
   const [loading, setLoading] = useState(true);
 
   // Get user data from localStorage
@@ -168,9 +199,7 @@ const Sidebar = ({
     try {
       const userDataStr = localStorage.getItem('auth_user') || localStorage.getItem('user');
       if (userDataStr) {
-        const user = JSON.parse(userDataStr);
-        setUserRole(user?.role?.toLowerCase() || 'softwareadmin');
-        return user;
+        return JSON.parse(userDataStr);
       }
     } catch (error) {
       console.error('Error getting user data:', error);
@@ -182,6 +211,8 @@ const Sidebar = ({
   const getMenuIcon = (name = '', path = '') => {
     const key = (name || path).toLowerCase().trim();
     if (key.includes('dashboard')) return <Icons.Dashboard />;
+    if (key.includes('due') || key.includes('due-list')) return <Icons.DueList />;
+    if (key.includes('bucket')) return <Icons.Buckets />;
     if (key.includes('merchant config')) return <Icons.Config />;
     if (key.includes('merchant')) return <Icons.Merchants />;
     if (key.includes('agent')) return <Icons.Agents />;
@@ -207,13 +238,16 @@ const Sidebar = ({
     if (normRole.includes('branch') || normRole.includes('bank')) {
       return [
         { section: 'Overview', items: [{ label: 'Dashboard', path: '/dashboard' }] },
+        { section: 'Collections', items: [
+          { label: 'Daily Due List', path: '/due-list' },
+          { label: 'Delinquency Buckets', path: '/buckets' },
+        ]},
         { section: 'Management', items: [
           { label: 'Agents', path: '/agents' },
           { label: 'Accounts', path: '/accounts' },
         ]},
         { section: 'Transactions', items: [
           { label: 'Transaction History', path: '/transactions' },
-          { label: 'Settlements', path: '/settlements' },
         ]},
         { section: 'Analytics', items: [
           { label: 'Reports', path: '/reports' },
@@ -248,6 +282,8 @@ const Sidebar = ({
       return [
         { section: 'Overview', items: [{ label: 'Dashboard', path: '/dashboard' }] },
         { section: 'Collections', items: [
+          { label: 'Daily Due List', path: '/due-list' },
+          { label: 'Delinquency Buckets', path: '/buckets' },
           { label: 'Transaction History', path: '/transactions' },
           { label: 'My Customers', path: '/customers' },
           { label: 'Commission', path: '/commission' },
@@ -334,7 +370,10 @@ const Sidebar = ({
   useEffect(() => {
     const loadMenusFromTables = async () => {
       try {
-        getUserData();
+        const u = getUserData();
+        if (u?.role) {
+          setUserRole(u.role.toLowerCase());
+        }
         const menusStr = localStorage.getItem('menus') || localStorage.getItem('auth_menus');
         
         if (menusStr) {
@@ -386,8 +425,44 @@ const Sidebar = ({
     customer: 'Customer'
   }[normUserRole] || (normUserRole.includes('branch') ? 'Branch Admin' : 'Software Admin');
 
-  // Compute menu items
-  const menuSections = getStaticMenus(userRole);
+  // Compute menu items & strictly enforce: Settlements and Refunds menus ONLY for Merchant and Software Admin
+  const isMerchant = normUserRole.includes('merchant');
+  const isSoftwareAdmin = normUserRole.includes('admin') || normUserRole.includes('software');
+  const isMerchantOrAdmin = 
+    normUserRole.includes('merchant') || 
+    normUserRole.includes('admin') || 
+    normUserRole === 'softwareadmin';
+
+  // Integration Status check (Model Y = Integrated CBS, Model N = Standalone Ledger)
+  const userObj = getUserData();
+  const rawInteg = localStorage.getItem('integrationStatus') || userObj?.integrationStatus || userObj?.IntegrationStatus || 'No';
+  const isIntegrated = String(rawInteg).toUpperCase() === 'Y' || String(rawInteg).toUpperCase() === 'YES' || rawInteg === true;
+
+  const rawSections = getStaticMenus(userRole);
+  const menuSections = rawSections.map(sec => ({
+    ...sec,
+    items: sec.items.filter(item => {
+      const p = (item.path || '').toLowerCase();
+      const l = (item.label || '').toLowerCase();
+      const isRestrictedFinance = 
+        p.includes('settlement') || l.includes('settlement') ||
+        p.includes('refund') || l.includes('refund');
+      if (isRestrictedFinance && !isMerchantOrAdmin) {
+        return false;
+      }
+
+      // Collections (Due List, Delinquency Buckets) are required ONLY for Branch / Agent operational roles in Standalone Model (Status: N).
+      // They are strictly hidden for Software Admin, Merchant, and Integrated CBS Mode (Status: Y).
+      const isCollectionMenu = 
+        p.includes('due-list') || l.includes('due list') ||
+        p.includes('bucket') || l.includes('bucket');
+      if (isCollectionMenu && (isSoftwareAdmin || isMerchant || isIntegrated)) {
+        return false;
+      }
+
+      return true;
+    })
+  })).filter(sec => sec.items.length > 0);
 
   const handleNavigation = (path, e) => {
     if (e) e.preventDefault();
@@ -432,7 +507,7 @@ const Sidebar = ({
   const sidebarClass = `ultra-sidebar ${collapsed ? 'is-collapsed' : ''} ${isMobile ? 'is-mobile' : ''} ${mobileOpen ? 'is-open' : ''}`;
 
   return (
-    <aside className={sidebarClass} role="complementary" aria-label="Sidebar navigation">
+    <aside className={sidebarClass} aria-label="Sidebar navigation">
       <div className="sidebar-container">
         
         {/* Brand Header */}
@@ -440,7 +515,7 @@ const Sidebar = ({
           <div className="brand-logo-pill" onClick={() => navigate('/dashboard')} role="button" tabIndex={0} title="eCollect • Smart Payment Solutions">
             <div className="brand-logo-img-wrapper">
               <img 
-                src="/ecollect-logo.png" 
+                src={isLightSidebar ? "/ecollect-logo-dark.png" : "/ecollect-logo.png"} 
                 alt="eCollect - Smart Payment Solutions" 
                 className={collapsed ? "sidebar-logo-collapsed-img" : "sidebar-logo-expanded-img"} 
               />

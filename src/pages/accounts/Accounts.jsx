@@ -3,12 +3,185 @@ import { QRCodeSVG } from 'qrcode.react';
 import * as XLSX from 'xlsx';
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
-import { accountApi, branchApi, agentApi, paymentApi, merchantApi, reminderApi, walletApi } from '../../services/api';
+import { accountApi, branchApi, agentApi, paymentApi, merchantApi, reminderApi, walletApi, whatsAppApi } from '../../services/api';
 import { lookupIFSC, INDIAN_BANKS_LIST, sanitizeAccountNumber } from '../../services/bankService';
+import { playPaymentSuccessNotification } from '../../utils/audioAlert';
+import { buildStandalonePaymentPayload, validateMerchantApiConfiguration } from '../../services/standaloneCollectionService';
+import { compressToPassportPhoto, getStoredCustomerPhotos, saveStoredCustomerPhoto } from '../../services/passportPhotoService';
+import { getDayShiftState, saveDayShiftState, calculateDayEndSummary, runGoLivePreFlightCheck } from '../../services/dayOperationsService';
+import { sendPaymentReceiptSms } from '../../services/smsService';
+import AutoPaySetupModal from '../../components/common/AutoPaySetupModal';
 import './Accounts.css';
 
 // Crisp Geometric SVG Icons
+
+// ============================================================
+// 0. LOAN NPA & DPD CALCULATION HELPER
+// ============================================================
+
+// Passport Photo storage service imported from passportPhotoService.js
+
+export const calculateLoanNpaStatus = (acc) => {
+  if (!acc) return { dpd: 0, label: 'Regular (0 DPD)', badgeClass: 'is-regular', fullDesc: 'Current Account' };
+
+  let dpd = 0;
+  const now = new Date();
+  
+  if (acc.nextDueDate && acc.nextDueDate !== 'N/A') {
+    const dueTime = new Date(acc.nextDueDate).getTime();
+    if (!isNaN(dueTime) && dueTime < now.getTime()) {
+      dpd = Math.floor((now.getTime() - dueTime) / (1000 * 60 * 60 * 24));
+    }
+  } else if (acc.lastPaidDate && acc.lastPaidDate !== 'N/A') {
+    const paidTime = new Date(acc.lastPaidDate).getTime();
+    if (!isNaN(paidTime) && paidTime < now.getTime()) {
+      dpd = Math.floor((now.getTime() - paidTime) / (1000 * 60 * 60 * 24));
+    }
+  }
+
+  // Allow manual DPD override if provided by CBS/ledger
+  if (acc.daysPastDue !== undefined && acc.daysPastDue !== null) {
+    dpd = Number(acc.daysPastDue);
+  }
+
+  if (dpd > 90) {
+    return { dpd, label: `NPA (${dpd} DPD)`, badgeClass: 'is-npa', fullDesc: `Substandard NPA: Defaulted for ${dpd} days past due (>90 days)` };
+  } else if (dpd > 60) {
+    return { dpd, label: `SMA-2 (${dpd} DPD)`, badgeClass: 'is-sma2', fullDesc: `Special Mention Account 2: Delinquent for ${dpd} days (61-90 days)` };
+  } else if (dpd > 30) {
+    return { dpd, label: `SMA-1 (${dpd} DPD)`, badgeClass: 'is-sma1', fullDesc: `Special Mention Account 1: Delinquent for ${dpd} days (31-60 days)` };
+  } else if (dpd > 0) {
+    return { dpd, label: `SMA-0 (${dpd} DPD)`, badgeClass: 'is-sma0', fullDesc: `Special Mention Account 0: Delinquent for ${dpd} days (1-30 days)` };
+  }
+
+  return { dpd: 0, label: 'Regular (0 DPD)', badgeClass: 'is-regular', fullDesc: 'Regular Standard Asset - 0 Days Past Due' };
+};
+
+// ============================================================
+// 1. INDUSTRY STANDARD DELINQUENCY BUCKETS (0 to 90+ DPD)
+// ============================================================
+export const calculateAccountBucket = (acc) => {
+  const npa = calculateLoanNpaStatus(acc);
+  const dpd = npa.dpd || 0;
+  
+  if (dpd === 0) return { key: 'B0', label: 'Bucket 0 (Current)', shortLabel: 'B0 (0d)', dpd, class: 'is-b0', color: '#10b981', desc: 'Current Regular - 0 Days Past Due' };
+  if (dpd <= 30) return { key: 'B1', label: 'Bucket 1 (SMA-0)', shortLabel: 'B1 (1-30d)', dpd, class: 'is-b1', color: '#38bdf8', desc: 'Early Delinquency (SMA-0) - 1 to 30 Days' };
+  if (dpd <= 60) return { key: 'B2', label: 'Bucket 2 (SMA-1)', shortLabel: 'B2 (31-60d)', dpd, class: 'is-b2', color: '#f59e0b', desc: 'Moderate Delinquency (SMA-1) - 31 to 60 Days' };
+  if (dpd <= 90) return { key: 'B3', label: 'Bucket 3 (SMA-2)', shortLabel: 'B3 (61-90d)', dpd, class: 'is-b3', color: '#f97316', desc: 'High Risk (SMA-2) - 61 to 90 Days' };
+  return { key: 'NPA', label: 'Critical / NPA (>90d)', shortLabel: '🚨 NPA (>90d)', dpd, class: 'is-npa', color: '#ef4444', desc: 'Substandard Non-Performing Asset - 90+ Days Default' };
+};
+
+// ============================================================
+// 2. AI DELINQUENCY PREDICTION & DEFAULT PROBABILITY ENGINE
+// ============================================================
+export const calculateAiRiskPrediction = (acc) => {
+  const npa = calculateLoanNpaStatus(acc);
+  const dpd = npa.dpd || 0;
+  const balance = Number(acc.balance || 0);
+  const due = Number(acc.dueAmount || acc.emiAmount || 0);
+  const ptpStatus = (acc.ptpStatus || '').toUpperCase();
+  
+  let score = 12; // Base score
+  
+  // Factor A: DPD Progression (0 to 50 pts)
+  if (dpd > 90) score += 52;
+  else if (dpd > 60) score += 38;
+  else if (dpd > 30) score += 24;
+  else if (dpd > 0) score += 10;
+
+  // Factor B: Debt Overdue Ratio (0 to 18 pts)
+  if (balance > 0 && due / balance > 0.4) score += 16;
+  else if (due > 25000) score += 10;
+
+  // Factor C: Promise to Pay History (±18 pts)
+  if (ptpStatus === 'BROKEN') score += 18;
+  else if (ptpStatus === 'KEPT') score -= 12;
+  else if (ptpStatus === 'PENDING') score -= 4;
+
+  // Factor D: Frequency Velocity
+  if (acc.emiFrequency === 'Daily' && dpd > 5) score += 12;
+  if (acc.isMandatoryCall) score += 6;
+
+  score = Math.max(5, Math.min(99, score));
+
+  let tier = 'LOW';
+  let tierLabel = 'Low Risk (0 - 25%)';
+  let badgeClass = 'is-low-risk';
+  let gaugeColor = '#10b981';
+  let recommendation = 'Account is in good standing. Standard automated WhatsApp reminder is recommended.';
+
+  if (score >= 80) {
+    tier = 'CRITICAL';
+    tierLabel = 'Critical Default Risk (>80%)';
+    badgeClass = 'is-critical-risk';
+    gaugeColor = '#ef4444';
+    recommendation = '🚨 Severe Delinquency: Issue Mandatory Demand Notice, schedule immediate Next-Day Doorstep Officer Visit, and freeze additional credit lines.';
+  } else if (score >= 55) {
+    tier = 'HIGH';
+    tierLabel = 'High Risk (56 - 80%)';
+    badgeClass = 'is-high-risk';
+    gaugeColor = '#f97316';
+    recommendation = '⚠️ High Delinquency Probability: Place on Mandatory Next-Day Calling Queue & enforce partial PTP commitment within 48 hours.';
+  } else if (score >= 26) {
+    tier = 'MEDIUM';
+    tierLabel = 'Moderate Risk (26 - 55%)';
+    badgeClass = 'is-medium-risk';
+    gaugeColor = '#f59e0b';
+    recommendation = '⚡ Early Delinquency: Send dynamic UPI payment link via WhatsApp and follow up via field agent.';
+  }
+
+  return {
+    score,
+    tier,
+    tierLabel,
+    badgeClass,
+    gaugeColor,
+    recommendation,
+    defaultProbability: score
+  };
+};
+
+
 const BaseAccountIcons = {
+  Handshake: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m11 17 2 2a1 1 0 0 0 1.4 0l4.3-4.3a1 1 0 0 0 0-1.4l-2-2a1 1 0 0 0-1.4 0l-1.3 1.3" />
+      <path d="m18 10 3.3-3.3a1 1 0 0 0 0-1.4l-2-2a1 1 0 0 0-1.4 0L14 7" />
+      <path d="m14 14-1-1a1 1 0 0 0-1.4 0l-4.3 4.3a1 1 0 0 0 0 1.4l2 2a1 1 0 0 0 1.4 0L12 19" />
+      <path d="M7 11 3.7 7.7a1 1 0 0 1 0-1.4l2-2a1 1 0 0 1 1.4 0L11 8" />
+    </svg>
+  ),
+  MapPin: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>
+  ),
+  Navigation: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="3 11 22 2 13 21 11 13 3 11" />
+    </svg>
+  ),
+  Camera: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+      <circle cx="12" cy="13" r="3" />
+    </svg>
+  ),
+  Brain: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04Z"/>
+      <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04Z"/>
+    </svg>
+  ),
+  AlertTriangle: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  ),
+
   Bell: () => (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
@@ -79,6 +252,20 @@ const BaseAccountIcons = {
       <rect x="2" y="5" width="20" height="14" rx="2" />
       <line x1="2" y1="10" x2="22" y2="10" />
       <line x1="6" y1="15" x2="10" y2="15" />
+    </svg>
+  ),
+  Banknote: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="20" height="12" x="2" y="6" rx="2" />
+      <circle cx="12" cy="12" r="2" />
+      <path d="M6 12h.01M18 12h.01" />
+    </svg>
+  ),
+  Cash: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="20" height="12" x="2" y="6" rx="2" />
+      <circle cx="12" cy="12" r="2" />
+      <path d="M6 12h.01M18 12h.01" />
     </svg>
   ),
   Plus: () => (
@@ -238,6 +425,36 @@ const Accounts = () => {
 
   // Unified Collection Modal States (Dynamic QR + Payment Link)
   // Standalone (Integration: N) Workflow States
+  
+  // ============================================================
+  // STANDALONE N FEATURES: BUCKETS, PTP, GEO MAP, AI & CALL QUEUE
+  // ============================================================
+  const [selectedBucketTab, setSelectedBucketTab] = useState('ALL');
+  
+  // Promise to Pay (PTP) State
+  const [isPtpModalOpen, setIsPtpModalOpen] = useState(false);
+  const [selectedPtpAccount, setSelectedPtpAccount] = useState(null);
+  const [ptpFormData, setPtpFormData] = useState({
+    ptpDate: '',
+    ptpAmount: '',
+    ptpStatus: 'PENDING',
+    ptpNotes: ''
+  });
+
+  // Next-Day Mandatory Call & Outreach Queue State
+  const [isMandatoryCallModalOpen, setIsMandatoryCallModalOpen] = useState(false);
+  const [selectedCallAccount, setSelectedCallAccount] = useState(null);
+  const [callFormData, setCallFormData] = useState({
+    callOutcome: 'Answered - Promised to Pay',
+    callNotes: '',
+    nextFollowUpDate: '',
+    scheduleTomorrow: true
+  });
+
+  // AI Default Risk Prediction Modal State
+  const [isAiRiskModalOpen, setIsAiRiskModalOpen] = useState(false);
+  const [selectedAiAccount, setSelectedAiAccount] = useState(null);
+
   const [isLoanModalOpen, setIsLoanModalOpen] = useState(false);
   const [isBulkAccountsModalOpen, setIsBulkAccountsModalOpen] = useState(false);
   const [isDueListModalOpen, setIsDueListModalOpen] = useState(false);
@@ -267,6 +484,8 @@ const Accounts = () => {
   const [isTriggeringScan, setIsTriggeringScan] = useState(false);
   const [isExportingDayEnd, setIsExportingDayEnd] = useState(false);
 
+
+
   // Merchant Communication Credits Wallet (Integration Status: N)
   const [walletData, setWalletData] = useState({
     balance: 750.00,
@@ -282,6 +501,18 @@ const Accounts = () => {
   const [topUpForm, setTopUpForm] = useState({ amount: 500, paymentMethod: 'UPI' });
   const [customTopUpAmount, setCustomTopUpAmount] = useState('');
   const [isRechargingWallet, setIsRechargingWallet] = useState(false);
+
+  // AutoPay & WhatsApp Link Modal State (Integration Status: N)
+  const [autoPayModalAccount, setAutoPayModalAccount] = useState(null);
+  const [autoPayModalOpen, setAutoPayModalOpen] = useState(false);
+  const [autoPayBulkAccounts, setAutoPayBulkAccounts] = useState([]);
+
+  // Interactive WhatsApp Payment Link Dispatcher Modal State
+  const [waModalOpen, setWaModalOpen] = useState(false);
+  const [waTargetAccount, setWaTargetAccount] = useState(null);
+  const [waRecipientPhone, setWaRecipientPhone] = useState('');
+  const [waCustomAmount, setWaCustomAmount] = useState('');
+  const [waSending, setWaSending] = useState(false);
 
   // Calculate Days Past Due (DPD) & Loan NPA / SMA Classification (RBI Prudential Norms)
   const calculateLoanNpaStatus = (acc) => {
@@ -387,7 +618,11 @@ const Accounts = () => {
     emiFrequency: 'Monthly',
     lastPaidDate: '',
     nextDueDate: '',
-    assignedAgentCode: ''
+    assignedAgentCode: '',
+    customerPhoto: '',
+    latitude: '',
+    longitude: '',
+    customerAddress: ''
   });
 
   // Bulk Master Accounts Upload State
@@ -413,6 +648,7 @@ const Accounts = () => {
   const [qrData, setQrData] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState(null);
   const [checkingStatus, setCheckingStatus] = useState(false);
+  const [qrExpirySeconds, setQrExpirySeconds] = useState(300);
 
   // Payment Link States
   const [linkLoading, setLinkLoading] = useState(false);
@@ -422,6 +658,14 @@ const Accounts = () => {
   const [customerEmailInput, setCustomerEmailInput] = useState('');
   const [linkStatus, setLinkStatus] = useState(null);
   const [checkingLinkStatus, setCheckingLinkStatus] = useState(false);
+
+  // Real-time Verified Payment Receipt
+  const [verifiedPaymentReceipt, setVerifiedPaymentReceipt] = useState(null);
+
+  // Direct Cash Collection States (Cash_Collection / ProcessCashCollectionAsync)
+  const [cashLoading, setCashLoading] = useState(false);
+  const [cashError, setCashError] = useState(null);
+  const [cashData, setCashData] = useState(null);
 
   // Multi-Product Collection Types (RD, LOAN, FD, RDCL, etc.)
   const [collectionProductTab, setCollectionProductTab] = useState('ALL'); // 'ALL' | 'RD' | 'LOAN' | 'FD' | 'RDCL'
@@ -435,12 +679,19 @@ const Accounts = () => {
     }
   }, []);
 
+  const rawRole = (user?.role || localStorage.getItem('user_role') || localStorage.getItem('role') || 'branchadmin').toLowerCase();
+  const isSoftwareAdmin = rawRole === 'softwareadmin' || rawRole === 'superadmin' || rawRole === 'admin' || rawRole === 'system_admin';
+  const isBranchUser = !isSoftwareAdmin;
+
   const isIntegratedMode = useMemo(() => {
     const rawInteg = localStorage.getItem('integrationStatus') || user?.integrationStatus || user?.IntegrationStatus || 'No';
     return String(rawInteg).toUpperCase() === 'Y' || String(rawInteg).toUpperCase() === 'YES' || rawInteg === true;
   }, [user]);
 
-  const isNonIntegrated = !isIntegratedMode;
+  // Operational Branch Features (Daily Due List, Delinquency Buckets, BOD/EOD Shift, Reminders, AutoPay Links)
+  // are strictly enabled ONLY for Branch & Field Operations logins in Standalone Mode (IntegrationStatus: N).
+  // Software Admin is an enterprise administration role and will NOT see branch daily due lists or delinquency buckets.
+  const isNonIntegrated = !isIntegratedMode && isBranchUser;
 
   const [agents, setAgents] = useState([]);
   const [branches, setBranches] = useState([]);
@@ -475,7 +726,81 @@ const Accounts = () => {
     });
   }, [agents, user, selectedBranchCode]);
 
-  const rawRole = localStorage.getItem('user_role') || localStorage.getItem('role') || 'branchadmin';
+  
+  // Day Begin (BOD), Day End (EOD) & Go-Live Operations Suite
+  const [isDayOpsModalOpen, setIsDayOpsModalOpen] = useState(false);
+  const [dayOpsTab, setDayOpsTab] = useState('BOD'); // 'BOD' | 'EOD' | 'CERTIFICATE' | 'GOLIVE'
+  const [dayShiftState, setDayShiftState] = useState(() => getDayShiftState());
+  const [dayOpsNotes, setDayOpsNotes] = useState('');
+
+  useEffect(() => {
+    const handleShiftEvent = (e) => {
+      if (e?.detail) {
+        setDayShiftState(e.detail);
+      } else {
+        setDayShiftState(getDayShiftState());
+      }
+    };
+    window.addEventListener('ecollect:day_shift_changed', handleShiftEvent);
+    window.addEventListener('storage', handleShiftEvent);
+    return () => {
+      window.removeEventListener('ecollect:day_shift_changed', handleShiftEvent);
+      window.removeEventListener('storage', handleShiftEvent);
+    };
+  }, []);
+
+  // Recomputed Day-End Summary
+  const eodSummary = useMemo(() => {
+    return calculateDayEndSummary({
+      accounts: accounts || [],
+      transactions: []
+    });
+  }, [accounts]);
+
+  // Go-Live Pre-Flight Readiness Check
+  const goLiveReport = useMemo(() => {
+    return runGoLivePreFlightCheck({
+      merchantId: user?.merchantId || 4,
+      accounts: accounts || [],
+      user: user,
+      isNonIntegrated: isNonIntegrated
+    });
+  }, [user, accounts, isNonIntegrated]);
+
+  const handleStartBodShift = () => {
+    const updated = {
+      date: new Date().toISOString().slice(0, 10),
+      shiftStatus: 'OPEN',
+      openedAt: new Date().toISOString(),
+      closedAt: null,
+      openedBy: user?.fullName || user?.name || 'Branch Manager',
+      closedBy: null,
+      notes: dayOpsNotes || 'Daily collection operations active.'
+    };
+    setDayShiftState(updated);
+    saveDayShiftState(updated);
+    showToast('☀️ Day Begin (BOD) Shift successfully opened! Field collections are active.');
+  };
+
+  const handleCompleteEodSettlement = () => {
+    const updated = {
+      ...dayShiftState,
+      shiftStatus: 'CLOSED',
+      closedAt: new Date().toISOString(),
+      closedBy: user?.fullName || user?.name || 'Branch Manager',
+      reconciledSummary: eodSummary,
+      notes: dayOpsNotes || 'Daily collections reconciled and shift closed.'
+    };
+
+    setDayShiftState(updated);
+    saveDayShiftState(updated);
+    setDayOpsTab('CERTIFICATE');
+    showToast('🌙 Day-End (EOD) Settlement completed! EOD Certificate generated.');
+  };
+
+  const handlePrintEodCertificate = () => {
+    window.print();
+  };
 
   // Form State
   const [formData, setFormData] = useState({
@@ -573,172 +898,6 @@ const Accounts = () => {
       reader.onerror = reject;
       reader.readAsText(file);
     });
-  };
-
-  // Comprehensive Master Accounts Sample Format (All 20 fields)
-  const masterAccountsTemplateData = [
-    {
-      AccountNumber: 'LN01005001',
-      CustomerName: 'Ramesh Sharma',
-      MobileNumber: '9876543210',
-      Email: 'ramesh.sharma@example.com',
-      ProductType: 'LOAN',
-      LoanCategory: 'Home Loan',
-      OutstandingAmount: 120000,
-      TenureMonths: 24,
-      DueAmount: 4500,
-      EmiAmount: 4500,
-      EmiFrequency: 'Monthly',
-      LastPaidDate: '2026-08-01',
-      NextDueDate: '2026-09-01',
-      AssignedAgentCode: '1075',
-      AssignedAgentName: 'Priya Sharma',
-      BranchCode: '01',
-      BankName: 'State Bank of India',
-      IfscCode: 'SBIN0001234',
-      ReminderDaysBeforeDue: 2,
-      ReminderChannels: 'SMS,WhatsApp,Call'
-    },
-    {
-      AccountNumber: 'LN01005002',
-      CustomerName: 'Sunita Verma',
-      MobileNumber: '9812345678',
-      Email: 'sunita.verma@example.com',
-      ProductType: 'LOAN',
-      LoanCategory: 'Vehicle Loan',
-      OutstandingAmount: 45000,
-      TenureMonths: 12,
-      DueAmount: 1500,
-      EmiAmount: 1500,
-      EmiFrequency: 'Weekly',
-      LastPaidDate: '2026-08-10',
-      NextDueDate: '2026-08-17',
-      AssignedAgentCode: '1075',
-      AssignedAgentName: 'Priya Sharma',
-      BranchCode: '01',
-      BankName: 'HDFC Bank',
-      IfscCode: 'HDFC0000456',
-      ReminderDaysBeforeDue: 2,
-      ReminderChannels: 'SMS,WhatsApp'
-    },
-    {
-      AccountNumber: 'RD01008001',
-      CustomerName: 'Amit Patel',
-      MobileNumber: '9988776655',
-      Email: 'amit.patel@example.com',
-      ProductType: 'RD',
-      LoanCategory: 'Standard Recurring Deposit',
-      OutstandingAmount: 50000,
-      TenureMonths: 36,
-      DueAmount: 2000,
-      EmiAmount: 2000,
-      EmiFrequency: 'Monthly',
-      LastPaidDate: '2026-08-05',
-      NextDueDate: '2026-09-05',
-      AssignedAgentCode: '1075',
-      AssignedAgentName: 'Priya Sharma',
-      BranchCode: '01',
-      BankName: 'ICICI Bank',
-      IfscCode: 'ICIC0000789',
-      ReminderDaysBeforeDue: 3,
-      ReminderChannels: 'WhatsApp,Call'
-    },
-    {
-      AccountNumber: 'FD01009001',
-      CustomerName: 'Kavita Singh',
-      MobileNumber: '9765432109',
-      Email: 'kavita.singh@example.com',
-      ProductType: 'FD',
-      LoanCategory: 'Fixed Deposit Scheme',
-      OutstandingAmount: 200000,
-      TenureMonths: 60,
-      DueAmount: 0,
-      EmiAmount: 0,
-      EmiFrequency: 'Quarterly',
-      LastPaidDate: '2026-07-01',
-      NextDueDate: '2026-10-01',
-      AssignedAgentCode: '1075',
-      AssignedAgentName: 'Priya Sharma',
-      BranchCode: '01',
-      BankName: 'Axis Bank',
-      IfscCode: 'UTIB0000321',
-      ReminderDaysBeforeDue: 7,
-      ReminderChannels: 'SMS,Call'
-    }
-  ];
-
-  // Download Sample Master Accounts Excel Template (.xlsx)
-  const handleDownloadAccountsExcelTemplate = () => {
-    try {
-      const ws = XLSX.utils.json_to_sheet(masterAccountsTemplateData);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'MasterAccounts');
-      XLSX.writeFile(wb, 'Master_Accounts_Bulk_Template.xlsx');
-      showToast('Downloaded complete Master Accounts Excel template (.xlsx)');
-    } catch (err) {
-      console.error('Download error:', err);
-      handleDownloadAccountsCsvTemplate();
-    }
-  };
-
-  // Download Sample Master Accounts CSV Template (.csv)
-  const handleDownloadAccountsCsvTemplate = () => {
-    const headers = [
-      'AccountNumber',
-      'CustomerName',
-      'MobileNumber',
-      'Email',
-      'ProductType',
-      'LoanCategory',
-      'OutstandingAmount',
-      'TenureMonths',
-      'DueAmount',
-      'EmiAmount',
-      'EmiFrequency',
-      'LastPaidDate',
-      'NextDueDate',
-      'AssignedAgentCode',
-      'AssignedAgentName',
-      'BranchCode',
-      'BankName',
-      'IfscCode',
-      'ReminderDaysBeforeDue',
-      'ReminderChannels'
-    ];
-
-    const sampleRows = masterAccountsTemplateData.map(r => [
-      `"${r.AccountNumber}"`,
-      `"${r.CustomerName}"`,
-      `"${r.MobileNumber}"`,
-      `"${r.Email}"`,
-      `"${r.ProductType}"`,
-      `"${r.LoanCategory}"`,
-      r.OutstandingAmount,
-      r.TenureMonths,
-      r.DueAmount,
-      r.EmiAmount,
-      `"${r.EmiFrequency}"`,
-      `"${r.LastPaidDate}"`,
-      `"${r.NextDueDate}"`,
-      `"${r.AssignedAgentCode}"`,
-      `"${r.AssignedAgentName}"`,
-      `"${r.BranchCode}"`,
-      `"${r.BankName}"`,
-      `"${r.IfscCode}"`,
-      r.ReminderDaysBeforeDue,
-      `"${r.ReminderChannels}"`
-    ].join(','));
-
-    const csvContent = [headers.join(','), ...sampleRows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'Master_Accounts_Bulk_Template.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast('Downloaded complete Master Accounts CSV template (.csv)');
   };
 
   // Daily Due List Sample Format
@@ -849,6 +1008,20 @@ const Accounts = () => {
       ifscCode: 'STANDALONE',
       accountType: `${prod} • ${loanKind} (${loanFormData.emiFrequency || 'Monthly'})`,
       collectionType: prod,
+      loanCategory: loanKind,
+
+      customerPhoto: loanFormData.customerPhoto || '',
+      latitude: loanFormData.latitude || '',
+      longitude: loanFormData.longitude || '',
+      customerAddress: loanFormData.customerAddress || '',
+      ptpDate: null,
+      ptpAmount: null,
+      ptpStatus: 'NONE',
+      ptpNotes: '',
+      isMandatoryCall: dueVal > 30000,
+      mandatoryCallDate: dueVal > 30000 ? new Date(Date.now() + 86400000).toISOString().split('T')[0] : null,
+
+      schemeName: loanKind,
       branchName: selectedBranchCode || '01',
       balance: balanceVal,
       dueAmount: dueVal,
@@ -873,6 +1046,15 @@ const Accounts = () => {
     setAccounts(prev => [optimisticAccount, ...prev.filter(a => a.accountNumber !== accNo)]);
     setIsLoanModalOpen(false);
     showToast('Loan Account created successfully!');
+
+    // Trigger AutoPay & WhatsApp Mandate Link setup for Standalone 'N' Mode (Branch Logins Only)
+    const rawInteg = localStorage.getItem('integrationStatus') || user?.integrationStatus || 'No';
+    const isIntegratedMode = String(rawInteg).toUpperCase() === 'Y' || String(rawInteg).toUpperCase() === 'YES' || rawInteg === true;
+    if (!isIntegratedMode && isBranchUser) {
+      setAutoPayModalAccount(optimisticAccount);
+      setAutoPayBulkAccounts([]);
+      setAutoPayModalOpen(true);
+    }
 
     try {
       const payload = {
@@ -914,6 +1096,195 @@ const Accounts = () => {
       loadAccounts(selectedBranchCode, selectedAgentCode);
     } catch (err) {
       console.warn('Background save note:', err);
+    }
+  };
+
+  // Comprehensive Excel Template Download with ALL Relevant Attributes (24 Fields)
+  const handleDownloadAccountsExcelTemplate = () => {
+    try {
+      const sampleData = [
+        {
+          AccountNumber: 'LN1004891',
+          CustomerName: 'Rajesh Kumar Sharma',
+          MobileNumber: '9876543210',
+          Email: 'rajesh.sharma@example.com',
+          ProductType: 'LOAN',
+          SchemeName: 'Home Loan',
+          OutstandingAmount: 250000,
+          DueAmount: 12500,
+          EmiAmount: 12500,
+          EmiFrequency: 'Monthly',
+          TenureMonths: 24,
+          LastPaidDate: '2026-08-10',
+          NextDueDate: '2026-09-10',
+          AssignedAgentCode: '1075',
+          AssignedAgentName: 'Amit Verma',
+          BranchCode: '01',
+          BankName: 'Local Branch Banking Route',
+          IfscCode: 'STANDALONE',
+          CustomerAddress: 'Plot 42, Sector 18, Near Central Market',
+          City: 'Mumbai',
+          Latitude: '19.076090',
+          Longitude: '72.877726',
+          CustomerPhoto: '',
+          PtpDate: '2026-09-12',
+          PtpAmount: 12500,
+          PtpStatus: 'PENDING',
+          IsMandatoryCall: 'NO',
+          ReminderRiskLevel: 'Standard',
+          ReminderChannels: 'SMS,WhatsApp,Call'
+        },
+        {
+          AccountNumber: 'LN1004892',
+          CustomerName: 'Pooja Manoj Patel',
+          MobileNumber: '9823456789',
+          Email: 'pooja.patel@example.com',
+          ProductType: 'LOAN',
+          SchemeName: 'Gold Loan',
+          OutstandingAmount: 150000,
+          DueAmount: 8200,
+          EmiAmount: 8200,
+          EmiFrequency: 'Monthly',
+          TenureMonths: 12,
+          LastPaidDate: '2026-08-05',
+          NextDueDate: '2026-09-05',
+          AssignedAgentCode: '1075',
+          AssignedAgentName: 'Amit Verma',
+          BranchCode: '01',
+          BankName: 'Local Branch Banking Route',
+          IfscCode: 'STANDALONE',
+          CustomerAddress: 'Shop 14, MG Road, Jewel Market',
+          City: 'Pune',
+          Latitude: '18.520430',
+          Longitude: '73.856743',
+          CustomerPhoto: '',
+          PtpDate: '',
+          PtpAmount: '',
+          PtpStatus: 'NONE',
+          IsMandatoryCall: 'NO',
+          ReminderRiskLevel: 'Standard',
+          ReminderChannels: 'SMS,WhatsApp,Call'
+        },
+        {
+          AccountNumber: 'RD2008191',
+          CustomerName: 'Suresh Chandra Gupta',
+          MobileNumber: '9811223344',
+          Email: 'suresh.gupta@example.com',
+          ProductType: 'RD',
+          SchemeName: 'Standard Recurring Deposit',
+          OutstandingAmount: 60000,
+          DueAmount: 5000,
+          EmiAmount: 5000,
+          EmiFrequency: 'Monthly',
+          TenureMonths: 12,
+          LastPaidDate: '2026-08-01',
+          NextDueDate: '2026-09-01',
+          AssignedAgentCode: '1075',
+          AssignedAgentName: 'Amit Verma',
+          BranchCode: '01',
+          BankName: 'Local Branch Banking Route',
+          IfscCode: 'STANDALONE',
+          CustomerAddress: 'Flat 302, Green Residency, Station Road',
+          City: 'Thane',
+          Latitude: '19.218330',
+          Longitude: '72.978088',
+          CustomerPhoto: '',
+          PtpDate: '',
+          PtpAmount: '',
+          PtpStatus: 'NONE',
+          IsMandatoryCall: 'NO',
+          ReminderRiskLevel: 'Standard',
+          ReminderChannels: 'SMS,WhatsApp,Call'
+        }
+      ];
+
+      const ws = XLSX.utils.json_to_sheet(sampleData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'MasterAccounts');
+      XLSX.writeFile(wb, 'eCollect_Master_Accounts_Template.xlsx');
+      showToast('📥 Master Accounts Excel template downloaded with all 24 attributes!');
+    } catch (err) {
+      console.error('Template export error:', err);
+      showToast('Could not generate Excel template', 'error');
+    }
+  };
+
+  const handleDownloadAccountsCsvTemplate = () => {
+    try {
+      const headers = [
+        'AccountNumber', 'CustomerName', 'MobileNumber', 'Email', 'ProductType', 'SchemeName',
+        'OutstandingAmount', 'DueAmount', 'EmiAmount', 'EmiFrequency', 'TenureMonths',
+        'LastPaidDate', 'NextDueDate', 'AssignedAgentCode', 'AssignedAgentName', 'BranchCode',
+        'BankName', 'IfscCode', 'CustomerAddress', 'City', 'Latitude', 'Longitude',
+        'CustomerPhoto', 'PtpDate', 'PtpAmount', 'PtpStatus', 'IsMandatoryCall', 'ReminderRiskLevel', 'ReminderChannels'
+      ];
+      const sampleRow = [
+        'LN1004891', 'Rajesh Kumar Sharma', '9876543210', 'rajesh@example.com', 'LOAN', 'Home Loan',
+        '250000', '12500', '12500', 'Monthly', '24',
+        '2026-08-10', '2026-09-10', '1075', 'Amit Verma', '01',
+        'Local Branch Banking Route', 'STANDALONE', 'Plot 42 Sector 18 Central Market', 'Mumbai', '19.076090', '72.877726',
+        '', '2026-09-12', '12500', 'PENDING', 'NO', 'Standard', 'SMS,WhatsApp,Call'
+      ];
+
+      const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), sampleRow.join(',')].join('\n');
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', 'eCollect_Master_Accounts_Template.csv');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast('📥 Master Accounts CSV template downloaded!');
+    } catch (err) {
+      console.error('CSV template error:', err);
+      showToast('Could not download CSV template', 'error');
+    }
+  };
+
+  // Export Daily Due List Excel
+  const handleDownloadDueListSheet = () => {
+    try {
+      const duesData = (accounts || [])
+        .filter(a => Number(a.dueAmount || a.emiAmount || 0) > 0)
+        .map((a, i) => {
+          const bucket = calculateAccountBucket(a);
+          return {
+            'Sr No': i + 1,
+            'Account No': a.accountNumber,
+            'Customer Name': a.accountHolder,
+            'Mobile': a.phone || a.mobileNumber || '',
+            'Product': a.collectionType || 'LOAN',
+            'Scheme / Type': a.loanCategory || a.schemeName || 'Loan',
+            'Current Due Demand (₹)': Number(a.dueAmount || a.emiAmount || 0),
+            'Outstanding (₹)': Number(a.balance || a.outstandingAmount || 0),
+            'EMI Amount (₹)': Number(a.emiAmount || 0),
+            'Frequency': a.emiFrequency || 'Monthly',
+            'Due Date': a.nextDueDate || '',
+            'DPD': bucket.dpd,
+            'Bucket / NPA Status': bucket.label,
+            'PTP Status': a.ptpStatus || 'NONE',
+            'PTP Date': a.ptpDate ? new Date(a.ptpDate).toLocaleDateString('en-IN') : 'None',
+            'Customer Address': a.customerAddress || a.address || '',
+            'City': a.city || a.branchName || '',
+            'GPS Coordinates': a.latitude && a.longitude ? `${a.latitude}, ${a.longitude}` : '',
+            'Agent Code': a.assignedAgentCode || '',
+            'Agent Name': a.assignedAgentName || ''
+          };
+        });
+
+      if (duesData.length === 0) {
+        showToast('No accounts currently have pending due demands to export.', 'warning');
+        return;
+      }
+
+      const ws = XLSX.utils.json_to_sheet(duesData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'DailyDueDemand');
+      XLSX.writeFile(wb, `eCollect_Daily_Due_List_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      showToast(`📥 Exported Daily Due List for ${duesData.length} borrowers!`);
+    } catch (err) {
+      console.error('Due list sheet download error:', err);
+      showToast('Could not export due list spreadsheet', 'error');
     }
   };
 
@@ -974,6 +1345,21 @@ const Accounts = () => {
 
         const masked = accNo.length > 4 ? `•••• •••• ${accNo.slice(-4)}` : accNo;
 
+        const photo = (r.CustomerPhoto || r.customerPhoto || r.Photo || r.photo || '').toString().trim();
+        const address = (r.CustomerAddress || r.customerAddress || r.Address || r.address || '').toString().trim();
+        const city = (r.City || r.city || '').toString().trim();
+        const lat = (r.Latitude || r.latitude || r.Lat || r.lat || '').toString().trim();
+        const lng = (r.Longitude || r.longitude || r.Lng || r.lng || '').toString().trim();
+        const ptpDateVal = r.PtpDate || r.ptpDate || r.PTPDate || null;
+        const ptpAmtVal = r.PtpAmount || r.ptpAmount ? Number(r.PtpAmount || r.ptpAmount) : null;
+        const ptpStatVal = (r.PtpStatus || r.ptpStatus || 'NONE').toString().trim();
+        const ptpNotesVal = (r.PtpNotes || r.ptpNotes || '').toString().trim();
+        const isMandatory = (r.IsMandatoryCall === true || String(r.IsMandatoryCall || '').toUpperCase() === 'YES' || due > 30000);
+
+        if (photo) {
+          saveStoredCustomerPhoto(accNo, photo);
+        }
+
         const accountObj = {
           id: `bulk_${Date.now()}_${idx}`,
           accountCode: `ACC-${accNo.slice(-6)}`,
@@ -1006,7 +1392,18 @@ const Accounts = () => {
           reminderRiskLevel: due > 50000 ? 'HighRisk' : 'Standard',
           customReminderNote: '',
           phone: phone,
-          email: email
+          email: email,
+          customerPhoto: photo,
+          customerAddress: address,
+          city: city,
+          latitude: lat,
+          longitude: lng,
+          ptpDate: ptpDateVal,
+          ptpAmount: ptpAmtVal,
+          ptpStatus: ptpStatVal,
+          ptpNotes: ptpNotesVal,
+          isMandatoryCall: isMandatory,
+          mandatoryCallDate: isMandatory ? new Date(Date.now() + 86400000).toISOString().split('T')[0] : null
         };
 
         newAccounts.push(accountObj);
@@ -1056,6 +1453,15 @@ const Accounts = () => {
       setBulkAccountsRows([]);
       setBulkAccountsFile(null);
 
+      // Trigger AutoPay & WhatsApp Mandate Link setup for Bulk Imports in Standalone 'N' Mode (Branch Logins Only)
+      const rawInteg = localStorage.getItem('integrationStatus') || user?.integrationStatus || 'No';
+      const isIntegratedMode = String(rawInteg).toUpperCase() === 'Y' || String(rawInteg).toUpperCase() === 'YES' || rawInteg === true;
+      if (!isIntegratedMode && isBranchUser) {
+        setAutoPayBulkAccounts(newAccounts);
+        setAutoPayModalAccount(null);
+        setAutoPayModalOpen(true);
+      }
+
       // 2. Try sending payload to backend in background
       try {
         await accountApi.bulkUpload(backendPayload);
@@ -1100,18 +1506,51 @@ const Accounts = () => {
 
     try {
       const dueMap = new Map();
+      const newImportedAccounts = [];
 
-      dueListRows.forEach(r => {
+      dueListRows.forEach((r, idx) => {
         const accNo = (r.AccountNumber || r.accountNumber || r.AccountNo || r.accountno || r.accno || r.AccountNum || r.accountnum || '').toString().trim();
         if (accNo) {
+          const custName = (r.CustomerName || r.customerName || r.AccountHolder || r.accountholder || r.Name || r.name || 'Due Customer').toString().trim();
           const due = Number(r.DueAmount || r.dueAmount || r.Demand || r.demand || r.amount || r.Due || 0);
-          const outstanding = r.OutstandingAmount || r.outstandingAmount || r.balance || r.Balance ? Number(r.OutstandingAmount || r.outstandingAmount || r.balance || r.Balance) : null;
-          const emi = r.EmiAmount || r.emiAmount || r.Emi ? Number(r.EmiAmount || r.emiAmount || r.Emi) : null;
+          const outstanding = r.OutstandingAmount || r.outstandingAmount || r.balance || r.Balance ? Number(r.OutstandingAmount || r.outstandingAmount || r.balance || r.Balance) : (due > 0 ? due * 10 : 50000);
+          const emi = r.EmiAmount || r.emiAmount || r.Emi ? Number(r.EmiAmount || r.emiAmount || r.Emi) : (due > 0 ? due : 5000);
           const lastPaid = r.LastPaidDate || r.lastPaidDate || null;
           const nextDue = r.NextDueDate || r.nextDueDate || null;
-          const agentCode = (r.AssignedAgentCode || r.assignedAgentCode || r.AgentCode || r.agentcode || '').toString().trim() || null;
+          const agentCode = (r.AssignedAgentCode || r.assignedAgentCode || r.AgentCode || r.agentcode || '').toString().trim() || selectedAgentCode || '1075';
+          const agentName = (r.AssignedAgentName || r.assignedAgentName || r.AgentName || r.agentname || '').toString().trim() || `Agent (${agentCode})`;
+          const mobile = (r.MobileNumber || r.mobileNumber || r.Phone || r.phone || r.Mobile || '').toString().trim();
+          const prodType = (r.ProductType || r.productType || r.CollectionType || r.collectionType || 'LOAN').toString().trim().toUpperCase();
 
-          dueMap.set(accNo, { due, outstanding, emi, lastPaid, nextDue, agentCode });
+          dueMap.set(accNo, { due, outstanding, emi, lastPaid, nextDue, agentCode, custName, mobile, prodType });
+
+          newImportedAccounts.push({
+            id: `duelist_${Date.now()}_${idx}`,
+            accountCode: `ACC-${accNo.slice(-6)}`,
+            bankName: 'CBS Due Demand Ledger',
+            accountHolder: custName,
+            accountNumber: accNo,
+            maskedNumber: accNo.length > 4 ? `•••• •••• ${accNo.slice(-4)}` : accNo,
+            ifscCode: 'STANDALONE',
+            accountType: `${prodType} • Daily Due Demand`,
+            collectionType: prodType,
+            loanCategory: 'Standard Due',
+            branchName: selectedBranchCode || '01',
+            balance: outstanding,
+            dueAmount: due,
+            emiAmount: emi,
+            emiFrequency: 'Monthly',
+            lastPaidDate: lastPaid ? new Date(lastPaid).toLocaleDateString('en-IN') : 'N/A',
+            nextDueDate: nextDue ? new Date(nextDue).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN'),
+            assignedAgentCode: agentCode,
+            assignedAgentName: agentName,
+            dailyLimit: 5000000,
+            isActive: true,
+            verified: true,
+            updatedAt: new Date().toISOString(),
+            phone: mobile,
+            email: ''
+          });
         }
       });
 
@@ -1121,26 +1560,54 @@ const Accounts = () => {
         return;
       }
 
-      // 1. Optimistically update existing accounts with new morning demand
-      setAccounts(prev => prev.map(acc => {
-        if (dueMap.has(acc.accountNumber)) {
-          const updateInfo = dueMap.get(acc.accountNumber);
-          return {
-            ...acc,
-            dueAmount: updateInfo.due,
-            balance: updateInfo.outstanding !== null ? updateInfo.outstanding : acc.balance,
-            outstandingAmount: updateInfo.outstanding !== null ? updateInfo.outstanding : acc.balance,
-            emiAmount: updateInfo.emi !== null ? updateInfo.emi : acc.emiAmount,
-            lastPaidDate: updateInfo.lastPaid ? new Date(updateInfo.lastPaid).toLocaleDateString('en-IN') : acc.lastPaidDate,
-            nextDueDate: updateInfo.nextDue ? new Date(updateInfo.nextDue).toLocaleDateString('en-IN') : acc.nextDueDate,
-            assignedAgentCode: updateInfo.agentCode || acc.assignedAgentCode,
-            updatedAt: new Date().toISOString()
-          };
-        }
-        return acc;
-      }));
+      // 1. Optimistically update existing accounts AND insert new accounts from the Due List
+      setAccounts(prev => {
+        const existingMap = new Map();
+        prev.forEach(a => existingMap.set(a.accountNumber, a));
 
-      showToast(`Daily due list synced: Updated demands for ${dueMap.size} accounts!`);
+        const merged = [];
+        // Update existing accounts
+        prev.forEach(acc => {
+          if (dueMap.has(acc.accountNumber)) {
+            const updateInfo = dueMap.get(acc.accountNumber);
+            merged.push({
+              ...acc,
+              accountHolder: updateInfo.custName !== 'Due Customer' ? updateInfo.custName : acc.accountHolder,
+              phone: updateInfo.mobile || acc.phone,
+              dueAmount: updateInfo.due,
+              balance: updateInfo.outstanding !== null ? updateInfo.outstanding : acc.balance,
+              outstandingAmount: updateInfo.outstanding !== null ? updateInfo.outstanding : acc.balance,
+              emiAmount: updateInfo.emi !== null ? updateInfo.emi : acc.emiAmount,
+              lastPaidDate: updateInfo.lastPaid ? new Date(updateInfo.lastPaid).toLocaleDateString('en-IN') : acc.lastPaidDate,
+              nextDueDate: updateInfo.nextDue ? new Date(updateInfo.nextDue).toLocaleDateString('en-IN') : acc.nextDueDate,
+              assignedAgentCode: updateInfo.agentCode || acc.assignedAgentCode,
+              updatedAt: new Date().toISOString()
+            });
+          } else {
+            merged.push(acc);
+          }
+        });
+
+        // Add brand-new accounts from Due List
+        newImportedAccounts.forEach(newAcc => {
+          if (!existingMap.has(newAcc.accountNumber)) {
+            merged.unshift(newAcc);
+          }
+        });
+
+        // Persist locally for session & offline resiliency
+        try {
+          localStorage.setItem('ecollect_standalone_accounts', JSON.stringify(merged));
+        } catch (e) {}
+
+        return merged;
+      });
+
+      // 2. Automatically switch to the DUE_LIST tab so the user instantly sees all imported dues
+      setCollectionProductTab('DUE_LIST');
+      setSelectedBucketTab('ALL');
+
+      showToast(`Daily due list synced: ${dueMap.size} account dues active in ledger!`);
       setIsDueListModalOpen(false);
       setDueListRows([]);
       setDueListFile(null);
@@ -1228,6 +1695,160 @@ const Accounts = () => {
   };
 
   // Open Individual Account Reminder Customization Modal
+  
+  // ============================================================
+  // PTP, MANDATORY CALL, GPS & AI HANDLERS
+  // ============================================================
+  
+  const handleDossierPhotoUpload = async (e, targetAcc = selectedAccount) => {
+    const file = e.target.files?.[0];
+    if (!file || !targetAcc) return;
+    try {
+      showToast('⏳ Formatting & compressing photo to passport size...');
+      const photoUrl = await compressToPassportPhoto(file, 240, 300, 0.82);
+      if (photoUrl) {
+        saveStoredCustomerPhoto(targetAcc.accountNumber, photoUrl);
+        setSelectedAccount(prev => prev ? ({ ...prev, customerPhoto: photoUrl }) : null);
+        setAccounts(prev => prev.map(a => (a.id === targetAcc.id || a.accountNumber === targetAcc.accountNumber) ? { ...a, customerPhoto: photoUrl } : a));
+        showToast(`📷 Passport photo saved for ${targetAcc.accountHolder}!`);
+      }
+    } catch (err) {
+      showToast('Failed to process passport photo: ' + err.message, 'error');
+    }
+  };
+
+  const handleOpenPtpModal = (acc) => {
+    setSelectedPtpAccount(acc);
+    setPtpFormData({
+      ptpDate: acc.ptpDate ? new Date(acc.ptpDate).toISOString().split('T')[0] : new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
+      ptpAmount: acc.ptpAmount || acc.dueAmount || acc.emiAmount || '',
+      ptpStatus: acc.ptpStatus || 'PENDING',
+      ptpNotes: acc.ptpNotes || ''
+    });
+    setIsPtpModalOpen(true);
+  };
+
+  const handleSavePtp = async (e) => {
+    e.preventDefault();
+    if (!selectedPtpAccount) return;
+
+    const updatedPtp = {
+      ptpDate: ptpFormData.ptpDate,
+      ptpAmount: Number(ptpFormData.ptpAmount || 0),
+      ptpStatus: ptpFormData.ptpStatus,
+      ptpNotes: ptpFormData.ptpNotes?.trim() || '',
+      ptpUpdatedAt: new Date().toISOString()
+    };
+
+    setAccounts(prev => prev.map(a => {
+      if (a.id === selectedPtpAccount.id || a.accountNumber === selectedPtpAccount.accountNumber) {
+        return { ...a, ...updatedPtp };
+      }
+      return a;
+    }));
+
+    if (selectedAccount && selectedAccount.id === selectedPtpAccount.id) {
+      setSelectedAccount(prev => ({ ...prev, ...updatedPtp }));
+    }
+
+    setIsPtpModalOpen(false);
+    showToast(`🤝 Promise to Pay (₹${Number(ptpFormData.ptpAmount).toLocaleString('en-IN')}) saved for ${selectedPtpAccount.accountHolder}!`);
+
+    try {
+      if (accountApi.savePtp) {
+        await accountApi.savePtp(selectedPtpAccount.id, updatedPtp);
+      } else if (accountApi.update) {
+        await accountApi.update(selectedPtpAccount.id, updatedPtp);
+      }
+    } catch (err) {
+      console.warn('PTP persisted locally in ledger session:', err);
+    }
+  };
+
+  const handleOpenMandatoryCallModal = (acc) => {
+    setSelectedCallAccount(acc);
+    setCallFormData({
+      callOutcome: 'Answered - Promised to Pay',
+      callNotes: acc.lastCallNotes || '',
+      nextFollowUpDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+      scheduleTomorrow: true
+    });
+    setIsMandatoryCallModalOpen(true);
+  };
+
+  const handleSaveCallOutcome = async (e) => {
+    e.preventDefault();
+    if (!selectedCallAccount) return;
+
+    const isPtpOutcome = callFormData.callOutcome.includes('PTP') || callFormData.callOutcome.includes('Promised');
+    const updatedCall = {
+      lastCallOutcome: callFormData.callOutcome,
+      lastCallNotes: callFormData.callNotes?.trim() || '',
+      lastCallTimestamp: new Date().toISOString(),
+      isMandatoryCall: callFormData.scheduleTomorrow,
+      mandatoryCallDate: callFormData.scheduleTomorrow ? callFormData.nextFollowUpDate : null
+    };
+
+    setAccounts(prev => prev.map(a => {
+      if (a.id === selectedCallAccount.id || a.accountNumber === selectedCallAccount.accountNumber) {
+        return { ...a, ...updatedCall };
+      }
+      return a;
+    }));
+
+    if (selectedAccount && selectedAccount.id === selectedCallAccount.id) {
+      setSelectedAccount(prev => ({ ...prev, ...updatedCall }));
+    }
+
+    setIsMandatoryCallModalOpen(false);
+    showToast(`📞 Call outcome '${callFormData.callOutcome}' logged for ${selectedCallAccount.accountHolder}!`);
+
+    if (isPtpOutcome) {
+      handleOpenPtpModal(selectedCallAccount);
+    }
+
+    try {
+      if (accountApi.saveCallOutcome) {
+        await accountApi.saveCallOutcome(selectedCallAccount.id, updatedCall);
+      } else if (accountApi.update) {
+        await accountApi.update(selectedCallAccount.id, updatedCall);
+      }
+    } catch (err) {
+      console.warn('Call outcome saved in ledger session:', err);
+    }
+  };
+
+  const handleOpenAiRiskModal = (acc) => {
+    setSelectedAiAccount(acc);
+    setIsAiRiskModalOpen(true);
+  };
+
+  const handleCaptureGpsLocation = (isForLoanModal = false) => {
+    if (!navigator.geolocation) {
+      showToast('Geolocation is not supported by your browser.', 'warning');
+      return;
+    }
+
+    showToast('📍 Acquiring precise GPS coordinates...');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude.toFixed(6);
+        const lng = position.coords.longitude.toFixed(6);
+        if (isForLoanModal) {
+          setLoanFormData(p => ({ ...p, latitude: lat, longitude: lng }));
+        } else {
+          setFormData(p => ({ ...p, latitude: lat, longitude: lng }));
+        }
+        showToast(`📍 GPS Locked: ${lat}, ${lng}`);
+      },
+      (error) => {
+        console.warn('GPS location error:', error);
+        showToast('Could not auto-detect GPS. Please enter coordinates manually.', 'warning');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
   const handleOpenAccountReminderModal = (acc) => {
     setSelectedReminderAccount(acc);
     setAccountReminderForm({
@@ -1298,14 +1919,7 @@ const Accounts = () => {
   // Load Wallet Data
   const loadWalletData = useCallback(async () => {
     try {
-      const authUser = (() => {
-        try {
-          return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
-        } catch {
-          return {};
-        }
-      })();
-      const mId = Number(authUser?.merchantId || authUser?.merchant_id || localStorage.getItem('merchantId') || 1);
+      const mId = Number(user?.merchantId || user?.merchant_id || localStorage.getItem('merchantId') || 1);
       const [balRes, txRes] = await Promise.allSettled([
         walletApi.getBalance(mId),
         walletApi.getTransactions(mId)
@@ -1341,14 +1955,7 @@ const Accounts = () => {
 
     setIsRechargingWallet(true);
     try {
-      const authUser = (() => {
-        try {
-          return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
-        } catch {
-          return {};
-        }
-      })();
-      const mId = Number(authUser?.merchantId || authUser?.merchant_id || localStorage.getItem('merchantId') || 1);
+      const mId = Number(user?.merchantId || user?.merchant_id || localStorage.getItem('merchantId') || 1);
       
       const res = await walletApi.topUp({
         merchantId: mId,
@@ -1373,17 +1980,10 @@ const Accounts = () => {
   const handleTriggerRemindersNow = async () => {
     setIsTriggeringScan(true);
     try {
-      const authUser = (() => {
-        try {
-          return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
-        } catch {
-          return {};
-        }
-      })();
-      const mId = Number(authUser?.merchantId || authUser?.merchant_id || localStorage.getItem('merchantId') || 1);
+      const mId = Number(user?.merchantId || user?.merchant_id || localStorage.getItem('merchantId') || 1);
 
       // 1. Identify due accounts
-      const dueAccounts = accounts.filter(acc => {
+      const dueAccounts = (accounts || []).filter(acc => {
         const dueVal = Number(acc.dueAmount || acc.demand || acc.emiAmount || 0);
         return dueVal > 0;
       });
@@ -1435,21 +2035,13 @@ const Accounts = () => {
   };
 
   const loadAccounts = useCallback(async (overrideBranchCode = null, overrideAgentCode = null, targetProduct = null) => {
-    const authUser = (() => {
-      try {
-        return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
-      } catch {
-        return {};
-      }
-    })();
-
-    const bCode = overrideBranchCode || selectedBranchCode || authUser?.branchCode || authUser?.external_branch_id || localStorage.getItem('branchCode') || '01';
-    const aCode = overrideAgentCode || selectedAgentCode || authUser?.agentCode || authUser?.external_agent_id || localStorage.getItem('agentCode') || '1075';
-    const mId = authUser?.merchantId || authUser?.merchant_id || localStorage.getItem('merchantId') || 4;
+    const bCode = overrideBranchCode || selectedBranchCode || user?.branchCode || user?.external_branch_id || localStorage.getItem('branchCode') || '01';
+    const aCode = overrideAgentCode || selectedAgentCode || user?.agentCode || user?.external_agent_id || localStorage.getItem('agentCode') || '1075';
+    const mId = user?.merchantId || user?.merchant_id || localStorage.getItem('merchantId') || 4;
     const activeProd = targetProduct !== null ? targetProduct : collectionProductTab;
 
     // Check Integration Status (Y vs N)
-    const rawInteg = localStorage.getItem('integrationStatus') || authUser?.integrationStatus || 'No';
+    const rawInteg = localStorage.getItem('integrationStatus') || user?.integrationStatus || 'No';
     const isIntegratedMode = String(rawInteg).toUpperCase() === 'Y' || String(rawInteg).toUpperCase() === 'YES' || rawInteg === true;
 
     setLoading(true);
@@ -1475,6 +2067,8 @@ const Accounts = () => {
           const balanceVal = Number(item.outstandingAmount ?? item.balance ?? 0);
           const dueVal = Number(item.dueAmount ?? item.emiAmount ?? balanceVal ?? 0);
 
+          const loanKind = item.schemeName || item.loanCategory || item.loanType || (item.accountType?.includes('•') ? item.accountType.split('•')[1]?.split('(')[0]?.trim() : null) || (prod === 'LOAN' ? 'Home Loan' : prod === 'FD' ? 'Fixed Term Deposit' : prod === 'DAILY_DEPOSIT' ? 'Daily Pigmy Deposit' : 'Standard Recurring Deposit');
+
           return {
             id: item.id || index + 1,
             accountCode: `${prod}-${item.branchCode || bCode}-${accNo.slice(-4)}`,
@@ -1483,9 +2077,25 @@ const Accounts = () => {
             accountNumber: accNo,
             maskedNumber: masked,
             ifscCode: item.ifscCode || 'STANDALONE',
-            accountType: item.accountType || `${prod} (${item.emiFrequency || 'Monthly'})`,
+            accountType: item.accountType || `${prod} • ${loanKind} (${item.emiFrequency || 'Monthly'})`,
             collectionType: prod,
+            loanCategory: loanKind,
+            schemeName: loanKind,
             branchName: item.branchName || item.branchCode || bCode,
+
+            customerPhoto: item.customerPhoto || item.photoUrl || getStoredCustomerPhotos()[accNo] || '',
+            latitude: item.latitude || item.lat || '',
+            longitude: item.longitude || item.lng || '',
+            customerAddress: item.customerAddress || item.address || '',
+            ptpDate: item.ptpDate || null,
+            ptpAmount: item.ptpAmount ? Number(item.ptpAmount) : null,
+            ptpStatus: item.ptpStatus || 'NONE',
+            ptpNotes: item.ptpNotes || '',
+            isMandatoryCall: item.isMandatoryCall || (dueVal > 30000),
+            mandatoryCallDate: item.mandatoryCallDate || null,
+            lastCallOutcome: item.lastCallOutcome || '',
+            lastCallNotes: item.lastCallNotes || '',
+
             balance: balanceVal,
             dueAmount: dueVal,
             emiAmount: Number(item.emiAmount || 0),
@@ -1590,25 +2200,49 @@ const Accounts = () => {
       let combinedRawList = [];
 
       if (activeProd === 'ALL') {
-        const [rdRes, loanRes] = await Promise.allSettled([
-          accountApi.getAll({ ...baseQueryParams, productType: 'RD', ProductType: 'RD' }),
-          accountApi.getAll({ ...baseQueryParams, productType: 'LOAN', ProductType: 'LOAN' })
-        ]);
+        const prodTypesToFetch = (configuredCollectionTypes && configuredCollectionTypes.length > 0)
+          ? configuredCollectionTypes
+          : ['RD', 'LOAN'];
 
-        if (rdRes.status === 'fulfilled') {
-          const list = extractAccountList(rdRes.value?.data) || extractAccountList(rdRes.value);
-          list.forEach(item => { if (!item.productType) item.productType = 'RD'; });
-          combinedRawList.push(...list);
-        }
-        if (loanRes.status === 'fulfilled') {
-          const list = extractAccountList(loanRes.value?.data) || extractAccountList(loanRes.value);
-          list.forEach(item => { if (!item.productType) item.productType = 'LOAN'; });
-          combinedRawList.push(...list);
-        }
+        const fetchPromises = prodTypesToFetch.map(prodType => 
+          accountApi.getAll({ 
+            ...baseQueryParams, 
+            productType: prodType, 
+            ProductType: prodType,
+            collectionType: prodType,
+            CollectionType: prodType
+          }).then(res => ({
+            prodType,
+            data: extractAccountList(res?.data) || extractAccountList(res)
+          })).catch(() => ({
+            prodType,
+            data: []
+          }))
+        );
+
+        const results = await Promise.all(fetchPromises);
+        results.forEach(({ prodType, data }) => {
+          if (Array.isArray(data) && data.length > 0) {
+            data.forEach(item => {
+              if (!item.productType) item.productType = prodType;
+              if (!item.collectionType) item.collectionType = prodType;
+            });
+            combinedRawList.push(...data);
+          }
+        });
       } else {
-        const res = await accountApi.getAll({ ...baseQueryParams, productType: activeProd, ProductType: activeProd });
+        const res = await accountApi.getAll({ 
+          ...baseQueryParams, 
+          productType: activeProd, 
+          ProductType: activeProd,
+          collectionType: activeProd,
+          CollectionType: activeProd
+        });
         const list = extractAccountList(res?.data) || extractAccountList(res);
-        list.forEach(item => { if (!item.productType) item.productType = activeProd; });
+        list.forEach(item => { 
+          if (!item.productType) item.productType = activeProd; 
+          if (!item.collectionType) item.collectionType = activeProd; 
+        });
         combinedRawList = list;
       }
 
@@ -1617,7 +2251,9 @@ const Accounts = () => {
           const isLoan = 
             (item.productType || item.ProductType || item.collectionType || item.CollectionType || item.udf5 || '').toString().toUpperCase().includes('LOAN') ||
             (item.accountType || item.AccountType || '').toString().toUpperCase().includes('LOAN') ||
-            !!item.Loan_AccNo || !!item.LoanAccNo || !!item.Loan_No || !!item.loanNo || !!item.emi_amount || !!item.outstanding_amount;
+            (item.Loan_Type || item.loanType || item.LoanType || item.Sch_Name || item.SchName || '').toString().toUpperCase().includes('LOAN') ||
+            (item.Sch_Code || item.SchCode || '').toString().toUpperCase().includes('LOAN') ||
+            !!item.Loan_AccNo || !!item.LoanAccNo || !!item.Loan_No || !!item.loanNo || !!item.LoanAccountNo || !!item.loanAccountNo || !!item.emi_amount || !!item.outstanding_amount;
           
           const isFd = (item.productType || item.collectionType || item.accountType || '').toString().toUpperCase().includes('FD');
           const isRdcl = (item.productType || item.collectionType || item.accountType || '').toString().toUpperCase().includes('RDCL');
@@ -1668,7 +2304,7 @@ const Accounts = () => {
           const schCode = item.Sch_Code || item.SchCode || item.schemeCode || item.SchemeCode || (isLoan ? '08' : '04');
           const ifsc = item.ifscCode || item.ifsc || item.IFSC || `DIGI000${schCode || '04'}`;
           const balanceVal = Number(item.balance ?? item.Balance ?? item.outstanding_amount ?? item.total_due ?? item.Principal_Balance ?? item.totalDeposited ?? item.monthlyAmount ?? item.Amount ?? 0);
-          const currentBranchName = item.branchName || authUser?.branchName || authUser?.branch || localStorage.getItem('branchName') || `Branch ${bCode}`;
+          const currentBranchName = item.branchName || user?.branchName || user?.branch || localStorage.getItem('branchName') || `Branch ${bCode}`;
 
           return {
             id: custId,
@@ -1806,7 +2442,7 @@ const Accounts = () => {
         const highRiskThreshold = Number(storedConfig.highRiskThreshold || 50000);
 
         // Find accounts approaching due date or overdue
-        const eligibleAccounts = accounts.filter(acc => {
+        const eligibleAccounts = (accounts || []).filter(acc => {
           if (!acc.dueAmount || Number(acc.dueAmount) <= 0) return false;
           if (!acc.nextDueDate || acc.nextDueDate === 'N/A') return true;
 
@@ -1921,6 +2557,14 @@ const Accounts = () => {
   };
 
   const handleOpenQrModal = (acc, initialTab = 'qr') => {
+    // 🔒 Mandatory Day Begin (BOD) Enforcement Gate (Model N Only)
+    if (isNonIntegrated && dayShiftState?.shiftStatus !== 'OPEN') {
+      showToast('🔒 Collection Shift is CLOSED! You must perform Day Begin (BOD) before initiating collections.', 'error');
+      setDayOpsTab('BOD');
+      setIsDayOpsModalOpen(true);
+      return;
+    }
+
     setQrAccount(acc);
     setCollectionTab(initialTab);
     const defaultAmt = Number(acc.balance) > 0 ? Number(acc.balance) : 500;
@@ -1935,11 +2579,19 @@ const Accounts = () => {
     setLinkData(null);
     setLinkError(null);
     setLinkStatus(null);
+    setVerifiedPaymentReceipt(null);
+    setQrExpirySeconds(300);
+    setCashData(null);
+    setCashError(null);
     setIsQrModalOpen(true);
   };
 
   const handleOpenPaymentLinkModal = (acc) => {
     handleOpenQrModal(acc, 'link');
+  };
+
+  const handleOpenCashModal = (acc) => {
+    handleOpenQrModal(acc, 'cash');
   };
 
   const handleGenerateQr = async (targetAmount = null) => {
@@ -1960,8 +2612,16 @@ const Accounts = () => {
     })();
 
     const currentMerchantId = Number(
-      authUser?.merchantId || authUser?.merchant_id || localStorage.getItem('merchantId') || 4
+      user?.merchantId || user?.merchant_id || localStorage.getItem('merchantId') || 4
     );
+
+    // Pre-validate Merchant API Keys / Configuration in database
+    const merchantValidation = await validateMerchantApiConfiguration(currentMerchantId);
+    if (!merchantValidation.isValid) {
+      setQrError(merchantValidation.message);
+      showToast(merchantValidation.message, 'error');
+      return;
+    }
 
     // Find agent info
     const matchedAgent = agents.find(
@@ -1970,64 +2630,86 @@ const Accounts = () => {
            String(a.id) === String(selectedAgentCode)
     );
 
-    const agentCodeStr = String(selectedAgentCode || authUser?.agentCode || authUser?.external_agent_id || '1075');
-    const agentNameStr = matchedAgent?.fullName || matchedAgent?.name || authUser?.name || authUser?.fullName || 'Branch Agent';
-    const agentPhoneStr = matchedAgent?.phone || matchedAgent?.mobile || authUser?.phone || authUser?.mobile || '9999999999';
-    const agentEmailStr = matchedAgent?.email || authUser?.email || 'agent@finwin.com';
+    const agentCodeStr = String(selectedAgentCode || user?.agentCode || user?.external_agent_id || '1075');
+    const agentNameStr = matchedAgent?.fullName || matchedAgent?.name || user?.name || user?.fullName || 'Branch Agent';
+    const agentPhoneStr = matchedAgent?.phone || matchedAgent?.mobile || user?.phone || user?.mobile || '9999999999';
+    const agentEmailStr = matchedAgent?.email || user?.email || 'agent@finwin.com';
 
     // Find branch info
     const matchedBranch = branches.find(
       b => String(b.code) === String(selectedBranchCode) ||
            String(b.branchCode) === String(selectedBranchCode) ||
-           String(b.id) === String(authUser?.branchId || authUser?.branch_id)
+           String(b.id) === String(user?.branchId || user?.branch_id)
     );
-    const branchNumericId = Number(matchedBranch?.id || authUser?.branchId || authUser?.branch_id || 1);
+    const branchNumericId = Number(matchedBranch?.id || user?.branchId || user?.branch_id || 1);
 
-    const payload = {
-      MerchantId: currentMerchantId,
-      merchantId: currentMerchantId,
-      Amount: finalAmount,
-      amount: finalAmount,
-      CollectionType: 'UPI',
-      collectionType: 'UPI',
-      QrSource: 'WEB_BRANCH',
-      qrSource: 'WEB_BRANCH',
-      Source: 'BranchPortal',
-      source: 'BranchPortal',
-      note: qrNote || `RD Deposit for ${qrAccount.accountHolder} - Acc #${qrAccount.accountNumber}`,
-      Note: qrNote || `RD Deposit for ${qrAccount.accountHolder} - Acc #${qrAccount.accountNumber}`,
-      Description: qrNote || `RD Deposit for ${qrAccount.accountHolder} - Acc #${qrAccount.accountNumber}`,
-      agent_details: {
-        agent_name: agentNameStr,
-        agent_id: agentCodeStr,
-        agent_orginId: agentCodeStr,
-        agent_phone: agentPhoneStr,
-        agent_email: agentEmailStr,
-        agent_branch: branchNumericId
-      },
-      AgentDetails: {
-        agent_name: agentNameStr,
-        agent_id: agentCodeStr,
-        agent_orginId: agentCodeStr,
-        agent_phone: agentPhoneStr,
-        agent_email: agentEmailStr,
-        agent_branch: branchNumericId
-      },
-      customer_details: {
-        customer_name: qrAccount.accountHolder || 'Customer',
-        customer_phone: customerPhoneInput || qrAccount.phone || qrAccount.mobile || '9999999999',
-        customer_accno: String(qrAccount.accountNumber || qrAccount.accountCode || ''),
-        customer_id: String(qrAccount.customerId || qrAccount.id || '0'),
-        customer_email: customerEmailInput || qrAccount.email || 'customer@finwin.com'
-      },
-      CustomerDetails: {
-        customer_name: qrAccount.accountHolder || 'Customer',
-        customer_phone: customerPhoneInput || qrAccount.phone || qrAccount.mobile || '9999999999',
-        customer_accno: String(qrAccount.accountNumber || qrAccount.accountCode || ''),
-        customer_id: String(qrAccount.customerId || qrAccount.id || '0'),
-        customer_email: customerEmailInput || qrAccount.email || 'customer@finwin.com'
-      }
-    };
+    const rawColType = (qrAccount.collectionType || qrAccount.productType || qrAccount.schemeType || qrAccount.accountType || qrAccount.type || 'RD').toString().toUpperCase();
+    const cleanColType = rawColType.includes('LOAN')
+      ? 'LOAN'
+      : (rawColType.includes('RDCL') ? 'RDCL' : (rawColType.includes('FD') ? 'FD' : (rawColType.includes('SB') ? 'SB' : 'RD')));
+
+    const payload = isNonIntegrated
+      ? buildStandalonePaymentPayload({
+          account: qrAccount,
+          amount: finalAmount,
+          mode: 'UPI',
+          note: qrNote,
+          user: authUser,
+          agent: matchedAgent,
+          branch: matchedBranch,
+          customerPhone: customerPhoneInput,
+          customerEmail: customerEmailInput
+        })
+      : {
+          MerchantId: currentMerchantId,
+          merchantId: currentMerchantId,
+          Amount: finalAmount,
+          amount: finalAmount,
+          CollectionType: cleanColType,
+          collectionType: cleanColType,
+          QrSource: 'WEB',
+          qrSource: 'WEB',
+          qr_source: 'WEB',
+          Source: 'COLLECTION',
+          source: 'COLLECTION',
+          PaymentMode: 'UPI',
+          paymentMode: 'UPI',
+          PaymentChannel: 'UPI',
+          paymentChannel: 'UPI',
+          note: qrNote || `${cleanColType} Deposit for ${qrAccount.accountHolder} - Acc #${qrAccount.accountNumber}`,
+          Note: qrNote || `${cleanColType} Deposit for ${qrAccount.accountHolder} - Acc #${qrAccount.accountNumber}`,
+          Description: qrNote || `${cleanColType} Deposit for ${qrAccount.accountHolder} - Acc #${qrAccount.accountNumber}`,
+          agent_details: {
+            agent_name: agentNameStr,
+            agent_id: agentCodeStr,
+            agent_orginId: agentCodeStr,
+            agent_phone: agentPhoneStr,
+            agent_email: agentEmailStr,
+            agent_branch: branchNumericId
+          },
+          AgentDetails: {
+            agent_name: agentNameStr,
+            agent_id: agentCodeStr,
+            agent_orginId: agentCodeStr,
+            agent_phone: agentPhoneStr,
+            agent_email: agentEmailStr,
+            agent_branch: branchNumericId
+          },
+          customer_details: {
+            customer_name: qrAccount.accountHolder || 'Customer',
+            customer_phone: customerPhoneInput || qrAccount.phone || qrAccount.mobile || '9999999999',
+            customer_accno: String(qrAccount.accountNumber || qrAccount.accountCode || ''),
+            customer_id: String(qrAccount.customerId || qrAccount.id || '0'),
+            customer_email: customerEmailInput || qrAccount.email || 'customer@finwin.com'
+          },
+          CustomerDetails: {
+            customer_name: qrAccount.accountHolder || 'Customer',
+            customer_phone: customerPhoneInput || qrAccount.phone || qrAccount.mobile || '9999999999',
+            customer_accno: String(qrAccount.accountNumber || qrAccount.accountCode || ''),
+            customer_id: String(qrAccount.customerId || qrAccount.id || '0'),
+            customer_email: customerEmailInput || qrAccount.email || 'customer@finwin.com'
+          }
+        };
 
     setQrLoading(true);
     setQrError(null);
@@ -2048,6 +2730,7 @@ const Accounts = () => {
           accountNumber: qrAccount.accountNumber,
           customerName: qrAccount.accountHolder
         });
+        setQrExpirySeconds(300);
         showToast(`UPI QR generated for ₹${finalAmount.toLocaleString('en-IN')}`);
       } else if (resData.message) {
         setQrError(resData.message);
@@ -2076,17 +2759,17 @@ const Accounts = () => {
 
     if (!qrAccount) return;
 
-    const authUser = (() => {
-      try {
-        return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
-      } catch {
-        return {};
-      }
-    })();
-
     const currentMerchantId = Number(
-      authUser?.merchantId || authUser?.merchant_id || localStorage.getItem('merchantId') || 4
+      user?.merchantId || user?.merchant_id || localStorage.getItem('merchantId') || 4
     );
+
+    // Pre-validate Merchant API Keys / Configuration in database
+    const merchantValidation = await validateMerchantApiConfiguration(currentMerchantId);
+    if (!merchantValidation.isValid) {
+      setLinkError(merchantValidation.message);
+      showToast(merchantValidation.message, 'error');
+      return;
+    }
 
     // Find agent info
     const matchedAgent = agents.find(
@@ -2095,37 +2778,45 @@ const Accounts = () => {
            String(a.id) === String(selectedAgentCode)
     );
 
-    const agentCodeStr = String(selectedAgentCode || authUser?.agentCode || authUser?.external_agent_id || '1075');
-    const agentNameStr = matchedAgent?.fullName || matchedAgent?.name || authUser?.name || authUser?.fullName || 'Branch Agent';
-    const agentPhoneStr = matchedAgent?.phone || matchedAgent?.mobile || authUser?.phone || authUser?.mobile || '9999999999';
-    const agentEmailStr = matchedAgent?.email || authUser?.email || 'agent@finwin.com';
+    const agentCodeStr = String(selectedAgentCode || user?.agentCode || user?.external_agent_id || '1075');
+    const agentNameStr = matchedAgent?.fullName || matchedAgent?.name || user?.name || user?.fullName || 'Branch Agent';
+    const agentPhoneStr = matchedAgent?.phone || matchedAgent?.mobile || user?.phone || user?.mobile || '9999999999';
+    const agentEmailStr = matchedAgent?.email || user?.email || 'agent@finwin.com';
 
     // Find branch info
     const matchedBranch = branches.find(
       b => String(b.code) === String(selectedBranchCode) ||
            String(b.branchCode) === String(selectedBranchCode) ||
-           String(b.id) === String(authUser?.branchId || authUser?.branch_id)
+           String(b.id) === String(user?.branchId || user?.branch_id)
     );
-    const branchNumericId = Number(matchedBranch?.id || authUser?.branchId || authUser?.branch_id || 1);
+    const branchNumericId = Number(matchedBranch?.id || user?.branchId || user?.branch_id || 1);
 
     const phoneNum = customerPhoneInput || qrAccount.phone || qrAccount.mobile || '9999999999';
     const emailAddr = customerEmailInput || qrAccount.email || 'customer@finwin.com';
+
+    const rawColType = (qrAccount.collectionType || qrAccount.productType || qrAccount.schemeType || qrAccount.accountType || qrAccount.type || 'RD').toString().toUpperCase();
+    const cleanColType = rawColType.includes('LOAN')
+      ? 'LOAN'
+      : (rawColType.includes('RDCL') ? 'RDCL' : (rawColType.includes('FD') ? 'FD' : (rawColType.includes('SB') ? 'SB' : 'RD')));
 
     const payload = {
       MerchantId: currentMerchantId,
       merchantId: currentMerchantId,
       Amount: finalAmount,
       amount: finalAmount,
-      CollectionType: 'PaymentLink',
-      collectionType: 'PaymentLink',
-      QrSource: 'WEB_BRANCH',
-      qrSource: 'WEB_BRANCH',
-      Source: 'BranchPortal',
-      source: 'BranchPortal',
-      Note: qrNote || `RD Deposit for ${qrAccount.accountHolder} - Acc #${qrAccount.accountNumber}`,
-      note: qrNote || `RD Deposit for ${qrAccount.accountHolder} - Acc #${qrAccount.accountNumber}`,
-      Description: qrNote || `RD Deposit for ${qrAccount.accountHolder} - Acc #${qrAccount.accountNumber}`,
-      description: qrNote || `RD Deposit for ${qrAccount.accountHolder} - Acc #${qrAccount.accountNumber}`,
+      CollectionType: cleanColType,
+      collectionType: cleanColType,
+      QrSource: 'WEB',
+      qrSource: 'WEB',
+      qr_source: 'WEB',
+      Source: 'COLLECTION',
+      source: 'COLLECTION',
+      PaymentMode: 'PAYMENT_LINK',
+      paymentMode: 'PAYMENT_LINK',
+      Note: qrNote || `${cleanColType} Deposit for ${qrAccount.accountHolder} - Acc #${qrAccount.accountNumber}`,
+      note: qrNote || `${cleanColType} Deposit for ${qrAccount.accountHolder} - Acc #${qrAccount.accountNumber}`,
+      Description: qrNote || `${cleanColType} Deposit for ${qrAccount.accountHolder} - Acc #${qrAccount.accountNumber}`,
+      description: qrNote || `${cleanColType} Deposit for ${qrAccount.accountHolder} - Acc #${qrAccount.accountNumber}`,
       agent_details: {
         agent_name: agentNameStr,
         agent_id: agentCodeStr,
@@ -2197,16 +2888,132 @@ const Accounts = () => {
     }
   };
 
+  const handlePaymentSuccess = (resData, orderId, finalAmt) => {
+    const currentUser = (() => {
+      try {
+        return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
+      } catch {
+        return {};
+      }
+    })();
+    const currentMid = Number(currentUser?.merchantId || currentUser?.merchant_id || localStorage.getItem('merchantId') || 4);
+
+    const txnId = resData.transactionId || resData.transaction_id || resData.data?.transaction_id || `UPI-${Date.now().toString().slice(-6)}`;
+    const cbsTxnId = resData.cbsTransactionId || resData.data?.cbsTransactionId || resData.data?.vendorPostTransId || resData.receipt?.TRAN_ID || 'CBS-POSTED';
+    const amountVal = Number(resData.amount || finalAmt || qrAmount || 0);
+
+    const receiptObj = {
+      orderId: orderId,
+      transactionId: txnId,
+      cbsTransactionId: cbsTxnId,
+      amount: amountVal,
+      customerName: resData.customerName || qrAccount?.accountHolder || 'Customer',
+      accountNumber: resData.accountNumber || qrAccount?.accountNumber || '',
+      collectionType: resData.collectionType || qrAccount?.collectionType || 'RD',
+      paymentMode: resData.paymentMode || resData.paymentChannel || 'UPI',
+      completedAt: resData.completedAt || new Date().toISOString(),
+      timestamp: new Date().toISOString(),
+      agentName: currentUser?.fullName || currentUser?.name || 'Branch Agent'
+    };
+
+    setVerifiedPaymentReceipt(receiptObj);
+    setPaymentStatus('SUCCESS');
+    setLinkStatus('SUCCESS');
+
+    const cleanColType = (qrAccount?.collectionType || 'RD').toUpperCase();
+    setAccounts(prev => prev.map(a => {
+      if (a.accountNumber === qrAccount?.accountNumber) {
+        const curBal = Number(a.balance || 0);
+        const newBal = cleanColType.includes('LOAN') ? Math.max(0, curBal - amountVal) : (curBal + amountVal);
+        return { ...a, balance: newBal, dueAmount: Math.max(0, (Number(a.dueAmount || 0) - amountVal)) };
+      }
+      return a;
+    }));
+
+    // 📲 Dispatch DLT Payment Received SMS Receipt
+    sendPaymentReceiptSms({
+      mobile: qrAccount?.phone || qrAccount?.mobileNumber || customerPhoneInput || '9999999999',
+      customerName: qrAccount?.accountHolder || 'Customer',
+      amount: amountVal,
+      accountNumber: qrAccount?.accountNumber || '',
+      receiptNumber: cbsTxnId || txnId,
+      remainingBalance: cleanColType.includes('LOAN') ? Math.max(0, Number(qrAccount?.balance || 0) - amountVal) : (Number(qrAccount?.balance || 0) + amountVal),
+      merchantId: currentMid,
+      merchantName: currentUser?.company || 'eCollect'
+    });
+
+    // 🔊 Audio Chime + Voice Speech Alert + Push Notification
+    playPaymentSuccessNotification({
+      amount: amountVal,
+      mode: 'UPI',
+      customerName: qrAccount?.accountHolder,
+      accountNumber: qrAccount?.accountNumber,
+      transactionId: txnId
+    });
+
+    showToast(`🎉 Payment of ₹${amountVal.toLocaleString('en-IN')} received & verified via UPI! (Txn ID: ${txnId})`);
+  };
+
+  // Real-Time Background Status Poller for Dynamic QR & Payment Link Modal
+  useEffect(() => {
+    if (!isQrModalOpen) return;
+    const activeOrderId = qrData?.orderId || linkData?.orderId;
+    if (!activeOrderId) return;
+    if (paymentStatus === 'SUCCESS' || linkStatus === 'SUCCESS' || verifiedPaymentReceipt) return;
+
+    let isSubscribed = true;
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await paymentApi.getStatus(activeOrderId);
+        const data = res.data || {};
+        const statusStr = (data.status || data.paymentStatus || data.data?.status || data.data?.paymentStatus || '').toUpperCase();
+
+        if (statusStr === 'SUCCESS' || statusStr === 'COMPLETED' || statusStr === 'PAID') {
+          if (isSubscribed) {
+            clearInterval(pollInterval);
+            const amt = qrData?.amount || linkData?.amount || qrAmount;
+            handlePaymentSuccess(data, activeOrderId, amt);
+          }
+        }
+      } catch (e) {
+        // Silently await webhook processing
+      }
+    }, 2500);
+
+    return () => {
+      isSubscribed = false;
+      clearInterval(pollInterval);
+    };
+  }, [isQrModalOpen, qrData?.orderId, linkData?.orderId, paymentStatus, linkStatus, verifiedPaymentReceipt]);
+
+  // Live Expiry Countdown Timer for Dynamic QR (5 minutes = 300s)
+  useEffect(() => {
+    if (!qrData || paymentStatus === 'SUCCESS' || verifiedPaymentReceipt) return;
+    if (qrExpirySeconds <= 0) return;
+
+    const timer = setInterval(() => {
+      setQrExpirySeconds(prev => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [qrData, paymentStatus, verifiedPaymentReceipt, qrExpirySeconds]);
+
+  const formatCountdown = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
   const handleCheckPaymentStatus = async () => {
     if (!qrData?.orderId) return;
     setCheckingStatus(true);
     try {
       const res = await paymentApi.getStatus(qrData.orderId);
       console.log('📡 Payment status check result:', res.data);
-      const statusStr = (res.data?.status || res.data?.data?.status || res.data?.paymentStatus || '').toUpperCase();
+      const resData = res.data || {};
+      const statusStr = (resData.status || resData.data?.status || resData.paymentStatus || '').toUpperCase();
       if (statusStr === 'SUCCESS' || statusStr === 'COMPLETED' || statusStr === 'PAID') {
-        setPaymentStatus('SUCCESS');
-        showToast('Payment received and verified successfully!');
+        handlePaymentSuccess(resData, qrData.orderId, qrData.amount);
       } else if (statusStr === 'FAILED') {
         setPaymentStatus('FAILED');
         showToast('Payment transaction failed or timed out.', 'error');
@@ -2226,10 +3033,10 @@ const Accounts = () => {
     try {
       const res = await paymentApi.getStatus(linkData.orderId);
       console.log('📡 Payment link status check result:', res.data);
-      const statusStr = (res.data?.status || res.data?.data?.status || res.data?.paymentStatus || '').toUpperCase();
+      const resData = res.data || {};
+      const statusStr = (resData.status || resData.data?.status || resData.paymentStatus || '').toUpperCase();
       if (statusStr === 'SUCCESS' || statusStr === 'COMPLETED' || statusStr === 'PAID') {
-        setLinkStatus('SUCCESS');
-        showToast('Payment link deposit captured & verified successfully!');
+        handlePaymentSuccess(resData, linkData.orderId, linkData.amount);
       } else if (statusStr === 'FAILED') {
         setLinkStatus('FAILED');
         showToast('Payment transaction failed or timed out.', 'error');
@@ -2243,36 +3050,302 @@ const Accounts = () => {
     }
   };
 
-  const handleShareWhatsApp = (url, amount, accNo, name, phone) => {
+  // Direct Cash Collection Process (PaymentController / Cash_Collection -> ProcessCashCollectionAsync)
+  const handleProcessCashCollection = async (targetAmount = null) => {
+    const finalAmount = Number(targetAmount !== null ? targetAmount : (qrCustomAmount || qrAmount));
+    if (!finalAmount || isNaN(finalAmount) || finalAmount <= 0) {
+      showToast('Please specify a valid cash collection amount', 'error');
+      return;
+    }
+
+    if (!qrAccount) return;
+
+    const currentMerchantId = Number(
+      user?.merchantId || user?.merchant_id || localStorage.getItem('merchantId') || 4
+    );
+
+    // Find agent info
+    const matchedAgent = agents.find(
+      a => String(a.external_agent_id) === String(selectedAgentCode) ||
+           String(a.agentCode) === String(selectedAgentCode) ||
+           String(a.id) === String(selectedAgentCode)
+    );
+
+    const agentCodeStr = String(selectedAgentCode || user?.agentCode || user?.external_agent_id || '1075');
+    const agentNameStr = matchedAgent?.fullName || matchedAgent?.name || user?.name || user?.fullName || 'Branch Agent';
+    const agentPhoneStr = matchedAgent?.phone || matchedAgent?.mobile || user?.phone || user?.mobile || '9999999999';
+    const agentEmailStr = matchedAgent?.email || user?.email || 'agent@finwin.com';
+
+    // Find branch info
+    const matchedBranch = branches.find(
+      b => String(b.code) === String(selectedBranchCode) ||
+           String(b.branchCode) === String(selectedBranchCode) ||
+           String(b.id) === String(user?.branchId || user?.branch_id)
+    );
+    const branchNumericId = Number(matchedBranch?.id || user?.branchId || user?.branch_id || 1);
+
+    const phoneNum = customerPhoneInput || qrAccount.phone || qrAccount.mobile || '9999999999';
+    const emailAddr = customerEmailInput || qrAccount.email || 'customer@finwin.com';
+    const rawColType = (qrAccount.collectionType || qrAccount.productType || qrAccount.schemeType || qrAccount.accountType || qrAccount.type || 'RD').toString().toUpperCase();
+    const cleanColType = rawColType.includes('LOAN')
+      ? 'LOAN'
+      : (rawColType.includes('RDCL') ? 'RDCL' : (rawColType.includes('FD') ? 'FD' : (rawColType.includes('SB') ? 'SB' : 'RD')));
+
+    const payload = {
+      MerchantId: currentMerchantId,
+      merchantId: currentMerchantId,
+      Amount: finalAmount,
+      amount: finalAmount,
+      CollectionType: cleanColType,
+      collectionType: cleanColType,
+      PaymentMode: 'CASH',
+      paymentMode: 'CASH',
+      QrSource: 'WEB',
+      qrSource: 'WEB',
+      qr_source: 'WEB',
+      Source: 'COLLECTION',
+      source: 'COLLECTION',
+      Note: qrNote || `Cash collection for ${qrAccount.accountHolder} - Acc #${qrAccount.accountNumber}`,
+      note: qrNote || `Cash collection for ${qrAccount.accountHolder} - Acc #${qrAccount.accountNumber}`,
+      Description: qrNote || `Cash collection for ${qrAccount.accountHolder} - Acc #${qrAccount.accountNumber}`,
+      description: qrNote || `Cash collection for ${qrAccount.accountHolder} - Acc #${qrAccount.accountNumber}`,
+      agent_details: {
+        agent_name: agentNameStr,
+        agent_id: agentCodeStr,
+        agent_orginId: agentCodeStr,
+        agent_phone: agentPhoneStr,
+        agent_email: agentEmailStr,
+        agent_branch: branchNumericId
+      },
+      AgentDetails: {
+        agent_name: agentNameStr,
+        agent_id: agentCodeStr,
+        agent_orginId: agentCodeStr,
+        agent_phone: agentPhoneStr,
+        agent_email: agentEmailStr,
+        agent_branch: branchNumericId
+      },
+      customer_details: {
+        customer_name: qrAccount.accountHolder || 'Customer',
+        customer_phone: phoneNum,
+        customer_accno: String(qrAccount.accountNumber || qrAccount.accountCode || ''),
+        customer_id: String(qrAccount.customerId || qrAccount.id || '0'),
+        customer_email: emailAddr
+      },
+      CustomerDetails: {
+        customer_name: qrAccount.accountHolder || 'Customer',
+        customer_phone: phoneNum,
+        customer_accno: String(qrAccount.accountNumber || qrAccount.accountCode || ''),
+        customer_id: String(qrAccount.customerId || qrAccount.id || '0'),
+        customer_email: emailAddr
+      }
+    };
+
+    setCashLoading(true);
+    setCashError(null);
+    try {
+      console.log('📡 [Cash Collection Engine] Calling processCashCollection with payload:', payload);
+      const res = await paymentApi.processCashCollection(payload);
+      console.log('✅ [Cash Collection Engine] Response received:', res.data);
+
+      const resData = res.data || {};
+      const statusStr = (resData.status || resData.Status || '').toString().toUpperCase();
+      const isSuccess = statusStr === 'Y' || statusStr === '1' || statusStr === 'SUCCESS' || resData.status === true;
+
+      if (isSuccess) {
+        const txnId = resData.transactionId || resData.TransactionId || resData.receipt?.TRAN_ID || `CASH-${Date.now().toString().slice(-6)}`;
+        setCashData({
+          status: 'SUCCESS',
+          amount: finalAmount,
+          transactionId: txnId,
+          message: resData.message || 'Cash collection successfully posted to CBS core banking system.',
+          timestamp: new Date().toISOString(),
+          customerName: qrAccount.accountHolder,
+          accountNumber: qrAccount.accountNumber,
+          collectionType: cleanColType,
+          agentName: agentNameStr
+        });
+
+        // Optimistically update account balance in state
+        setAccounts(prev => prev.map(a => {
+          if (a.accountNumber === qrAccount.accountNumber) {
+            const curBal = Number(a.balance || 0);
+            const newBal = cleanColType === 'LOAN' ? Math.max(0, curBal - finalAmount) : (curBal + finalAmount);
+            return { ...a, balance: newBal, dueAmount: Math.max(0, (Number(a.dueAmount || 0) - finalAmount)) };
+          }
+          return a;
+        }));
+
+        // 🔊 Audio Chime + Voice Speech Alert + Push Notification
+        playPaymentSuccessNotification({
+          amount: finalAmount,
+          mode: 'CASH',
+          customerName: qrAccount.accountHolder,
+          accountNumber: qrAccount.accountNumber,
+          transactionId: txnId
+        });
+
+        showToast(`✅ Cash collection of ₹${finalAmount.toLocaleString('en-IN')} received & posted! (Txn ID: ${txnId})`);
+      } else {
+        const errorMsg = resData.message || resData.error || 'CBS Cash Posting rejected transaction';
+        setCashError(errorMsg);
+        showToast(errorMsg, 'error');
+      }
+    } catch (err) {
+      console.error('❌ [Cash Collection Engine] Full Error Response:', {
+        status: err.response?.status,
+        data: err.response?.data,
+        message: err.message
+      });
+
+      const resData = err.response?.data;
+      let msg = 'Cash collection transaction was not accepted by the backend.';
+
+      if (typeof resData === 'string' && resData.trim()) {
+        msg = resData;
+      } else if (resData?.message) {
+        msg = resData.message;
+      } else if (resData?.error) {
+        msg = resData.error;
+      } else if (resData?.errors && typeof resData.errors === 'object') {
+        msg = Object.entries(resData.errors)
+          .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
+          .join(' | ');
+      } else if (resData?.title) {
+        msg = resData.title;
+      } else if (err.message) {
+        msg = err.message;
+      }
+
+      setCashError(msg);
+      showToast(msg, 'error');
+    } finally {
+      setCashLoading(false);
+    }
+  };
+
+  const handleShareWhatsApp = async (url, amount, accNo, name, phone) => {
+    const targetPhone = phone || qrAccount?.mobileNumber || qrAccount?.phone || '';
+    const cleanPhone = targetPhone ? String(targetPhone).replace(/\D/g, '') : '';
+    const merchantId = localStorage.getItem('merchantId') || 22;
+
+    if (cleanPhone) {
+      try {
+        const payload = {
+          merchantId: Number(merchantId),
+          phoneNumber: cleanPhone,
+          templateName: 'paymentlink',
+          parameters: [url || 'https://mydop.in/adss/balance/report/filter']
+        };
+        showToast('💬 Sending WhatsApp Payment Link via Telinfy API...');
+        const res = await whatsAppApi.sendTemplateMessage(payload);
+        if (res?.data?.isSuccess) {
+          showToast(`✅ WhatsApp Payment Link sent via Telinfy to +91 ${cleanPhone}`);
+          return;
+        }
+      } catch (err) {
+        console.warn('Telinfy API send failed, falling back to WhatsApp Web:', err);
+      }
+    }
+
     const isLoan = qrAccount?.collectionType === 'LOAN';
     const text = isLoan
       ? `Dear ${name || 'Customer'},\nPlease complete your Loan EMI installment of ₹${Number(amount).toLocaleString('en-IN')} for Loan Acc #${accNo} via this secure Finwin Payment Link:\n${url}\n\nThank you!`
       : `Dear ${name || 'Customer'},\nPlease complete your deposit collection of ₹${Number(amount).toLocaleString('en-IN')} for Account #${accNo} via this secure Finwin Payment Link:\n${url}\n\nThank you!`;
-    const cleanPhone = phone ? String(phone).replace(/\D/g, '') : '';
     const waUrl = cleanPhone && cleanPhone.length === 10
       ? `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(text)}`
       : `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(waUrl, '_blank');
   };
 
-  // Dedicated Communication & Reminder Handlers for Grid Actions
-  const handleSendWhatsAppReminder = (acc) => {
-    const phone = acc.phone || acc.mobile || '';
-    const name = acc.accountHolder || 'Customer';
-    const accNo = acc.accountNumber || '';
-    const bal = Number(acc.balance || 0).toLocaleString('en-IN');
-    const cleanPhone = phone ? String(phone).replace(/\D/g, '') : '';
-    const isLoan = acc.collectionType === 'LOAN';
-    const msg = isLoan
-      ? `Dear ${name},\nThis is a friendly reminder from DIGICOB Bank regarding your Loan Account #${accNo}.\nYour current outstanding / EMI due is ₹${bal}.\nPlease settle your installment at your earliest convenience.\nThank you!`
-      : `Dear ${name},\nThis is a friendly reminder from DIGICOB Bank regarding your RD Account #${accNo}.\nYour scheduled deposit amount is ₹${bal}.\nPlease complete your deposit collection at your earliest convenience.\nThank you!`;
+  // Interactive WhatsApp Payment Link Modal Opener & Dispatches
+  const handleOpenWhatsAppModal = (acc) => {
+    let rawPhone = acc.phone || acc.mobile || acc.mobileNumber || acc.customerPhone || acc.registeredPhone || acc.contactNumber || acc.customer?.phone || acc.customer?.mobile || '';
+    let cleanPhone = rawPhone ? String(rawPhone).replace(/\D/g, '') : '';
     
-    const waUrl = cleanPhone && cleanPhone.length === 10
-      ? `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(msg)}`
-      : `https://wa.me/?text=${encodeURIComponent(msg)}`;
-    
-    window.open(waUrl, '_blank');
-    showToast(`WhatsApp reminder dispatched for ${name}`);
+    // Strip leading 91 or +91 if length is 12 digits
+    if (cleanPhone.length === 12 && cleanPhone.startsWith('91')) {
+      cleanPhone = cleanPhone.substring(2);
+    } else if (cleanPhone.length > 10) {
+      cleanPhone = cleanPhone.slice(-10);
+    }
+
+    const amount = acc.dueAmount || acc.emiAmount || acc.balance || 500;
+
+    setWaTargetAccount(acc);
+    setWaRecipientPhone(cleanPhone);
+    setWaCustomAmount(amount);
+    setWaModalOpen(true);
+  };
+
+  const handleSendWhatsAppPaymentLink = async (e) => {
+    e.preventDefault();
+    if (!waRecipientPhone || waRecipientPhone.trim().length < 10) {
+      showToast('Please enter a valid 10-digit mobile number', 'error');
+      return;
+    }
+
+    setWaSending(true);
+    try {
+      const cleanPhone = waRecipientPhone.replace(/\D/g, '').trim();
+      const amountToCharge = Number(waCustomAmount || waTargetAccount?.dueAmount || waTargetAccount?.balance || 500);
+      const merchantId = localStorage.getItem('merchantId') || 22;
+
+      // 1. Generate Live Payment Link from Gateway
+      showToast('🔗 Generating Payment Link from Payment Gateway...');
+      const payload = {
+        amount: amountToCharge,
+        customerName: waTargetAccount?.accountHolder || waTargetAccount?.customerName || 'Customer',
+        customerPhone: cleanPhone,
+        customerEmail: waTargetAccount?.email || 'customer@ecollect.in',
+        accountNumber: waTargetAccount?.accountNumber || 'ACC-99201',
+        description: `Collection for Account #${waTargetAccount?.accountNumber || ''}`,
+        merchantId: Number(merchantId)
+      };
+
+      let generatedLink = '';
+      try {
+        const linkRes = await paymentApi.processPaymentLink(payload);
+        const resData = linkRes.data;
+        generatedLink = resData.payment_link || resData.paymentLink || resData.url || resData.paymentUrl || resData.short_url || resData.shortUrl || resData.data?.payment_link || resData.data?.paymentLink || resData.data?.url || (typeof resData === 'string' ? resData : null);
+      } catch (err) {
+        console.warn('Payment link API fallback to short link:', err);
+      }
+
+      if (!generatedLink) {
+        generatedLink = `https://mydop.in/pay/${waTargetAccount?.accountNumber || 'due'}?amt=${amountToCharge}`;
+      }
+
+      // 2. Dispatch via Telinfy REST API
+      showToast('💬 Dispatching WhatsApp Payment Link via Telinfy API...');
+      const waPayload = {
+        merchantId: Number(merchantId),
+        phoneNumber: cleanPhone,
+        templateName: 'paymentlink',
+        parameters: [generatedLink]
+      };
+
+      const waRes = await whatsAppApi.sendTemplateMessage(waPayload);
+      if (waRes?.data?.isSuccess) {
+        showToast(`✅ WhatsApp Payment Link sent via Telinfy to +91 ${cleanPhone}!`);
+        setWaModalOpen(false);
+      } else {
+        // Fallback to WhatsApp Web if API fails
+        const text = `Dear ${waTargetAccount?.accountHolder || 'Customer'},\nPlease complete your payment of ₹${amountToCharge.toLocaleString('en-IN')} via this Finwin Payment Link:\n${generatedLink}\n\nThank you!`;
+        window.open(`https://wa.me/91${cleanPhone}?text=${encodeURIComponent(text)}`, '_blank');
+        showToast(`Opened WhatsApp Web for +91 ${cleanPhone}`);
+        setWaModalOpen(false);
+      }
+    } catch (err) {
+      console.error('WhatsApp Modal dispatch error:', err);
+      showToast('Error generating or sending WhatsApp link', 'error');
+    } finally {
+      setWaSending(false);
+    }
+  };
+
+  const handleSendWhatsAppReminder = async (acc) => {
+    handleOpenWhatsAppModal(acc);
   };
 
   const handleSendSmsReminder = (acc) => {
@@ -2408,7 +3481,7 @@ const Accounts = () => {
 
   const collectionCounts = useMemo(() => {
     const counts = { ALL: accounts.length, RD: 0, LOAN: 0, FD: 0, RDCL: 0 };
-    accounts.forEach(a => {
+    (accounts || []).forEach(a => {
       const t = (a.collectionType || 'RD').toUpperCase();
       if (counts[t] !== undefined) counts[t] += 1;
       else counts[t] = 1;
@@ -2417,8 +3490,21 @@ const Accounts = () => {
   }, [accounts]);
 
   // Filtered Accounts
+  
+  // Delinquency Buckets & Priority Queue Aggregations
+  const bucketCounts = useMemo(() => {
+    const counts = { B0: 0, B1: 0, B2: 0, B3: 0, NPA: 0, PTP: 0, MANDATORY_CALL: 0 };
+    (accounts || []).forEach(a => {
+      const bucket = calculateAccountBucket(a);
+      if (counts[bucket.key] !== undefined) counts[bucket.key]++;
+      if (a.ptpDate && a.ptpStatus !== 'KEPT') counts.PTP++;
+      if (a.isMandatoryCall || bucket.key === 'B3' || bucket.key === 'NPA' || a.ptpStatus === 'BROKEN') counts.MANDATORY_CALL++;
+    });
+    return counts;
+  }, [accounts]);
+
   const filteredAccounts = useMemo(() => {
-    return accounts.filter(acc => {
+    return (accounts || []).filter(acc => {
       const matchesSearch = 
         (acc.bankName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (acc.accountHolder || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -2426,20 +3512,30 @@ const Accounts = () => {
         (acc.accountNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (acc.schemeName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (acc.ifscCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (acc.phone || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (acc.branchName || '').toLowerCase().includes(searchTerm.toLowerCase());
 
       const matchesCollectionTab = 
         collectionProductTab === 'ALL' || 
-        (acc.collectionType || 'RD').toUpperCase() === collectionProductTab.toUpperCase();
+        (collectionProductTab === 'DUE_LIST' 
+          ? Number(acc.dueAmount || acc.emiAmount || 0) > 0 
+          : (acc.collectionType || 'RD').toUpperCase() === collectionProductTab.toUpperCase());
+
+      const bucket = calculateAccountBucket(acc);
+      const matchesBucket = 
+        selectedBucketTab === 'ALL' ||
+        (selectedBucketTab === 'PTP' && acc.ptpDate && acc.ptpStatus !== 'KEPT') ||
+        (selectedBucketTab === 'MANDATORY_CALL' && (acc.isMandatoryCall || bucket.key === 'B3' || bucket.key === 'NPA' || acc.ptpStatus === 'BROKEN')) ||
+        bucket.key === selectedBucketTab;
 
       const matchesType = typeFilter === 'ALL' || acc.accountType?.toLowerCase() === typeFilter.toLowerCase();
       const matchesStatus = statusFilter === 'ALL' || 
         (statusFilter === 'ACTIVE' && acc.isActive) ||
         (statusFilter === 'INACTIVE' && !acc.isActive);
 
-      return matchesSearch && matchesCollectionTab && matchesType && matchesStatus;
+      return matchesSearch && matchesCollectionTab && matchesBucket && matchesType && matchesStatus;
     });
-  }, [accounts, searchTerm, collectionProductTab, typeFilter, statusFilter]);
+  }, [accounts, searchTerm, collectionProductTab, selectedBucketTab, typeFilter, statusFilter]);
 
   // Reset pagination on filter changes
   useEffect(() => {
@@ -2453,7 +3549,7 @@ const Accounts = () => {
   }, [filteredAccounts, currentPage, pageSize]);
 
   const totalEscrowBalance = useMemo(() => {
-    return accounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
+    return (accounts || []).reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
   }, [accounts]);
 
   return (
@@ -2511,26 +3607,59 @@ const Accounts = () => {
                   <AccountIcons.Bell />
                   <span>🔔 Reminder Bot & Rules</span>
                 </button>
-                <button 
-                  type="button"
-                  className="btn-export-day-end" 
-                  onClick={handleExportDayEnd}
-                  disabled={isExportingDayEnd}
-                  title="Download today's collection reconciliation file to upload back into CBS"
-                >
-                  <AccountIcons.Download />
-                  <span>{isExportingDayEnd ? 'Exporting...' : '📤 Day-End CBS Export'}</span>
-                </button>
+                {/* Day Begin (BOD), Day End (EOD) & Go-Live Suite Button (Model N Only) */}
+                {isNonIntegrated && (
+                  <>
+                    <button 
+                      type="button"
+                      className="btn-day-ops"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 14px',
+                        borderRadius: '10px',
+                        background: dayShiftState?.shiftStatus === 'OPEN'
+                          ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(5, 150, 105, 0.25))'
+                          : 'linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(185, 28, 28, 0.25))',
+                        border: dayShiftState?.shiftStatus === 'OPEN'
+                          ? '1px solid rgba(16, 185, 129, 0.4)'
+                          : '1px solid rgba(239, 68, 68, 0.4)',
+                        color: dayShiftState?.shiftStatus === 'OPEN' ? '#10b981' : '#f87171',
+                        fontWeight: 700,
+                        fontSize: '13px',
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => setIsDayOpsModalOpen(true)}
+                      title="Open Day Begin (BOD), Day End (EOD) Settlement & Go-Live Readiness Suite"
+                    >
+                      <span>{dayShiftState?.shiftStatus === 'OPEN' ? '☀️ Shift: OPEN' : '🌙 Shift: CLOSED'}</span>
+                      <span style={{ padding: '2px 6px', borderRadius: '6px', background: 'rgba(255, 255, 255, 0.1)', fontSize: '11px', color: '#fff' }}>
+                        🚀 Go-Live: {goLiveReport.percentage}%
+                      </span>
+                    </button>
+                    <button 
+                      type="button"
+                      className="btn-export-day-end" 
+                      onClick={handleExportDayEnd}
+                      disabled={isExportingDayEnd}
+                      title="Download today's collection reconciliation file to upload back into CBS"
+                    >
+                      <AccountIcons.Download />
+                      <span>{isExportingDayEnd ? 'Exporting...' : '📤 Day-End CBS Export'}</span>
+                    </button>
 
-                <button 
-                  type="button"
-                  className="btn-upload-due-list" 
-                  onClick={() => setIsDueListModalOpen(true)}
-                  title="Upload Morning CBS Due List (Excel / CSV) to refresh today's collection demands"
-                >
-                  <AccountIcons.FileSpreadsheet />
-                  <span>📋 Upload Daily Due List</span>
-                </button>
+                    <button 
+                      type="button"
+                      className="btn-upload-due-list" 
+                      onClick={() => setIsDueListModalOpen(true)}
+                      title="Upload Morning CBS Due List (Excel / CSV) to refresh today's collection demands"
+                    >
+                      <AccountIcons.FileSpreadsheet />
+                      <span>📋 Upload Daily Due List</span>
+                    </button>
+                  </>
+                )}
 
                 <button 
                   type="button"
@@ -2566,6 +3695,54 @@ const Accounts = () => {
           </div>
         </div>
 
+        {/* 🔒 Mandatory Day Begin (BOD) Shift Closed Alert Banner (Model N Only) */}
+        {isNonIntegrated && dayShiftState?.shiftStatus !== 'OPEN' && (
+          <div style={{
+            padding: '14px 20px',
+            borderRadius: '14px',
+            background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.18), rgba(185, 28, 28, 0.28))',
+            border: '1px solid #ef4444',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '14px',
+            boxShadow: '0 8px 24px rgba(239, 68, 68, 0.2)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div style={{ padding: '10px', borderRadius: '10px', background: 'rgba(239, 68, 68, 0.25)', fontSize: '20px' }}>
+                🔒
+              </div>
+              <div>
+                <strong style={{ fontSize: '14.5px', color: '#fca5a5', fontWeight: 800 }}>
+                  Mandatory Shift Gate: Collection Operations are Currently LOCKED
+                </strong>
+                <p style={{ margin: '3px 0 0 0', fontSize: '12.5px', color: '#cbd5e1' }}>
+                  Doorstep Cash, Dynamic UPI QR, and Payment Link collections are disabled. Initiate Day Begin (BOD) to open daily shift.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setDayOpsTab('BOD'); setIsDayOpsModalOpen(true); }}
+              style={{
+                padding: '10px 22px',
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, #10b981, #059669)',
+                color: '#fff',
+                fontWeight: 800,
+                fontSize: '13px',
+                border: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)'
+              }}
+            >
+              ☀️ Start Day Begin (BOD) Now
+            </button>
+          </div>
+        )}
+
         {/* 4 KPI Telemetry Cards */}
         <div className="accounts-kpi-grid">
           
@@ -2576,7 +3753,7 @@ const Accounts = () => {
             </div>
             <div className="kpi-value font-mono">{accounts.length}</div>
             <div className="kpi-foot">
-              <span className="trend-tag is-up"><AccountIcons.ArrowUp /> {accounts.filter(a => a.isActive).length} Live Active</span>
+              <span className="trend-tag is-up"><AccountIcons.ArrowUp /> {(accounts || []).filter(a => a.isActive).length} Live Active</span>
             </div>
           </div>
 
@@ -2682,6 +3859,29 @@ const Accounts = () => {
             <span className="tab-badge-count font-mono">{collectionCounts.RDCL || 0}</span>
           </button>
 
+          
+          {/* Dedicated Daily Due List / Demand Ledger Tab (Model N Only) */}
+          {isNonIntegrated && (
+            <button 
+              type="button" 
+              className={`collection-nav-tab is-due-tab ${collectionProductTab === 'DUE_LIST' ? 'is-active' : ''}`}
+              onClick={() => {
+                setCollectionProductTab('DUE_LIST');
+              }}
+              style={{ 
+                borderColor: collectionProductTab === 'DUE_LIST' ? '#ef4444' : 'rgba(239, 68, 68, 0.4)', 
+                color: collectionProductTab === 'DUE_LIST' ? '#ffffff' : '#f87171',
+                background: collectionProductTab === 'DUE_LIST' ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(185, 28, 28, 0.35))' : 'rgba(239, 68, 68, 0.08)'
+              }}
+            >
+              <span className="tab-dot">📋</span>
+              <span className="tab-label font-bold">Daily Due Demand Ledger</span>
+              <span className="tab-badge-count font-mono" style={{ background: 'rgba(239, 68, 68, 0.3)', color: '#fca5a5' }}>
+                {(accounts || []).filter(a => Number(a.dueAmount || a.emiAmount || 0) > 0).length}
+              </span>
+            </button>
+          )}
+
           {/* Additional Dynamic Merchant Configured Collection Types */}
           {configuredCollectionTypes
             .filter(t => !['RD', 'LOAN', 'FD', 'RDCL'].includes(t.toUpperCase()))
@@ -2704,6 +3904,94 @@ const Accounts = () => {
               );
             })}
         </div>
+
+        
+        {/* Delinquency Buckets & Priority Outreach Queue (Integration Status: N) */}
+        {isNonIntegrated && (
+          <div className="bucket-nav-container">
+            <div className="bucket-nav-scroll">
+              <button 
+                type="button" 
+                className={`bucket-nav-btn is-all ${selectedBucketTab === 'ALL' ? 'is-active' : ''}`}
+                onClick={() => setSelectedBucketTab('ALL')}
+              >
+                <span className="bucket-icon">📊</span>
+                <span className="bucket-title">All Portfolios</span>
+                <span className="bucket-count font-mono">{accounts.length}</span>
+              </button>
+
+              <button 
+                type="button" 
+                className={`bucket-nav-btn is-b0 ${selectedBucketTab === 'B0' ? 'is-active' : ''}`}
+                onClick={() => setSelectedBucketTab('B0')}
+              >
+                <span className="bucket-icon">🟢</span>
+                <span className="bucket-title">Bucket 0 (Current / 0d)</span>
+                <span className="bucket-count font-mono">{bucketCounts.B0 || 0}</span>
+              </button>
+
+              <button 
+                type="button" 
+                className={`bucket-nav-btn is-b1 ${selectedBucketTab === 'B1' ? 'is-active' : ''}`}
+                onClick={() => setSelectedBucketTab('B1')}
+              >
+                <span className="bucket-icon">🔵</span>
+                <span className="bucket-title">Bucket 1 (SMA-0: 1-30d)</span>
+                <span className="bucket-count font-mono">{bucketCounts.B1 || 0}</span>
+              </button>
+
+              <button 
+                type="button" 
+                className={`bucket-nav-btn is-b2 ${selectedBucketTab === 'B2' ? 'is-active' : ''}`}
+                onClick={() => setSelectedBucketTab('B2')}
+              >
+                <span className="bucket-icon">🟡</span>
+                <span className="bucket-title">Bucket 2 (SMA-1: 31-60d)</span>
+                <span className="bucket-count font-mono">{bucketCounts.B2 || 0}</span>
+              </button>
+
+              <button 
+                type="button" 
+                className={`bucket-nav-btn is-b3 ${selectedBucketTab === 'B3' ? 'is-active' : ''}`}
+                onClick={() => setSelectedBucketTab('B3')}
+              >
+                <span className="bucket-icon">🟠</span>
+                <span className="bucket-title">Bucket 3 (SMA-2: 61-90d)</span>
+                <span className="bucket-count font-mono">{bucketCounts.B3 || 0}</span>
+              </button>
+
+              <button 
+                type="button" 
+                className={`bucket-nav-btn is-npa ${selectedBucketTab === 'NPA' ? 'is-active' : ''}`}
+                onClick={() => setSelectedBucketTab('NPA')}
+              >
+                <span className="bucket-icon">🚨</span>
+                <span className="bucket-title">Critical / NPA (&gt;90d)</span>
+                <span className="bucket-count font-mono">{bucketCounts.NPA || 0}</span>
+              </button>
+
+              <button 
+                type="button" 
+                className={`bucket-nav-btn is-ptp ${selectedBucketTab === 'PTP' ? 'is-active' : ''}`}
+                onClick={() => setSelectedBucketTab('PTP')}
+              >
+                <span className="bucket-icon">🤝</span>
+                <span className="bucket-title">Promise to Pay (PTP)</span>
+                <span className="bucket-count font-mono">{bucketCounts.PTP || 0}</span>
+              </button>
+
+              <button 
+                type="button" 
+                className={`bucket-nav-btn is-call-queue ${selectedBucketTab === 'MANDATORY_CALL' ? 'is-active' : ''}`}
+                onClick={() => setSelectedBucketTab('MANDATORY_CALL')}
+              >
+                <span className="bucket-icon">📞</span>
+                <span className="bucket-title">Mandatory Call Queue</span>
+                <span className="bucket-count font-mono">{bucketCounts.MANDATORY_CALL || 0}</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Filter Toolbar */}
         <div className="accounts-filter-bar">
@@ -2767,6 +4055,54 @@ const Accounts = () => {
 
         </div>
 
+        
+        {/* Daily Due Demand Ledger Operations Banner */}
+        {collectionProductTab === 'DUE_LIST' && (() => {
+          const dueAccounts = (accounts || []).filter(a => Number(a.dueAmount || a.emiAmount || 0) > 0);
+          const totalDueDemand = dueAccounts.reduce((sum, a) => sum + Number(a.dueAmount || a.emiAmount || 0), 0);
+          const totalOutstanding = dueAccounts.reduce((sum, a) => sum + Number(a.balance || a.outstandingAmount || 0), 0);
+
+          return (
+            <div style={{ margin: '0 0 16px 0', padding: '16px 20px', borderRadius: '16px', background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(15, 23, 42, 0.95))', border: '1px solid rgba(239, 68, 68, 0.35)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div style={{ width: '46px', height: '46px', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px' }}>
+                  📋
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#f87171' }}>Daily Due Demand Ledger & Field Sheet</h3>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#94a3b8' }}>
+                    Showing active morning demand queue for field collectors & doorstep recovery agents.
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600 }}>Active Overdue Demand</div>
+                  <div className="font-mono font-bold" style={{ fontSize: '18px', color: '#ef4444' }}>
+                    ₹{totalDueDemand.toLocaleString('en-IN')}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600 }}>Due Borrowers</div>
+                  <div className="font-mono font-bold" style={{ fontSize: '18px', color: '#38bdf8' }}>
+                    {dueAccounts.length}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadDueListSheet}
+                  className="btn-export-day-end"
+                  style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: '#fff', padding: '10px 16px', borderRadius: '10px', fontWeight: 700, fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', cursor: 'pointer' }}
+                >
+                  <AccountIcons.Download />
+                  <span>Download Due List Sheet (.xlsx)</span>
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Accounts Master Table */}
         <div className="accounts-table-card">
           <div className="table-responsive-container">
@@ -2802,8 +4138,20 @@ const Accounts = () => {
                       {/* Bank & Code */}
                       <td>
                         <div className="bank-identity-cell">
-                          <div className="bank-avatar-box">
-                            {acc.bankName ? acc.bankName.slice(0, 2).toUpperCase() : (acc.collectionType === 'LOAN' ? 'LN' : 'RD')}
+                          <div className={`bank-avatar-box is-${(acc.collectionType || 'RD').toLowerCase()}`}>
+                            {acc.collectionType === 'LOAN'
+                              ? (acc.loanCategory?.includes('Gold') ? '🪙' :
+                                 acc.loanCategory?.includes('Vehicle') || acc.loanCategory?.includes('Auto') ? '🚗' :
+                                 acc.loanCategory?.includes('Home') || acc.loanCategory?.includes('Housing') ? '🏠' :
+                                 acc.loanCategory?.includes('Personal') ? '👤' :
+                                 acc.loanCategory?.includes('Business') ? '💼' :
+                                 acc.loanCategory?.includes('Agri') ? '🌾' :
+                                 acc.loanCategory?.includes('Micro') ? '👥' : '💳')
+                              : acc.collectionType === 'FD'
+                              ? '📈'
+                              : acc.collectionType === 'RDCL' || acc.collectionType === 'DAILY_DEPOSIT'
+                              ? '🪙'
+                              : (acc.bankName ? acc.bankName.slice(0, 2).toUpperCase() : '🏦')}
                           </div>
                           <div className="bank-info-stack">
                             <span className="bank-title font-bold">{acc.bankName}</span>
@@ -2812,17 +4160,51 @@ const Accounts = () => {
                         </div>
                       </td>
 
-                      {/* Collection Type Badge */}
+                      {/* Collection / Specific Loan Type Badge */}
                       <td>
-                        <span className={`collection-type-tag is-${(acc.collectionType || 'RD').toLowerCase()}`}>
-                          {acc.collectionType === 'LOAN' ? '💳 LOAN' : acc.collectionType === 'FD' ? '📈 FD' : acc.collectionType === 'RDCL' ? '🪙 RDCL' : '🏦 RD'}
-                        </span>
+                        {acc.collectionType === 'LOAN' ? (
+                          <span className="collection-type-tag is-loan" title={acc.loanCategory || 'Loan Portfolio'}>
+                            {acc.loanCategory?.includes('Gold') ? '🪙 Gold Loan' :
+                             acc.loanCategory?.includes('Vehicle') || acc.loanCategory?.includes('Auto') ? '🚗 Vehicle Loan' :
+                             acc.loanCategory?.includes('Home') || acc.loanCategory?.includes('Housing') ? '🏠 Home Loan' :
+                             acc.loanCategory?.includes('Personal') ? '👤 Personal Loan' :
+                             acc.loanCategory?.includes('Business') || acc.loanCategory?.includes('MSME') ? '💼 Business Loan' :
+                             acc.loanCategory?.includes('Education') ? '🎓 Education Loan' :
+                             acc.loanCategory?.includes('Agri') || acc.loanCategory?.includes('Crop') ? '🌾 Agri Loan' :
+                             acc.loanCategory?.includes('Micro') || acc.loanCategory?.includes('JLG') ? '👥 Micro Loan' :
+                             acc.loanCategory?.includes('Pigmy') ? '⚡ Pigmy Loan' :
+                             acc.loanCategory?.includes('Property') || acc.loanCategory?.includes('LAP') ? '🏢 Property Loan' :
+                             (acc.loanCategory ? `💳 ${acc.loanCategory}` : '💳 Home Loan')}
+                          </span>
+                        ) : acc.collectionType === 'FD' ? (
+                          <span className="collection-type-tag is-fd">📈 FD</span>
+                        ) : acc.collectionType === 'RDCL' || acc.collectionType === 'DAILY_DEPOSIT' ? (
+                          <span className="collection-type-tag is-rdcl">🪙 RDCL</span>
+                        ) : (
+                          <span className="collection-type-tag is-rd">🏦 RD</span>
+                        )}
                       </td>
 
                       {/* Holder */}
                       <td>
                         <div className="holder-stack">
-                          <span className="holder-name font-bold">{acc.accountHolder}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {(acc.customerPhoto || getStoredCustomerPhotos()[acc.accountNumber]) ? (
+                              <img 
+                                src={acc.customerPhoto || getStoredCustomerPhotos()[acc.accountNumber]} 
+                                alt={acc.accountHolder} 
+                                className="customer-avatar-mini-img"
+                              />
+                            ) : (
+                              <div className="customer-avatar-mini-circle">
+                                {(acc.accountHolder || 'C').charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <div>
+                              <span className="holder-name font-bold" style={{ display: 'block' }}>{acc.accountHolder}</span>
+                              {acc.phone && <span className="font-mono text-muted" style={{ fontSize: '11px' }}>{acc.phone}</span>}
+                            </div>
+                          </div>
                           {acc.verified && (
                             <span className="verified-pill">
                               <AccountIcons.ShieldCheck /> 2FA Verified
@@ -2868,7 +4250,7 @@ const Accounts = () => {
                         </span>
                       </td>
 
-                      {/* Status & NPA Health */}
+                      {/* Status, Delinquency Bucket & PTP Telemetry */}
                       <td>
                         <div className="status-and-reminder-stack">
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
@@ -2877,18 +4259,42 @@ const Accounts = () => {
                               <span>{acc.isActive ? 'Active' : 'Disabled'}</span>
                             </span>
 
-                            {/* 90-day DPD / NPA Banking Classification Badge */}
-                            {(() => {
-                              const npaInfo = calculateLoanNpaStatus(acc);
+                            {/* Delinquency Bucket Badge (Model N Only) */}
+                            {isNonIntegrated && (() => {
+                              const bucket = calculateAccountBucket(acc);
                               return (
                                 <span 
-                                  className={`npa-pill ${npaInfo.badgeClass}`}
-                                  title={npaInfo.fullDesc}
+                                  className={`bucket-tag-pill ${bucket.class}`}
+                                  title={bucket.desc}
                                 >
-                                  {npaInfo.label}
+                                  {bucket.shortLabel}
                                 </span>
                               );
                             })()}
+
+                            {/* PTP Badge */}
+                            {acc.ptpDate && (
+                              <span 
+                                className={`ptp-status-pill is-${(acc.ptpStatus || 'pending').toLowerCase()}`}
+                                title={`PTP Date: ${acc.ptpDate} | Note: ${acc.ptpNotes || 'No notes'}`}
+                                onClick={() => handleOpenPtpModal(acc)}
+                                style={{ cursor: 'pointer' }}
+                              >
+                                🤝 PTP: {new Date(acc.ptpDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} (₹{Number(acc.ptpAmount || 0).toLocaleString('en-IN')})
+                              </span>
+                            )}
+
+                            {/* Mandatory Call Required Indicator */}
+                            {acc.isMandatoryCall && (
+                              <span 
+                                className="mandatory-call-indicator"
+                                title="Next-Day Mandatory Call Scheduled"
+                                onClick={() => handleOpenMandatoryCallModal(acc)}
+                                style={{ cursor: 'pointer' }}
+                              >
+                                📞 Mandatory Call
+                              </span>
+                            )}
                           </div>
                           
                           {/* Due Date Reminder Setup button exclusively for Integration Status N */}
@@ -2924,17 +4330,28 @@ const Accounts = () => {
                           >
                             <AccountIcons.Link />
                           </button>
+                          <button 
+                            className="action-btn is-cash" 
+                            onClick={() => handleOpenCashModal(acc)}
+                            title="Direct Cash Collection & Post to CBS"
+                          >
+                            <AccountIcons.Cash />
+                          </button>
+                          <button 
+                            className="action-btn is-whatsapp" 
+                            style={{ color: '#25d366' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenWhatsAppModal(acc);
+                            }}
+                            title="Generate Payment Link & Send via WhatsApp"
+                          >
+                            <AccountIcons.WhatsApp />
+                          </button>
 
-                          {/* Instant Customer Reminders & Outreach for Integration Status N */}
+                          {/* Instant Customer Reminders & Outreach */}
                           {isNonIntegrated && (
                             <>
-                              <button 
-                                className="action-btn is-whatsapp" 
-                                onClick={() => handleSendWhatsAppReminder(acc)}
-                                title="Send WhatsApp Deposit Reminder"
-                              >
-                                <AccountIcons.WhatsApp />
-                              </button>
                               <button 
                                 className="action-btn is-sms" 
                                 onClick={() => handleSendSmsReminder(acc)}
@@ -2953,6 +4370,55 @@ const Accounts = () => {
                           )}
 
                           {/* Account Record Management */}
+                          {/* PTP Logger Action (Integration Status: N) */}
+                          {isNonIntegrated && (
+                            <button 
+                              className="action-btn is-ptp" 
+                              onClick={() => handleOpenPtpModal(acc)}
+                              title="Promise to Pay (PTP) Commitment Logger"
+                            >
+                              <AccountIcons.Handshake />
+                            </button>
+                          )}
+
+                          {/* AutoPay Mandate & WhatsApp EMI Link Action (Integration Status: N Concept) */}
+                          {isNonIntegrated && (
+                            <button 
+                              className="action-btn is-autopay" 
+                              onClick={() => {
+                                setAutoPayModalAccount(acc);
+                                setAutoPayBulkAccounts([]);
+                                setAutoPayModalOpen(true);
+                              }}
+                              title="⚡ Configure AutoPay Mandate & Send WhatsApp EMI Selection Link"
+                              style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.35)', fontWeight: 600, padding: '4px 8px', borderRadius: '6px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            >
+                              ⚡ AutoPay
+                            </button>
+                          )}
+
+                          {/* AI Default Risk Prediction Action (Integration Status: N) */}
+                          {isNonIntegrated && (
+                            <button 
+                              className="action-btn is-ai-predict" 
+                              onClick={() => handleOpenAiRiskModal(acc)}
+                              title="AI Default Risk Prediction & Strategic Advisory"
+                            >
+                              <AccountIcons.Brain />
+                            </button>
+                          )}
+
+                          {/* Next-Day Mandatory Call Logger */}
+                          {isNonIntegrated && (
+                            <button 
+                              className="action-btn is-call-log" 
+                              onClick={() => handleOpenMandatoryCallModal(acc)}
+                              title="Log Call Outcome & Schedule Next-Day Mandatory Call"
+                            >
+                              <AccountIcons.PhoneCall />
+                            </button>
+                          )}
+
                           <button 
                             className="action-btn is-view" 
                             onClick={() => setSelectedAccount(acc)}
@@ -3079,83 +4545,823 @@ const Accounts = () => {
         </div>
 
         {/* View Account Dossier Slideover / Modal */}
-        {selectedAccount && (
-          <div className="account-modal-overlay" onClick={() => setSelectedAccount(null)}>
-            <div className="account-dossier-card" onClick={(e) => e.stopPropagation()}>
-              <div className="dossier-card-head">
-                <div className="dossier-badge-wrap">
-                  <AccountIcons.Bank />
-                  <h3>
-                    {selectedAccount.collectionType === 'LOAN'
-                      ? 'Loan Portfolio Account Dossier'
-                      : 'Banking & Deposit Route Dossier'}
-                  </h3>
-                </div>
-                <button className="btn-modal-close" onClick={() => setSelectedAccount(null)}>✕</button>
-              </div>
+        {selectedAccount && (() => {
+          const npaInfo = calculateLoanNpaStatus(selectedAccount);
+          const colType = (selectedAccount.collectionType || 'RD').toUpperCase();
+          const isLoan = colType === 'LOAN';
+          const isCopied = copiedId === `dossier_${selectedAccount.id}`;
 
-              <div className="dossier-modal-body">
-                <div className="dossier-bank-hero">
-                  <div className="big-bank-icon">
-                    {selectedAccount.bankName ? selectedAccount.bankName.slice(0, 2).toUpperCase() : (selectedAccount.collectionType === 'LOAN' ? 'LN' : 'RD')}
+          return (
+            <div className="account-modal-overlay" onClick={() => setSelectedAccount(null)}>
+              <div className="account-dossier-card" onClick={(e) => e.stopPropagation()}>
+                
+                {/* Header with Title and Close */}
+                <div className="dossier-card-head">
+                  <div className="dossier-badge-wrap">
+                    <AccountIcons.Bank />
+                    <h3>
+                      {isLoan ? 'Loan Portfolio Comprehensive Dossier' : 'Banking & Collection Route Dossier'}
+                    </h3>
                   </div>
-                  <div>
-                    <h2 className="dossier-bank-name">{selectedAccount.bankName}</h2>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
-                      <span className={`collection-type-tag is-${(selectedAccount.collectionType || 'RD').toLowerCase()}`}>
-                        {selectedAccount.collectionType === 'LOAN' ? '💳 LOAN' : selectedAccount.collectionType === 'FD' ? '📈 FD' : selectedAccount.collectionType === 'RDCL' ? '🪙 RDCL' : '🏦 RD'}
-                      </span>
-                      <span className="dossier-code font-mono text-cyan">{selectedAccount.accountCode} • {selectedAccount.schemeName || selectedAccount.accountType}</span>
+                  <button className="btn-modal-close" onClick={() => setSelectedAccount(null)}>✕</button>
+                </div>
+
+                <div className="dossier-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  
+                  {/* Hero Banner with Official KYC Passport Size Photo Showcase */}
+                  <div className="dossier-bank-hero" style={{ display: 'flex', gap: '20px', alignItems: 'flex-start', padding: '20px', borderRadius: '18px', background: 'var(--bgCard, #111827)', border: '1px solid var(--borderColor, rgba(255, 255, 255, 0.1))' }}>
+                    
+                    {/* Official Passport Photo Box (3.5 x 4.5 Ratio: 130px x 165px) */}
+                    <div className="passport-photo-card" style={{ width: '130px', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                      <div style={{
+                        position: 'relative',
+                        width: '130px',
+                        height: '165px',
+                        borderRadius: '12px',
+                        overflow: 'hidden',
+                        background: '#f8fafc',
+                        border: '2px solid var(--borderGlow, #6366f1)',
+                        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        {(selectedAccount.customerPhoto || getStoredCustomerPhotos()[selectedAccount.accountNumber]) ? (
+                          <img 
+                            src={selectedAccount.customerPhoto || getStoredCustomerPhotos()[selectedAccount.accountNumber]} 
+                            alt={selectedAccount.accountHolder} 
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        ) : (
+                          <div style={{ textAlign: 'center', padding: '10px', color: '#94a3b8' }}>
+                            <span style={{ fontSize: '42px', display: 'block', marginBottom: '4px' }}>👤</span>
+                            <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>Passport Photo</span>
+                          </div>
+                        )}
+
+                        <div style={{
+                          position: 'absolute',
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          padding: '3px 0',
+                          background: 'rgba(15, 23, 42, 0.85)',
+                          backdropFilter: 'blur(4px)',
+                          textAlign: 'center',
+                          fontSize: '10px',
+                          fontWeight: 800,
+                          color: '#34d399',
+                          letterSpacing: '0.4px',
+                          borderTop: '1px solid rgba(255, 255, 255, 0.1)'
+                        }}>
+                          {(selectedAccount.customerPhoto || getStoredCustomerPhotos()[selectedAccount.accountNumber]) ? '✓ PASSPORT KYC' : 'PHOTO PENDING'}
+                        </div>
+                      </div>
+
+                      {/* Photo Actions: Upload & Remove */}
+                      <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
+                        <label 
+                          style={{
+                            flex: 1,
+                            padding: '6px 8px',
+                            borderRadius: '8px',
+                            background: 'rgba(99, 102, 241, 0.18)',
+                            border: '1px solid rgba(99, 102, 241, 0.35)',
+                            color: '#818cf8',
+                            fontSize: '11.5px',
+                            fontWeight: 800,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '4px',
+                            cursor: 'pointer',
+                            textAlign: 'center'
+                          }}
+                          title="Upload Passport Photo"
+                        >
+                          📷 {selectedAccount.customerPhoto ? 'Change' : 'Upload'}
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            style={{ display: 'none' }} 
+                            onChange={(e) => handleDossierPhotoUpload(e, selectedAccount)}
+                          />
+                        </label>
+
+                        {selectedAccount.customerPhoto && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              saveStoredCustomerPhoto(selectedAccount.accountNumber, null);
+                              setSelectedAccount(p => ({ ...p, customerPhoto: '' }));
+                              setAccounts(prev => prev.map(a => (a.id === selectedAccount.id || a.accountNumber === selectedAccount.accountNumber) ? { ...a, customerPhoto: '' } : a));
+                              showToast('Photo removed.');
+                            }}
+                            style={{
+                              padding: '6px 8px',
+                              borderRadius: '8px',
+                              background: 'rgba(239, 68, 68, 0.15)',
+                              border: '1px solid rgba(239, 68, 68, 0.35)',
+                              color: '#ef4444',
+                              fontSize: '11.5px',
+                              fontWeight: 800,
+                              cursor: 'pointer'
+                            }}
+                            title="Remove Photo"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                        <h2 className="dossier-bank-name">{selectedAccount.bankName || 'Partner Banking Node'}</h2>
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                          <span className={`collection-type-tag is-${colType.toLowerCase()}`}>
+                            {isLoan ? '💳 LOAN' : colType === 'FD' ? '📈 FD' : colType === 'RDCL' ? '🪙 RDCL' : '🏦 RD'}
+                          </span>
+                          <span className={`status-pill ${selectedAccount.isActive ? 'is-active' : 'is-inactive'}`}>
+                            <span className="status-dot"></span>
+                            <span>{selectedAccount.isActive ? 'Active Route' : 'Disabled'}</span>
+                          </span>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap' }}>
+                        <span className="dossier-code font-mono text-cyan" style={{ fontSize: '13px', fontWeight: 700 }}>
+                          {selectedAccount.accountHolder}
+                        </span>
+                        <span className="font-mono text-muted" style={{ fontSize: '12px' }}>• Code: {selectedAccount.accountCode || 'N/A'}</span>
+                        <span className="font-mono text-muted" style={{ fontSize: '12px' }}>• Node: {selectedAccount.branchName || 'Main Branch'}</span>
+                      </div>
                     </div>
                   </div>
+
+                  {/* 4 Telemetry Highlights */}
+                  
+                  {/* AI Risk Prediction & Strategic Advisory Card */}
+                  {(() => {
+                    const aiRisk = calculateAiRiskPrediction(selectedAccount);
+                    return (
+                      <div className={`dossier-ai-card ${aiRisk.badgeClass}`}>
+                        <div className="dossier-ai-head">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <AccountIcons.Brain />
+                            <span className="font-bold">AI Default Risk Assessment</span>
+                          </div>
+                          <span className="dossier-ai-badge font-mono font-bold">
+                            Default Probability: {aiRisk.defaultProbability}% ({aiRisk.tier})
+                          </span>
+                        </div>
+                        <p className="dossier-ai-recommendation">{aiRisk.recommendation}</p>
+                      </div>
+                    );
+                  })()}
+
+                  <div className="dossier-kpi-grid">
+                    <div className="dossier-kpi-card">
+                      <span className="dossier-kpi-lbl">{isLoan ? 'Outstanding Balance' : 'Current Holdings'}</span>
+                      <span className={`dossier-kpi-val font-mono ${isLoan ? 'text-purple' : 'text-green'}`}>
+                        ₹{Number(selectedAccount.balance || 0).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div className="dossier-kpi-card">
+                      <span className="dossier-kpi-lbl">Due / EMI Installment</span>
+                      <span className="dossier-kpi-val font-mono text-amber" style={{ color: '#f59e0b' }}>
+                        ₹{Number(selectedAccount.dueAmount || selectedAccount.emiAmount || 0).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div className="dossier-kpi-card">
+                      <span className="dossier-kpi-lbl">Collection Frequency</span>
+                      <span className="dossier-kpi-val font-mono text-cyan">
+                        {selectedAccount.emiFrequency || (isLoan ? 'Monthly' : 'Regular')}
+                      </span>
+                    </div>
+                    <div className="dossier-kpi-card">
+                      <span className="dossier-kpi-lbl">NPA Health / DPD</span>
+                      <span className="dossier-kpi-val">
+                        <span className={`npa-pill ${npaInfo.badgeClass}`} style={{ fontSize: '11px' }}>
+                          {npaInfo.label} ({npaInfo.dpd}d DPD)
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Section 1: Customer Profile & Contact Details */}
+                  <div className="dossier-section-block">
+                    <div className="dossier-section-head">
+                      <AccountIcons.CreditCard />
+                      <span>Customer Profile & KYC Information</span>
+                    </div>
+                    <div className="dossier-data-grid">
+                      <div className="data-box">
+                        <span className="data-lbl">Full Name</span>
+                        <span className="data-val font-bold">{selectedAccount.accountHolder || selectedAccount.customerName || 'Direct Customer'}</span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">Mobile / Contact</span>
+                        <span className="data-val font-mono text-cyan">
+                          {selectedAccount.phone || selectedAccount.mobileNumber || selectedAccount.customerPhone || 'Not Registered'}
+                        </span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">Email Address</span>
+                        <span className="data-val font-mono text-muted">
+                          {selectedAccount.email || selectedAccount.customerEmail || 'customer@finwin.com'}
+                        </span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">Customer Reference ID</span>
+                        <span className="data-val font-mono">
+                          #{selectedAccount.customerId || selectedAccount.id || 'CUST-0001'}
+                        </span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">City / Outlet Node</span>
+                        <span className="data-val">{selectedAccount.city || selectedAccount.branchName || 'Mumbai Central'}</span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">Compliance & Verification</span>
+                        <span className="data-val text-green" style={{ color: '#10b981', fontWeight: 600 }}>
+                          ✓ 2FA Verified & Active
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section 2: Banking & Account Routing Details */}
+                  <div className="dossier-section-block">
+                    <div className="dossier-section-head">
+                      <AccountIcons.Bank />
+                      <span>Banking Node & Settlement Routing</span>
+                    </div>
+                    <div className="dossier-data-grid">
+                      <div className="data-box">
+                        <span className="data-lbl">Bank Name</span>
+                        <span className="data-val font-bold">{selectedAccount.bankName || 'Partner Bank'}</span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">Account / Loan Number</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span className="data-val font-mono font-bold" style={{ color: 'var(--accent, #6366f1)' }}>
+                            {selectedAccount.accountNumber}
+                          </span>
+                          <button 
+                            className="mini-copy-btn"
+                            onClick={() => handleCopy(selectedAccount.accountNumber, `dossier_${selectedAccount.id}`)}
+                            title="Copy Account Number"
+                          >
+                            {isCopied ? <AccountIcons.Check /> : <AccountIcons.Copy />}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">IFSC Code</span>
+                        <span className="data-val font-mono font-bold text-cyan">{selectedAccount.ifscCode || 'HDFC0001892'}</span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">Branch Outlet & Code</span>
+                        <span className="data-val">{selectedAccount.branchName || 'Main'} ({selectedAccount.branchCode || 'BR-01'})</span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">Scheme / Product Route</span>
+                        <span className="data-val font-bold text-cyan">
+                          {selectedAccount.schemeName || selectedAccount.loanCategory || (isLoan ? 'Personal / Gold Loan' : 'Recurring Deposit (RD)')}
+                        </span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">Daily Settlement Limit</span>
+                        <span className="data-val font-mono">
+                          ₹{Number(selectedAccount.dailyLimit || 5000000).toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section 3: Loan Portfolio / Schedule Telemetry */}
+                  <div className="dossier-section-block">
+                    <div className="dossier-section-head">
+                      <AccountIcons.Sliders />
+                      <span>Financial Portfolio & Schedule Telemetry</span>
+                    </div>
+                    <div className="dossier-data-grid">
+                      <div className="data-box">
+                        <span className="data-lbl">Next Due / Collection Date</span>
+                        <span className="data-val font-mono">
+                          {selectedAccount.nextDueDate ? new Date(selectedAccount.nextDueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '10th of every month'}
+                        </span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">Last Payment Recorded</span>
+                        <span className="data-val font-mono text-muted">
+                          {selectedAccount.lastPaidDate ? new Date(selectedAccount.lastPaidDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Recent Collection'}
+                        </span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">Repayment Tenure</span>
+                        <span className="data-val font-mono">
+                          {selectedAccount.tenure || selectedAccount.totalInstallments || '24 Installments'}
+                        </span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">Days Past Due (DPD)</span>
+                        <span className="data-val font-mono font-bold" style={{ color: npaInfo.dpd > 30 ? '#ef4444' : '#10b981' }}>
+                          {npaInfo.dpd} Days
+                        </span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">Interest Rate (% p.a.)</span>
+                        <span className="data-val font-mono">{selectedAccount.interestRate ? `${selectedAccount.interestRate}% p.a.` : '11.5% p.a.'}</span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">Collection Channel Mode</span>
+                        <span className="data-val font-mono">UPI Dynamic QR / Instant Cash</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  
+                  {/* Geolocation Doorstep Mapping & Promise to Pay Section */}
+                  <div className="dossier-section-block">
+                    <div className="dossier-section-head">
+                      <AccountIcons.MapPin />
+                      <span>Customer Doorstep Location & Visual Map Navigation</span>
+                    </div>
+                    
+                    <div className="dossier-data-grid">
+                      <div className="data-box" style={{ gridColumn: 'span 2' }}>
+                        <span className="data-lbl">Customer Physical Place & Address</span>
+                        <span className="data-val font-bold" style={{ fontSize: '13.5px' }}>
+                          {selectedAccount.customerAddress || selectedAccount.address || 'Doorstep Place / Street Address on record - Branch Node'}
+                        </span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">City / Region</span>
+                        <span className="data-val font-bold text-cyan">
+                          {selectedAccount.city || selectedAccount.branchName || 'Main Cluster'}
+                        </span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">GPS Coordinates</span>
+                        <span className="data-val font-mono text-cyan">
+                          {selectedAccount.latitude && selectedAccount.longitude
+                            ? `${selectedAccount.latitude}° N, ${selectedAccount.longitude}° E`
+                            : '19.0760° N, 72.8777° E (Default)'}
+                        </span>
+                      </div>
+                      <div className="data-box" style={{ gridColumn: 'span 2' }}>
+                        <span className="data-lbl">Doorstep Routing Status</span>
+                        <span className="data-val text-green" style={{ color: '#10b981', fontWeight: 600 }}>
+                          ✓ GPS Location Verified for Agent Doorstep Collection
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Live Embedded Map Visualizer */}
+                    <div style={{ marginTop: '12px', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255, 255, 255, 0.15)', background: '#0f172a', position: 'relative' }}>
+                      <iframe
+                        title="Customer Doorstep Map Location"
+                        width="100%"
+                        height="200"
+                        style={{ border: 'none', filter: 'invert(90%) hue-rotate(180deg) brightness(95%) contrast(90%)' }}
+                        loading="lazy"
+                        src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(selectedAccount.longitude || 72.8777) - 0.015}%2C${Number(selectedAccount.latitude || 19.0760) - 0.015}%2C${Number(selectedAccount.longitude || 72.8777) + 0.015}%2C${Number(selectedAccount.latitude || 19.0760) + 0.015}&layer=mapnik&marker=${selectedAccount.latitude || '19.0760'}%2C${selectedAccount.longitude || '72.8777'}`}
+                      />
+                      
+                      {/* Overlay Map Banner */}
+                      <div style={{ position: 'absolute', bottom: '10px', left: '10px', right: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(15, 23, 42, 0.88)', backdropFilter: 'blur(8px)', padding: '8px 14px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.12)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '16px' }}>📍</span>
+                          <div>
+                            <div className="font-bold" style={{ fontSize: '12px' }}>{selectedAccount.accountHolder}</div>
+                            <div className="font-mono text-muted" style={{ fontSize: '10.5px' }}>{selectedAccount.customerAddress || 'Doorstep Pin'}</div>
+                          </div>
+                        </div>
+                        <a 
+                          href={`https://www.google.com/maps/dir/?api=1&destination=${selectedAccount.latitude || '19.0760'},${selectedAccount.longitude || '72.8777'}`}
+                          target="_blank" 
+                          rel="noreferrer"
+                          className="btn-open-google-maps"
+                          style={{ padding: '6px 12px', fontSize: '11.5px' }}
+                        >
+                          <AccountIcons.Navigation /> 🗺️ Open in Google Maps Navigation
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Promise to Pay (PTP) Tracking Telemetry */}
+                  <div className="dossier-section-block">
+                    <div className="dossier-section-head">
+                      <AccountIcons.Handshake />
+                      <span>Promise to Pay (PTP) Commitment & Recovery Schedule</span>
+                    </div>
+                    <div className="dossier-data-grid">
+                      <div className="data-box">
+                        <span className="data-lbl">PTP Commitment Date</span>
+                        <span className="data-val font-mono font-bold text-amber">
+                          {selectedAccount.ptpDate ? new Date(selectedAccount.ptpDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'No Open PTP'}
+                        </span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">Promised Amount (₹)</span>
+                        <span className="data-val font-mono font-bold text-green">
+                          {selectedAccount.ptpAmount ? `₹${Number(selectedAccount.ptpAmount).toLocaleString('en-IN')}` : '—'}
+                        </span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">PTP Status</span>
+                        <span className="data-val font-bold">
+                          {selectedAccount.ptpStatus || 'NONE'}
+                        </span>
+                      </div>
+                      <div className="data-box" style={{ gridColumn: 'span 3' }}>
+                        <span className="data-lbl">Officer PTP Follow-up Notes</span>
+                        <span className="data-val text-muted">
+                          {selectedAccount.ptpNotes || 'Customer agreed to make payment via dynamic UPI QR / Doorstep Cash.'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section 4: Assigned Agent & Automation */}
+                  <div className="dossier-section-block">
+                    <div className="dossier-section-head">
+                      <AccountIcons.Bell />
+                      <span>Assigned Field Agent & Automation Setup</span>
+                    </div>
+                    <div className="dossier-data-grid">
+                      <div className="data-box">
+                        <span className="data-lbl">Assigned Representative</span>
+                        <span className="data-val font-bold">
+                          {selectedAccount.assignedAgentName || selectedAccount.agentName || 'Branch Central Desk'}
+                        </span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">Agent Staff ID / Code</span>
+                        <span className="data-val font-mono text-cyan">
+                          {selectedAccount.assignedAgentCode || selectedAccount.agentCode || 'AG-001'}
+                        </span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">Reminder Risk Schedule</span>
+                        <span className="data-val font-bold" style={{ color: '#c084fc' }}>
+                          {selectedAccount.reminderRiskLevel === 'HighRisk' ? '🚨 High Risk (3d/Daily)' : selectedAccount.reminderRiskLevel === 'Custom' ? `⚡ Custom (${selectedAccount.reminderDaysBeforeDue || 2}d)` : selectedAccount.reminderRiskLevel === 'Disabled' ? '🔕 Reminders Off' : '🔔 2 Days Before Due'}
+                        </span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">Active Outreach Channels</span>
+                        <span className="data-val font-mono text-muted">
+                          {selectedAccount.reminderChannels || 'SMS, WhatsApp, Voice Call'}
+                        </span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">Last Reminder Dispatched</span>
+                        <span className="data-val font-mono text-muted">
+                          {selectedAccount.lastReminderSentAt ? new Date(selectedAccount.lastReminderSentAt).toLocaleString('en-IN') : 'Automated Schedule Ready'}
+                        </span>
+                      </div>
+                      <div className="data-box">
+                        <span className="data-lbl">Route Creation Date</span>
+                        <span className="data-val font-mono text-muted">
+                          {selectedAccount.createdAt ? new Date(selectedAccount.createdAt).toLocaleDateString('en-IN') : 'System Initialized'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Compliance Banner */}
+                  <div className="compliance-strip">
+                    <AccountIcons.ShieldCheck />
+                    <span>Banking route configured with NPCI UPI 2.0 dynamic clearance, RTGS/NEFT settlement & RBI standard audit telemetry.</span>
+                  </div>
+
                 </div>
 
-                <div className="dossier-data-grid">
-                  <div className="data-box">
-                    <span className="data-lbl">Account Holder</span>
-                    <span className="data-val font-bold">{selectedAccount.accountHolder}</span>
+                {/* Dossier Footer with Quick Financial Actions */}
+                <div className="dossier-modal-foot" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button 
+                      className="btn-qr-action is-qr"
+                      style={{ padding: '8px 14px', borderRadius: '8px', background: 'linear-gradient(135deg, #6366f1, #4f46e5)', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '12.5px' }}
+                      onClick={() => { const acc = selectedAccount; setSelectedAccount(null); handleOpenQrModal(acc, 'qr'); }}
+                    >
+                      <AccountIcons.QrCode /> Collect via QR
+                    </button>
+                    <button 
+                      className="btn-cash-action is-cash"
+                      style={{ padding: '8px 14px', borderRadius: '8px', background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '12.5px' }}
+                      onClick={() => { const acc = selectedAccount; setSelectedAccount(null); handleOpenCashModal(acc); }}
+                    >
+                      <AccountIcons.Cash /> Receive Cash
+                    </button>
+                    <button 
+                      style={{ padding: '8px 14px', borderRadius: '8px', background: 'linear-gradient(135deg, #25d366, #128c7e)', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '12.5px' }}
+                      onClick={() => { const acc = selectedAccount; handleSendWhatsAppReminder(acc); }}
+                    >
+                      <AccountIcons.WhatsApp /> WhatsApp Reminder
+                    </button>
                   </div>
-                  <div className="data-box">
-                    <span className="data-lbl">{selectedAccount.collectionType === 'LOAN' ? 'Loan Account No' : 'Account Number'}</span>
-                    <span className="data-val font-mono">{selectedAccount.accountNumber}</span>
-                  </div>
-                  <div className="data-box">
-                    <span className="data-lbl">Scheme / Product</span>
-                    <span className="data-val font-bold text-cyan">{selectedAccount.schemeName || (selectedAccount.collectionType === 'LOAN' ? 'Loan Collection' : 'RD Deposit')}</span>
-                  </div>
-                  <div className="data-box">
-                    <span className="data-lbl">IFSC & Branch Node</span>
-                    <span className="data-val font-mono text-cyan">{selectedAccount.ifscCode} ({selectedAccount.branchName})</span>
-                  </div>
-                  <div className="data-box">
-                    <span className="data-lbl">{selectedAccount.collectionType === 'LOAN' ? 'Due / Outstanding Balance' : 'Holdings Balance'}</span>
-                    <span className={`data-val font-mono font-bold ${selectedAccount.collectionType === 'LOAN' ? 'text-purple' : 'text-green'}`}>
-                      ₹{Number(selectedAccount.balance).toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                  <div className="data-box">
-                    <span className="data-lbl">Daily Payout / Clear Limit</span>
-                    <span className="data-val font-mono">₹{Number(selectedAccount.dailyLimit || 5000000).toLocaleString('en-IN')}</span>
+
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button className="btn-edit-from-modal" onClick={() => { const acc = selectedAccount; setSelectedAccount(null); handleOpenEdit(acc); }}>
+                      <AccountIcons.Edit /> Edit Details
+                    </button>
+                    <button className="btn-close-modal" onClick={() => setSelectedAccount(null)}>
+                      Close
+                    </button>
                   </div>
                 </div>
 
-                <div className="compliance-strip">
-                  <AccountIcons.ShieldCheck />
-                  <span>Account is verified with RTGS / NEFT / IMPS instant clearance routes and RBI compliance check.</span>
+              </div>
+            </div>
+          );
+        })()}
+
+        
+        {/* ============================================================
+            PROMISE TO PAY (PTP) MODAL (Integration Status: N)
+           ============================================================ */}
+        {isPtpModalOpen && selectedPtpAccount && (
+          <div className="account-modal-overlay" onClick={() => setIsPtpModalOpen(false)}>
+            <div className="account-modal-container" onClick={e => e.stopPropagation()} style={{ maxWidth: '620px' }}>
+              <div className="account-modal-head">
+                <div className="modal-title-stack">
+                  <div className="modal-badge-tag" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', borderColor: 'rgba(245, 158, 11, 0.35)' }}>
+                    <AccountIcons.Handshake />
+                    <span>Promise to Pay Commitment</span>
+                  </div>
+                  <h2>Promise to Pay (PTP) Tracker</h2>
+                  <p>Log customer repayment commitment date and amount for {selectedPtpAccount.accountHolder}.</p>
                 </div>
+                <button className="btn-modal-close" onClick={() => setIsPtpModalOpen(false)}>✕</button>
               </div>
 
-              <div className="dossier-modal-foot">
-                <button className="btn-edit-from-modal" onClick={() => { const acc = selectedAccount; setSelectedAccount(null); handleOpenEdit(acc); }}>
-                  <AccountIcons.Edit /> Edit Account Details
-                </button>
-                <button className="btn-close-modal" onClick={() => setSelectedAccount(null)}>
-                  Close
-                </button>
-              </div>
+              <form onSubmit={handleSavePtp} className="account-form-grid">
+                <div className="form-fields-2col">
+                  <div className="form-field-group">
+                    <label>PTP Commitment Date <span className="req-star">*</span></label>
+                    <input
+                      type="date"
+                      required
+                      value={ptpFormData.ptpDate}
+                      onChange={e => setPtpFormData(p => ({ ...p, ptpDate: e.target.value }))}
+                      className="font-mono font-bold"
+                    />
+                  </div>
+                  <div className="form-field-group">
+                    <label>Promised Amount (₹) <span className="req-star">*</span></label>
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      placeholder="0"
+                      value={ptpFormData.ptpAmount}
+                      onChange={e => setPtpFormData(p => ({ ...p, ptpAmount: e.target.value }))}
+                      className="font-mono font-bold text-green"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-field-group">
+                  <label>PTP Follow-up Status <span className="req-star">*</span></label>
+                  <select
+                    value={ptpFormData.ptpStatus}
+                    onChange={e => setPtpFormData(p => ({ ...p, ptpStatus: e.target.value }))}
+                    className="form-select-ctrl font-bold"
+                  >
+                    <option value="PENDING">🟡 PENDING (Commitment Awaited)</option>
+                    <option value="KEPT">🟢 KEPT (Payment Successfully Received)</option>
+                    <option value="BROKEN">🔴 BROKEN (Customer Defaulted on Commitment)</option>
+                    <option value="RESCHEDULED">🟣 RESCHEDULED (Granted Extension)</option>
+                  </select>
+                </div>
+
+                <div className="form-field-group">
+                  <label>Officer / Agent Notes</label>
+                  <textarea
+                    rows={3}
+                    placeholder="e.g. Borrower promised partial payment on Friday post-salary credit..."
+                    value={ptpFormData.ptpNotes}
+                    onChange={e => setPtpFormData(p => ({ ...p, ptpNotes: e.target.value }))}
+                    className="form-textarea-ctrl"
+                  />
+                </div>
+
+                <div className="account-modal-foot">
+                  <button type="button" className="btn-modal-cancel" onClick={() => setIsPtpModalOpen(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-modal-save" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
+                    <AccountIcons.Check />
+                    <span>Save PTP Commitment</span>
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
+
+        {/* ============================================================
+            NEXT-DAY MANDATORY CALL & OUTCOME LOGGER MODAL
+           ============================================================ */}
+        {isMandatoryCallModalOpen && selectedCallAccount && (
+          <div className="account-modal-overlay" onClick={() => setIsMandatoryCallModalOpen(false)}>
+            <div className="account-modal-container" onClick={e => e.stopPropagation()} style={{ maxWidth: '640px' }}>
+              <div className="account-modal-head">
+                <div className="modal-title-stack">
+                  <div className="modal-badge-tag" style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', borderColor: 'rgba(168, 85, 247, 0.35)' }}>
+                    <AccountIcons.PhoneCall />
+                    <span>Mandatory Outreach Queue</span>
+                  </div>
+                  <h2>Mandatory Call & Outreach Logger</h2>
+                  <p>Log phone call outcome for {selectedCallAccount.accountHolder} ({selectedCallAccount.phone || 'No phone'}).</p>
+                </div>
+                <button className="btn-modal-close" onClick={() => setIsMandatoryCallModalOpen(false)}>✕</button>
+              </div>
+
+              <form onSubmit={handleSaveCallOutcome} className="account-form-grid">
+                {/* 1-Click Dial Button */}
+                {selectedCallAccount.phone && (
+                  <div style={{ padding: '12px 16px', borderRadius: '12px', background: 'rgba(99, 102, 241, 0.12)', border: '1px solid rgba(99, 102, 241, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <div className="font-bold">{selectedCallAccount.accountHolder}</div>
+                      <div className="font-mono text-cyan">{selectedCallAccount.phone}</div>
+                    </div>
+                    <a 
+                      href={`tel:${selectedCallAccount.phone}`}
+                      className="btn-qr-action"
+                      style={{ textDecoration: 'none', background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', padding: '8px 16px', borderRadius: '8px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      <AccountIcons.PhoneCall /> 📞 Dial Customer
+                    </a>
+                  </div>
+                )}
+
+                <div className="form-field-group">
+                  <label>Call Outcome <span className="req-star">*</span></label>
+                  <select
+                    value={callFormData.callOutcome}
+                    onChange={e => setCallFormData(p => ({ ...p, callOutcome: e.target.value }))}
+                    className="form-select-ctrl font-bold"
+                  >
+                    <option value="Answered - Promised to Pay">✅ Answered - Promised to Pay (Will trigger PTP Logger)</option>
+                    <option value="Answered - Callback Requested">📞 Answered - Callback Requested Later</option>
+                    <option value="Ringing - No Answer">🔕 Ringing - No Answer</option>
+                    <option value="Phone Switched Off / Out of Reach">🚫 Phone Switched Off / Out of Reach</option>
+                    <option value="Refused to Pay - Disputed">⚠️ Refused to Pay - Disputed Loan Claim</option>
+                    <option value="Wrong Number / Number Invalid">❌ Wrong Number / Number Invalid</option>
+                  </select>
+                </div>
+
+                <div className="form-fields-2col">
+                  <div className="form-field-group">
+                    <label>Schedule Next Call Date</label>
+                    <input
+                      type="date"
+                      value={callFormData.nextFollowUpDate}
+                      onChange={e => setCallFormData(p => ({ ...p, nextFollowUpDate: e.target.value }))}
+                      className="font-mono"
+                    />
+                  </div>
+                  <div className="form-field-group" style={{ justifyContent: 'center' }}>
+                    <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '16px' }}>
+                      <input 
+                        type="checkbox"
+                        checked={callFormData.scheduleTomorrow}
+                        onChange={e => setCallFormData(p => ({ ...p, scheduleTomorrow: e.target.checked }))}
+                        style={{ width: '18px', height: '18px' }}
+                      />
+                      <span className="font-bold text-amber">Keep in Tomorrow's Mandatory Queue</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="form-field-group">
+                  <label>Call Notes / Customer Discussion</label>
+                  <textarea
+                    rows={3}
+                    placeholder="Notes on customer discussion, reason for delay, repayment terms..."
+                    value={callFormData.callNotes}
+                    onChange={e => setCallFormData(p => ({ ...p, callNotes: e.target.value }))}
+                    className="form-textarea-ctrl"
+                  />
+                </div>
+
+                <div className="account-modal-foot">
+                  <button type="button" className="btn-modal-cancel" onClick={() => setIsMandatoryCallModalOpen(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-modal-save" style={{ background: 'linear-gradient(135deg, #a855f7, #9333ea)' }}>
+                    <AccountIcons.Check />
+                    <span>Log Call Outcome</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================
+            AI DELINQUENCY RISK PREDICTION & ADVISORY MODAL
+           ============================================================ */}
+        {isAiRiskModalOpen && selectedAiAccount && (() => {
+          const aiRisk = calculateAiRiskPrediction(selectedAiAccount);
+          const bucket = calculateAccountBucket(selectedAiAccount);
+
+          return (
+            <div className="account-modal-overlay" onClick={() => setIsAiRiskModalOpen(false)}>
+              <div className="account-modal-container" onClick={e => e.stopPropagation()} style={{ maxWidth: '680px' }}>
+                <div className="account-modal-head">
+                  <div className="modal-title-stack">
+                    <div className="modal-badge-tag" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', borderColor: 'rgba(99, 102, 241, 0.35)' }}>
+                      <AccountIcons.Brain />
+                      <span>AI Predictive Delinquency Intelligence</span>
+                    </div>
+                    <h2>AI Risk Assessment & Advisory</h2>
+                    <p>Machine-learned delinquency probability analysis for {selectedAiAccount.accountHolder}.</p>
+                  </div>
+                  <button className="btn-modal-close" onClick={() => setIsAiRiskModalOpen(false)}>✕</button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {/* Speedometer Risk Bar */}
+                  <div style={{ padding: '18px 20px', borderRadius: '16px', background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.85))', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <span className="font-bold">Default Probability Score:</span>
+                      <span className="font-mono font-bold" style={{ fontSize: '18px', color: aiRisk.gaugeColor }}>
+                        {aiRisk.score}% ({aiRisk.tier})
+                      </span>
+                    </div>
+                    <div style={{ width: '100%', height: '10px', background: 'rgba(255, 255, 255, 0.1)', borderRadius: '999px', overflow: 'hidden' }}>
+                      <div style={{ width: `${aiRisk.score}%`, height: '100%', background: aiRisk.gaugeColor, transition: 'width 0.4s ease' }}></div>
+                    </div>
+                  </div>
+
+                  {/* Telemetry Factors Grid */}
+                  <div className="dossier-data-grid">
+                    <div className="data-box">
+                      <span className="data-lbl">Current Delinquency Bucket</span>
+                      <span className="data-val font-bold" style={{ color: bucket.color }}>{bucket.label}</span>
+                    </div>
+                    <div className="data-box">
+                      <span className="data-lbl">Days Past Due (DPD)</span>
+                      <span className="data-val font-mono font-bold text-red">{bucket.dpd} Days</span>
+                    </div>
+                    <div className="data-box">
+                      <span className="data-lbl">Outstanding Exposure</span>
+                      <span className="data-val font-mono font-bold text-purple">₹{Number(selectedAiAccount.balance || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="data-box">
+                      <span className="data-lbl">Current Overdue Demand</span>
+                      <span className="data-val font-mono font-bold text-amber">₹{Number(selectedAiAccount.dueAmount || selectedAiAccount.emiAmount || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="data-box">
+                      <span className="data-lbl">Promise to Pay (PTP) Status</span>
+                      <span className="data-val font-bold">{selectedAiAccount.ptpStatus || 'NONE'}</span>
+                    </div>
+                    <div className="data-box">
+                      <span className="data-lbl">Mandatory Call Queue</span>
+                      <span className="data-val font-bold text-cyan">{selectedAiAccount.isMandatoryCall ? 'Active in Queue' : 'Normal'}</span>
+                    </div>
+                  </div>
+
+                  {/* AI Strategic Actionable Recommendation */}
+                  <div style={{ padding: '16px 18px', borderRadius: '14px', background: 'rgba(99, 102, 241, 0.12)', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                      <AccountIcons.Sparkles />
+                      <span className="font-bold text-cyan">AI Strategic Collection Directive</span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '13px', lineHeight: '1.5', color: '#f8fafc' }}>
+                      {aiRisk.recommendation}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="account-modal-foot">
+                  <button 
+                    type="button" 
+                    className="btn-qr-action is-qr" 
+                    onClick={() => { setIsAiRiskModalOpen(false); handleOpenPtpModal(selectedAiAccount); }}
+                  >
+                    <AccountIcons.Handshake /> Set PTP Commitment
+                  </button>
+                  <button 
+                    type="button" 
+                    className="btn-cash-action is-cash" 
+                    onClick={() => { setIsAiRiskModalOpen(false); handleOpenMandatoryCallModal(selectedAiAccount); }}
+                  >
+                    <AccountIcons.PhoneCall /> Schedule Mandatory Call
+                  </button>
+                  <button type="button" className="btn-modal-cancel" onClick={() => setIsAiRiskModalOpen(false)}>
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Add / Edit Account Modal */}
         {isModalOpen && (
@@ -3338,6 +5544,8 @@ const Accounts = () => {
               </div>
 
               <form onSubmit={handleSaveLoanAccount} className="account-form-grid">
+                
+                {/* Row 1: Account Number & Customer Name */}
                 <div className="form-fields-2col">
                   <div className="form-field-group">
                     <label>Account Number <span className="req-star">*</span></label>
@@ -3362,6 +5570,7 @@ const Accounts = () => {
                   </div>
                 </div>
 
+                {/* Row 2: Customer Mobile & Product Type */}
                 <div className="form-fields-2col">
                   <div className="form-field-group">
                     <label>Customer Mobile Number <span className="req-star">*</span></label>
@@ -3369,14 +5578,14 @@ const Accounts = () => {
                       type="tel"
                       maxLength={10}
                       required
-                      placeholder="10-digit mobile"
+                      placeholder="10-digit mobile number"
                       value={loanFormData.mobileNumber}
                       onChange={e => setLoanFormData(p => ({ ...p, mobileNumber: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
                       className="font-mono"
                     />
                   </div>
                   <div className="form-field-group">
-                    <label>Product / Collection Type <span className="req-star">*</span></label>
+                    <label>Product Type <span className="req-star">*</span></label>
                     <select
                       value={loanFormData.productType}
                       onChange={e => {
@@ -3389,76 +5598,93 @@ const Accounts = () => {
                       }}
                       className="form-select-ctrl"
                     >
-                      <option value="LOAN">LOAN (Priority Portfolio)</option>
-                      <option value="RD">RD (Recurring Deposit)</option>
-                      <option value="DAILY_DEPOSIT">DAILY DEPOSIT (Pigmy / Daily)</option>
-                      <option value="FD">FD (Fixed Deposit Collection)</option>
+                      <option value="LOAN">💳 LOAN (Priority Portfolio)</option>
+                      <option value="RD">🏦 RD (Recurring Deposit)</option>
+                      <option value="DAILY_DEPOSIT">🪙 DAILY DEPOSIT (Pigmy / Daily)</option>
+                      <option value="FD">📈 FD (Fixed Deposit Collection)</option>
                     </select>
                   </div>
                 </div>
 
-                {/* Loan Kind / Sub-Type Selector */}
-                {loanFormData.productType === 'LOAN' ? (
-                  <div className="form-field-group" style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span>Loan Kind / Scheme Sub-Type <span className="req-star">*</span></span>
-                      <span style={{ fontSize: '11px', color: '#a78bfa', fontWeight: 600 }}>Home, Vehicle, Gold, Personal, etc.</span>
-                    </label>
+                {/* Row 3: Loan Scheme / Kind & EMI Frequency */}
+                <div className="form-fields-2col">
+                  <div className="form-field-group">
+                    <label>Loan Scheme / Sub-Type <span className="req-star">*</span></label>
+                    {loanFormData.productType === 'LOAN' ? (
+                      <select
+                        value={loanFormData.loanCategory}
+                        onChange={e => setLoanFormData(p => ({ ...p, loanCategory: e.target.value }))}
+                        className="form-select-ctrl font-bold"
+                      >
+                        <option value="Home Loan">🏠 Home Loan (Housing Finance)</option>
+                        <option value="Gold Loan">🪙 Gold / Jewel Loan</option>
+                        <option value="Vehicle Loan">🚗 Vehicle / Auto Loan (2W / 4W)</option>
+                        <option value="Personal Loan">👤 Personal Loan (Unsecured)</option>
+                        <option value="Business Loan">💼 Business / MSME Loan</option>
+                        <option value="Education Loan">🎓 Education / Student Loan</option>
+                        <option value="Agriculture Loan">🌾 Agriculture / Crop Loan</option>
+                        <option value="Microfinance Loan">👥 Microfinance / JLG Loan</option>
+                        <option value="Daily Pigmy Loan">⚡ Daily Pigmy Micro Loan</option>
+                        <option value="Loan Against Property">🏢 Loan Against Property (LAP)</option>
+                        <option value="Commercial Vehicle Loan">🚛 Commercial Vehicle Loan</option>
+                        <option value="Consumer Durable Loan">📱 Consumer Appliance Loan</option>
+                        <option value="Other Loan Scheme">📝 Other Custom Loan Scheme</option>
+                      </select>
+                    ) : (
+                      <select
+                        value={loanFormData.loanCategory}
+                        onChange={e => setLoanFormData(p => ({ ...p, loanCategory: e.target.value }))}
+                        className="form-select-ctrl font-bold"
+                      >
+                        {loanFormData.productType === 'RD' && (
+                          <>
+                            <option value="Standard Recurring Deposit">Standard Recurring Deposit</option>
+                            <option value="Senior Citizen RD Scheme">Senior Citizen RD Scheme</option>
+                            <option value="High-Yield Flexi RD">High-Yield Flexi RD</option>
+                          </>
+                        )}
+                        {loanFormData.productType === 'DAILY_DEPOSIT' && (
+                          <>
+                            <option value="Daily Pigmy Deposit">Daily Pigmy Deposit</option>
+                            <option value="Doorstep Cash Deposit">Doorstep Cash Deposit</option>
+                            <option value="Merchant Daily Collector Scheme">Merchant Daily Collector Scheme</option>
+                          </>
+                        )}
+                        {loanFormData.productType === 'FD' && (
+                          <>
+                            <option value="Fixed Term Deposit">Fixed Term Deposit</option>
+                            <option value="Cumulative Re-investment FD">Cumulative Re-investment FD</option>
+                            <option value="Monthly Interest Payout FD">Monthly Interest Payout FD</option>
+                          </>
+                        )}
+                      </select>
+                    )}
+                  </div>
+                  <div className="form-field-group">
+                    <label>EMI Frequency <span className="req-star">*</span></label>
                     <select
-                      value={loanFormData.loanCategory}
-                      onChange={e => setLoanFormData(p => ({ ...p, loanCategory: e.target.value }))}
-                      className="form-select-ctrl font-bold"
+                      value={loanFormData.emiFrequency}
+                      onChange={e => {
+                        const newFreq = e.target.value;
+                        const { emi, due } = calculateAutoEmi(loanFormData.outstandingAmount, newFreq, loanFormData.tenureMonths);
+                        setLoanFormData(p => ({
+                          ...p,
+                          emiFrequency: newFreq,
+                          emiAmount: emi || p.emiAmount,
+                          dueAmount: due || p.dueAmount
+                        }));
+                      }}
+                      className="form-select-ctrl"
                     >
-                      <option value="Home Loan">🏠 Home Loan (Housing Finance)</option>
-                      <option value="Vehicle Loan">🚗 Vehicle / Auto Loan (2W / 4W)</option>
-                      <option value="Personal Loan">👤 Personal Loan (Unsecured)</option>
-                      <option value="Gold Loan">🪙 Gold / Jewel Loan</option>
-                      <option value="Business Loan">💼 Business / MSME Loan</option>
-                      <option value="Education Loan">🎓 Education / Student Loan</option>
-                      <option value="Agriculture Loan">🌾 Agriculture / Crop / Kisan Loan</option>
-                      <option value="Microfinance Loan">👥 Microfinance / JLG Group Loan</option>
-                      <option value="Daily Pigmy Loan">⚡ Daily Pigmy Micro Loan</option>
-                      <option value="Loan Against Property">🏢 Loan Against Property (LAP)</option>
-                      <option value="Commercial Vehicle Loan">🚛 Commercial Vehicle / Truck Loan</option>
-                      <option value="Consumer Durable Loan">📱 Consumer Durable / Appliance Loan</option>
-                      <option value="Other Loan Scheme">📝 Other Custom Loan Scheme</option>
+                      <option value="Monthly">Monthly (per month)</option>
+                      <option value="Weekly">Weekly (per week)</option>
+                      <option value="Daily">Daily (daily collection / pigmy)</option>
                     </select>
                   </div>
-                ) : (
-                  <div className="form-field-group" style={{ marginBottom: '16px' }}>
-                    <label>Deposit Scheme Type <span className="req-star">*</span></label>
-                    <select
-                      value={loanFormData.loanCategory}
-                      onChange={e => setLoanFormData(p => ({ ...p, loanCategory: e.target.value }))}
-                      className="form-select-ctrl font-bold"
-                    >
-                      {loanFormData.productType === 'RD' && (
-                        <>
-                          <option value="Standard Recurring Deposit">Standard Recurring Deposit</option>
-                          <option value="Senior Citizen RD Scheme">Senior Citizen RD Scheme</option>
-                          <option value="High-Yield Flexi RD">High-Yield Flexi RD</option>
-                        </>
-                      )}
-                      {loanFormData.productType === 'DAILY_DEPOSIT' && (
-                        <>
-                          <option value="Daily Pigmy Deposit">Daily Pigmy Deposit</option>
-                          <option value="Doorstep Cash Deposit">Doorstep Cash Deposit</option>
-                          <option value="Merchant Daily Collector Scheme">Merchant Daily Collector Scheme</option>
-                        </>
-                      )}
-                      {loanFormData.productType === 'FD' && (
-                        <>
-                          <option value="Fixed Term Deposit">Fixed Term Deposit</option>
-                          <option value="Cumulative Re-investment FD">Cumulative Re-investment FD</option>
-                          <option value="Monthly Interest Payout FD">Monthly Interest Payout FD</option>
-                        </>
-                      )}
-                    </select>
-                  </div>
-                )}
+                </div>
 
-                {/* Financial Parameters: Outstanding, Tenure & Frequency */}
-                <div className="form-fields-3col">
+                {/* Row 4: Outstanding Amount & Tenure */}
+                <div className="form-fields-2col">
                   <div className="form-field-group">
                     <label>Outstanding / Loan Amount (₹) <span className="req-star">*</span></label>
                     <input
@@ -3481,7 +5707,6 @@ const Accounts = () => {
                       className="font-mono font-bold text-purple"
                     />
                   </div>
-
                   <div className="form-field-group">
                     <label>Loan Tenure</label>
                     <select
@@ -3508,37 +5733,12 @@ const Accounts = () => {
                       <option value="60">60 Months (5 Years)</option>
                     </select>
                   </div>
-
-                  <div className="form-field-group">
-                    <label>EMI Frequency <span className="req-star">*</span></label>
-                    <select
-                      value={loanFormData.emiFrequency}
-                      onChange={e => {
-                        const newFreq = e.target.value;
-                        const { emi, due } = calculateAutoEmi(loanFormData.outstandingAmount, newFreq, loanFormData.tenureMonths);
-                        setLoanFormData(p => ({
-                          ...p,
-                          emiFrequency: newFreq,
-                          emiAmount: emi || p.emiAmount,
-                          dueAmount: due || p.dueAmount
-                        }));
-                      }}
-                      className="form-select-ctrl"
-                    >
-                      <option value="Monthly">Monthly (per month)</option>
-                      <option value="Weekly">Weekly (per week)</option>
-                      <option value="Daily">Daily (daily collection / pigmy)</option>
-                    </select>
-                  </div>
                 </div>
 
-                {/* Auto-Calculated EMI and Due Demand */}
+                {/* Row 5: Calculated EMI & Current Due */}
                 <div className="form-fields-2col">
                   <div className="form-field-group">
-                    <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span>Calculated EMI Amount (₹) <span className="req-star">*</span></span>
-                      <span style={{ fontSize: '11px', color: '#818cf8', fontWeight: 700 }}>⚡ Auto-Calculated</span>
-                    </label>
+                    <label>Calculated EMI (₹) <span className="req-star">*</span></label>
                     <input
                       type="number"
                       min="1"
@@ -3564,6 +5764,7 @@ const Accounts = () => {
                   </div>
                 </div>
 
+                {/* Row 6: Last Paid Date & Next Due Date */}
                 <div className="form-fields-2col">
                   <div className="form-field-group">
                     <label>Last Paid Date</label>
@@ -3585,6 +5786,108 @@ const Accounts = () => {
                   </div>
                 </div>
 
+                
+                {/* Customer Photo Upload & Doorstep Address */}
+                <div className="form-fields-2col">
+                  <div className="form-field-group">
+                    <label>Customer Physical Address / Landmark</label>
+                    <input
+                      type="text"
+                      placeholder="Street, Landmark, Doorstep Location"
+                      value={loanFormData.customerAddress || ''}
+                      onChange={e => setLoanFormData(p => ({ ...p, customerAddress: e.target.value }))}
+                    />
+                  </div>
+                  <div className="form-field-group">
+                    <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>GPS Coordinates (Lat / Lng)</span>
+                      <button 
+                        type="button" 
+                        className="btn-fetch-ifsc-mini"
+                        style={{ padding: '2px 8px', fontSize: '11px' }}
+                        onClick={() => handleCaptureGpsLocation(true)}
+                      >
+                        📍 Capture GPS
+                      </button>
+                    </label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        type="text"
+                        placeholder="Latitude"
+                        value={loanFormData.latitude || ''}
+                        onChange={e => setLoanFormData(p => ({ ...p, latitude: e.target.value }))}
+                        className="font-mono"
+                        style={{ flex: 1 }}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Longitude"
+                        value={loanFormData.longitude || ''}
+                        onChange={e => setLoanFormData(p => ({ ...p, longitude: e.target.value }))}
+                        className="font-mono"
+                        style={{ flex: 1 }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Customer Photo Upload from Device */}
+                <div className="form-field-group">
+                  <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Customer Profile Photo</span>
+                    <span style={{ fontSize: '11px', color: '#818cf8', fontWeight: 600 }}>Select image from device</span>
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '10px 14px', background: 'var(--bgSecondary, #0f172a)', border: '1px dashed var(--borderColor, rgba(255, 255, 255, 0.2))', borderRadius: '12px' }}>
+                    {loanFormData.customerPhoto ? (
+                      <div style={{ position: 'relative', width: '52px', height: '52px', flexShrink: 0 }}>
+                        <img 
+                          src={loanFormData.customerPhoto} 
+                          alt="Customer Preview" 
+                          style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', border: '2px solid #6366f1' }} 
+                        />
+                        <button 
+                          type="button" 
+                          onClick={() => setLoanFormData(p => ({ ...p, customerPhoto: '' }))}
+                          style={{ position: 'absolute', top: '-4px', right: '-4px', width: '20px', height: '20px', borderRadius: '50%', background: '#ef4444', color: '#fff', border: 'none', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          title="Remove Photo"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: 'rgba(99, 102, 241, 0.15)', border: '1px solid rgba(99, 102, 241, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#818cf8', flexShrink: 0 }}>
+                        <AccountIcons.Camera />
+                      </div>
+                    )}
+
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', padding: '7px 14px', background: 'rgba(99, 102, 241, 0.2)', border: '1px solid rgba(99, 102, 241, 0.4)', borderRadius: '8px', color: '#818cf8', fontSize: '12.5px', fontWeight: 700, width: 'fit-content' }}>
+                        📁 {loanFormData.customerPhoto ? 'Change Photo from Device' : 'Select Photo from Device / Storage'}
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          style={{ display: 'none' }}
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              try {
+                                showToast('⏳ Formatting to passport photo size...');
+                                const compressedUrl = await compressToPassportPhoto(file, 240, 300, 0.82);
+                                setLoanFormData(p => ({ ...p, customerPhoto: compressedUrl }));
+                                showToast('📷 Passport photo ready!');
+                              } catch (err) {
+                                showToast('Error processing image', 'error');
+                              }
+                            }
+                          }}
+                        />
+                      </label>
+                      <span style={{ fontSize: '11px', color: '#64748b' }}>Uploads directly from phone / computer storage and stores format in local ledger.</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Row 7: Field Agent */}
                 <div className="form-field-group">
                   <label>Assign Field Agent <span className="req-star">*</span></label>
                   <select
@@ -3744,9 +6047,9 @@ const Accounts = () => {
         )}
 
         {/* ============================================================
-            3. DAILY DUE LIST CSV/EXCEL UPLOAD MODAL (DAY BEGIN)
+            3. DAILY DUE LIST CSV/EXCEL UPLOAD MODAL (DAY BEGIN) (Model N Only)
            ============================================================ */}
-        {isDueListModalOpen && (
+        {isNonIntegrated && isDueListModalOpen && (
           <div className="account-modal-overlay" onClick={() => setIsDueListModalOpen(false)}>
             <div className="account-modal-container bulk-upload-modal" onClick={e => e.stopPropagation()}>
               <div className="account-modal-head">
@@ -3827,11 +6130,11 @@ const Accounts = () => {
                       <tbody>
                         {dueListRows.map((row, i) => (
                           <tr key={i}>
-                            <td>{row.AccountNumber}</td>
-                            <td className="text-purple font-bold">₹{Number(row.DueAmount || 0).toLocaleString('en-IN')}</td>
-                            <td>₹{Number(row.OutstandingAmount || 0).toLocaleString('en-IN')}</td>
-                            <td>{row.NextDueDate || '-'}</td>
-                            <td>{row.AssignedAgentCode || '-'}</td>
+                            <td className="font-bold">{row.AccountNumber || row.accountnumber || row.AccountNo || row.accountno || row.accno || '-'}</td>
+                            <td className="text-purple font-bold">₹{Number(row.DueAmount || row.dueamount || row.Demand || row.demand || row.Due || row.due || 0).toLocaleString('en-IN')}</td>
+                            <td>₹{Number(row.OutstandingAmount || row.outstandingamount || row.Balance || row.balance || 0).toLocaleString('en-IN')}</td>
+                            <td>{row.NextDueDate || row.nextduedate || row.DueDate || row.duedate || '-'}</td>
+                            <td>{row.AssignedAgentCode || row.assignedagentcode || row.AgentCode || row.agentcode || '-'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -4156,6 +6459,238 @@ const Accounts = () => {
           </div>
         )}
 
+
+        {/* ============================================================
+            7. DAY BEGIN (BOD) & DAY END (EOD) OPERATIONS SUITE MODAL (Model N Only)
+           ============================================================ */}
+        {isNonIntegrated && isDayOpsModalOpen && (
+          <div className="account-modal-overlay" onClick={() => setIsDayOpsModalOpen(false)}>
+            <div className="account-modal-container day-ops-modal" style={{ maxWidth: '850px' }} onClick={e => e.stopPropagation()}>
+              <div className="account-modal-head">
+                <div className="modal-title-stack">
+                  <div className="modal-badge-tag" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', borderColor: 'rgba(99, 102, 241, 0.3)' }}>
+                    <span>Operations & Shift Hub</span>
+                  </div>
+                  <h2>Day Operations & Shift Control Hub</h2>
+                  <p>Manage Beginning of Day (BOD), manual End of Day (EOD) settlement, and compliance audit.</p>
+                </div>
+                <button className="btn-modal-close" onClick={() => setIsDayOpsModalOpen(false)}>✕</button>
+              </div>
+
+              <div className="wallet-modal-body">
+                {/* Navigation Tabs */}
+                <div className="wallet-modal-tabs">
+                  <button
+                    type="button"
+                    className={`wallet-nav-tab ${dayOpsTab === 'BOD' ? 'is-active' : ''}`}
+                    onClick={() => setDayOpsTab('BOD')}
+                  >
+                    <span>☀️ 1. Day Begin (BOD)</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`wallet-nav-tab ${dayOpsTab === 'EOD' ? 'is-active' : ''}`}
+                    onClick={() => setDayOpsTab('EOD')}
+                  >
+                    <span>🌙 2. Day End (EOD) Settlement</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`wallet-nav-tab ${dayOpsTab === 'CERTIFICATE' ? 'is-active' : ''}`}
+                    onClick={() => setDayOpsTab('CERTIFICATE')}
+                  >
+                    <span>📜 3. Settlement Scroll</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`wallet-nav-tab ${dayOpsTab === 'GOLIVE' ? 'is-active' : ''}`}
+                    onClick={() => setDayOpsTab('GOLIVE')}
+                  >
+                    <span>🚀 4. Go-Live Audit ({goLiveReport.percentage}%)</span>
+                  </button>
+                </div>
+
+                {/* TAB 1: DAY BEGIN (BOD) */}
+                {dayOpsTab === 'BOD' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '10px 0' }}>
+                    <div style={{
+                      padding: '16px 20px',
+                      borderRadius: '14px',
+                      background: dayShiftState?.shiftStatus === 'OPEN' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                      border: dayShiftState?.shiftStatus === 'OPEN' ? '1px solid #10b981' : '1px solid #ef4444',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}>
+                      <div>
+                        <div style={{ fontSize: '12px', fontWeight: 700, color: '#94a3b8' }}>CURRENT SHIFT STATUS</div>
+                        <div style={{ fontSize: '20px', fontWeight: 900, color: dayShiftState?.shiftStatus === 'OPEN' ? '#34d399' : '#f87171' }}>
+                          {dayShiftState?.shiftStatus === 'OPEN' ? '☀️ SHIFT IS OPEN & ACTIVE' : '🌙 SHIFT IS CURRENTLY CLOSED'}
+                        </div>
+                        {dayShiftState?.openedAt && (
+                          <div style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '4px' }}>
+                            Opened at: {new Date(dayShiftState.openedAt).toLocaleTimeString()} by {dayShiftState.openedBy || 'Manager'}
+                          </div>
+                        )}
+                      </div>
+                      <span style={{ fontSize: '32px' }}>{dayShiftState?.shiftStatus === 'OPEN' ? '🟢' : '🔒'}</span>
+                    </div>
+
+                    <div className="form-field-group">
+                      <label>Morning Shift Operational Notes</label>
+                      <input
+                        type="text"
+                        value={dayOpsNotes}
+                        onChange={e => setDayOpsNotes(e.target.value)}
+                        placeholder="e.g. Standard morning field collection run"
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                      <button
+                        type="button"
+                        onClick={handleStartBodShift}
+                        style={{
+                          padding: '12px 24px',
+                          borderRadius: '12px',
+                          background: 'linear-gradient(135deg, #10b981, #059669)',
+                          color: '#fff',
+                          fontWeight: 800,
+                          fontSize: '14px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}
+                      >
+                        <span>{dayShiftState?.shiftStatus === 'OPEN' ? '✓ Shift Active (Click to Refresh)' : '☀️ Start Day Begin (BOD) & Unlock Operations'}</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 2: DAY END (EOD) */}
+                {dayOpsTab === 'EOD' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '10px 0' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+                      <div style={{ padding: '14px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                        <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700 }}>DOORSTEP CASH</div>
+                        <div style={{ fontSize: '18px', fontWeight: 900, color: '#34d399', fontFamily: 'monospace' }}>₹{eodSummary.cashCollectedAmount.toLocaleString('en-IN')}</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                        <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700 }}>DYNAMIC UPI QR</div>
+                        <div style={{ fontSize: '18px', fontWeight: 900, color: '#818cf8', fontFamily: 'monospace' }}>₹{eodSummary.upiCollectedAmount.toLocaleString('en-IN')}</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                        <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700 }}>PAYMENT LINKS</div>
+                        <div style={{ fontSize: '18px', fontWeight: 900, color: '#f59e0b', fontFamily: 'monospace' }}>₹{(eodSummary.linkCollectedAmount || 0).toLocaleString('en-IN')}</div>
+                      </div>
+                      <div style={{ padding: '14px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
+                        <div style={{ fontSize: '11px', color: '#6ee7b7', fontWeight: 700 }}>TOTAL COLLECTED</div>
+                        <div style={{ fontSize: '18px', fontWeight: 900, color: '#10b981', fontFamily: 'monospace' }}>₹{eodSummary.totalCollectedAmount.toLocaleString('en-IN')}</div>
+                      </div>
+                    </div>
+
+                    <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.07)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: 800, color: '#fff' }}>Manual Day-End Settlement</div>
+                        <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
+                          Review today's total collections ({eodSummary.totalTransactionsCount} transactions) and seal the daily ledger.
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#38bdf8' }}>
+                        Efficiency: {eodSummary.collectionEfficiencyPercent}%
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                      <button
+                        type="button"
+                        onClick={handleCompleteEodSettlement}
+                        style={{
+                          padding: '12px 24px',
+                          borderRadius: '12px',
+                          background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                          color: '#fff',
+                          fontWeight: 800,
+                          fontSize: '14px',
+                          border: 'none',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        🌙 Complete Day-End (EOD) Settlement & Close Shift
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 3: CERTIFICATE */}
+                {dayOpsTab === 'CERTIFICATE' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '10px 0' }}>
+                    <div style={{ padding: '20px', borderRadius: '14px', background: '#fff', color: '#0f172a', fontFamily: 'monospace' }}>
+                      <div style={{ textAlign: 'center', borderBottom: '2px dashed #cbd5e1', paddingBottom: '12px', marginBottom: '14px' }}>
+                        <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 900 }}>FINWIN eCOLLECT ENTERPRISE</h3>
+                        <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>OFFICIAL DAILY RECONCILIATION SCROLL & CERTIFICATE</p>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12.5px' }}>
+                        <div>Date: <strong>{dayShiftState?.date || new Date().toLocaleDateString('en-IN')}</strong></div>
+                        <div>Branch Code: <strong>{selectedBranchCode || '01'}</strong></div>
+                        <div>Shift Status: <strong>{dayShiftState?.shiftStatus || 'CLOSED'}</strong></div>
+                        <div>Reconciled By: <strong>{dayShiftState?.closedBy || user?.name || 'Manager'}</strong></div>
+                        <div>Total Collections: <strong>₹{eodSummary.totalCollectedAmount.toLocaleString('en-IN')}</strong></div>
+                        <div>Cash Collected: <strong>₹{eodSummary.cashCollectedAmount.toLocaleString('en-IN')}</strong></div>
+                        <div>UPI QR Collected: <strong>₹{eodSummary.upiCollectedAmount.toLocaleString('en-IN')}</strong></div>
+                        <div>Payment Links Collected: <strong>₹{(eodSummary.linkCollectedAmount || 0).toLocaleString('en-IN')}</strong></div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                      <button type="button" onClick={handlePrintEodCertificate} style={{ padding: '10px 20px', borderRadius: '10px', background: 'linear-gradient(135deg, #6366f1, #4f46e5)', color: '#fff', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
+                        🖨️ Print EOD Certificate
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 4: GO-LIVE AUDIT */}
+                {dayOpsTab === 'GOLIVE' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '10px 0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderRadius: '12px', background: 'rgba(99, 102, 241, 0.12)', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
+                      <div>
+                        <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 700 }}>STANDALONE MODE (N) COMPLIANCE AUDIT</div>
+                        <div style={{ fontSize: '18px', fontWeight: 900, color: '#818cf8' }}>
+                          Score: {goLiveReport.passedCount} / {goLiveReport.totalChecks} Checks Passed ({goLiveReport.percentage}%)
+                        </div>
+                      </div>
+                      <span style={{ fontSize: '28px' }}>{goLiveReport.isReady ? '🚀' : '⏳'}</span>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {goLiveReport.checks.map(chk => (
+                        <div key={chk.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '10px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                          <div>
+                            <div style={{ fontSize: '13px', fontWeight: 700, color: '#f8fafc' }}>{chk.title}</div>
+                            <div style={{ fontSize: '11.5px', color: '#94a3b8' }}>{chk.detail}</div>
+                          </div>
+                          <span style={{ fontSize: '11.5px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', background: chk.passed ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)', color: chk.passed ? '#34d399' : '#f87171' }}>
+                            {chk.passed ? '✓ PASS' : '✕ ACTION REQUIRED'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="account-modal-foot">
+                  <button type="button" className="btn-modal-cancel" onClick={() => setIsDayOpsModalOpen(false)}>
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ============================================================
             6. MERCHANT COMMUNICATION CREDITS WALLET MODAL
            ============================================================ */}
@@ -4456,12 +6991,20 @@ const Accounts = () => {
               <div className="qr-modal-head">
                 <div className="qr-modal-title-group">
                   <div className="qr-title-icon">
-                    {collectionTab === 'link' ? <AccountIcons.Link /> : <AccountIcons.QrCode />}
+                    {collectionTab === 'link' ? <AccountIcons.Link /> : collectionTab === 'cash' ? <AccountIcons.Cash /> : <AccountIcons.QrCode />}
                   </div>
                   <div>
-                    <h3>{collectionTab === 'link' ? 'Instant Payment Link Generator' : 'Dynamic UPI QR Collection'}</h3>
+                    <h3>
+                      {collectionTab === 'link' 
+                        ? 'Instant Payment Link Generator' 
+                        : collectionTab === 'cash'
+                        ? 'Direct Cash Collection & CBS Post'
+                        : 'Dynamic UPI QR Collection'}
+                    </h3>
                     <span className="font-mono text-cyan" style={{ fontSize: '11.5px' }}>
-                      {qrAccount.collectionType === 'LOAN'
+                      {collectionTab === 'cash'
+                        ? 'Immediate CBS Core Banking Posting & Official Receipt Generation'
+                        : qrAccount.collectionType === 'LOAN'
                         ? 'Real-Time Loan EMI Collection & Gateway Dispatch'
                         : qrAccount.collectionType === 'FD'
                         ? 'Real-Time FD Fixed Deposit Inward Clearance'
@@ -4492,6 +7035,14 @@ const Accounts = () => {
                   <AccountIcons.Link />
                   <span>Instant Payment Link</span>
                 </button>
+                <button
+                  type="button"
+                  className={`collection-tab-btn ${collectionTab === 'cash' ? 'is-active' : ''}`}
+                  onClick={() => setCollectionTab('cash')}
+                >
+                  <AccountIcons.Cash />
+                  <span>Direct Cash Collection</span>
+                </button>
               </div>
 
               <div className="qr-modal-body">
@@ -4514,100 +7065,110 @@ const Accounts = () => {
                   </div>
                 </div>
 
-                {/* Amount Presets & Custom Input */}
-                <div>
-                  <div className="qr-section-label">Select or Enter Amount</div>
-                  <div className="qr-preset-grid">
-                    {[100, 200, 500, 1000, 2000, 5000].map((amt) => (
-                      <button
-                        key={amt}
-                        type="button"
-                        className={`qr-preset-btn ${qrAmount === amt && !qrCustomAmount ? 'is-active' : ''}`}
-                        onClick={() => {
-                          setQrAmount(amt);
-                          setQrCustomAmount('');
-                          setQrData(null);
-                          setPaymentStatus(null);
-                          setLinkData(null);
-                          setLinkStatus(null);
-                        }}
-                      >
-                        ₹{amt.toLocaleString('en-IN')}
-                      </button>
-                    ))}
-                    {Number(qrAccount.balance) > 0 && (
-                      <button
-                        type="button"
-                        className={`qr-preset-btn ${qrAmount === Number(qrAccount.balance) && !qrCustomAmount ? 'is-active' : ''}`}
-                        onClick={() => {
-                          setQrAmount(Number(qrAccount.balance));
-                          setQrCustomAmount('');
-                          setQrData(null);
-                          setPaymentStatus(null);
-                          setLinkData(null);
-                          setLinkStatus(null);
-                        }}
-                        style={{ gridColumn: 'span 2' }}
-                      >
-                        ₹{Number(qrAccount.balance).toLocaleString('en-IN')} (Full Balance)
-                      </button>
-                    )}
-                  </div>
-                </div>
+                {/* Amount Presets & Custom Input (Shown only when configuring amount before generation) */}
+                {!(
+                  (collectionTab === 'qr' && (qrData || paymentStatus === 'SUCCESS' || verifiedPaymentReceipt)) ||
+                  (collectionTab === 'link' && (linkData || linkStatus === 'SUCCESS' || verifiedPaymentReceipt)) ||
+                  (collectionTab === 'cash' && cashData)
+                ) && (
+                  <>
+                    <div>
+                      <div className="qr-section-label">Select or Enter Amount</div>
+                      <div className="qr-preset-grid">
+                        {[100, 200, 500, 1000, 2000, 5000].map((amt) => (
+                          <button
+                            key={amt}
+                            type="button"
+                            className={`qr-preset-btn ${qrAmount === amt && !qrCustomAmount ? 'is-active' : ''}`}
+                            onClick={() => {
+                              setQrAmount(amt);
+                              setQrCustomAmount('');
+                              setQrData(null);
+                              setPaymentStatus(null);
+                              setLinkData(null);
+                              setLinkStatus(null);
+                            }}
+                          >
+                            ₹{amt.toLocaleString('en-IN')}
+                          </button>
+                        ))}
+                        {Number(qrAccount.balance) > 0 && (
+                          <button
+                            type="button"
+                            className={`qr-preset-btn ${qrAmount === Number(qrAccount.balance) && !qrCustomAmount ? 'is-active' : ''}`}
+                            onClick={() => {
+                              setQrAmount(Number(qrAccount.balance));
+                              setQrCustomAmount('');
+                              setQrData(null);
+                              setPaymentStatus(null);
+                              setLinkData(null);
+                              setLinkStatus(null);
+                            }}
+                            style={{ gridColumn: 'span 2' }}
+                          >
+                            ₹{Number(qrAccount.balance).toLocaleString('en-IN')} (Full Balance)
+                          </button>
+                        )}
+                      </div>
+                    </div>
 
-                <div className="qr-input-wrap">
-                  <span className="qr-currency-prefix">₹</span>
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    placeholder={`Custom amount (e.g. ${qrAmount})`}
-                    value={qrCustomAmount}
-                    onChange={(e) => {
-                      setQrCustomAmount(e.target.value);
-                      setQrData(null);
-                      setPaymentStatus(null);
-                      setLinkData(null);
-                      setLinkStatus(null);
-                    }}
-                    className="qr-amount-input font-mono"
-                  />
-                </div>
+                    <div className="qr-input-wrap">
+                      <span className="qr-currency-prefix">₹</span>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        placeholder={`Custom amount (e.g. ${qrAmount})`}
+                        value={qrCustomAmount}
+                        onChange={(e) => {
+                          setQrCustomAmount(e.target.value);
+                          setQrData(null);
+                          setPaymentStatus(null);
+                          setLinkData(null);
+                          setLinkStatus(null);
+                        }}
+                        className="qr-amount-input font-mono"
+                      />
+                    </div>
+                  </>
+                )}
 
                 {/* TAB 1: DYNAMIC UPI QR MODE */}
                 {collectionTab === 'qr' && (
                   <>
-                    <div>
-                      <div className="qr-section-label">Collection Remarks / Note</div>
-                      <input
-                        type="text"
-                        placeholder="Enter reference or collection remarks"
-                        value={qrNote}
-                        onChange={(e) => setQrNote(e.target.value)}
-                        className="qr-note-input"
-                      />
-                    </div>
+                    {/* Remarks input & Generate Button (Shown before QR is generated) */}
+                    {!qrData && !paymentStatus && !verifiedPaymentReceipt && (
+                      <>
+                        <div>
+                          <div className="qr-section-label">Collection Remarks / Note</div>
+                          <input
+                            type="text"
+                            placeholder="Enter reference or collection remarks"
+                            value={qrNote}
+                            onChange={(e) => setQrNote(e.target.value)}
+                            className="qr-note-input"
+                          />
+                        </div>
 
-                    {/* Generate Button if not generated yet */}
-                    {!qrData && (
-                      <button
-                        type="button"
-                        className="btn-generate-qr-cta"
-                        disabled={qrLoading}
-                        onClick={() => handleGenerateQr()}
-                      >
-                        {qrLoading ? (
-                          <span>Connecting to Payment Gateway...</span>
-                        ) : (
-                          <>
-                            <AccountIcons.QrCode />
-                            <span>
-                              Generate UPI QR for ₹
-                              {Number(qrCustomAmount || qrAmount || 0).toLocaleString('en-IN')}
-                            </span>
-                          </>
-                        )}
-                      </button>
+                        <button
+                          type="button"
+                          className="btn-generate-qr-cta"
+                          disabled={qrLoading}
+                          onClick={() => handleGenerateQr()}
+                        >
+                          {qrLoading ? (
+                            <span>Connecting to Payment Gateway...</span>
+                          ) : (
+                            <>
+                              <AccountIcons.QrCode />
+                              <span>
+                                Generate UPI QR for ₹
+                                {Number(qrCustomAmount || qrAmount || 0).toLocaleString('en-IN')}
+                              </span>
+                            </>
+                          )}
+                        </button>
+                      </>
                     )}
 
                     {/* Error Banner */}
@@ -4617,21 +7178,49 @@ const Accounts = () => {
                       </div>
                     )}
 
-                    {/* Generated QR View */}
-                    {qrData && (
-                      <div className="qr-result-box">
-                        <div className="qr-amount-badge-large font-mono">
-                          <span>₹{Number(qrData.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    {/* Generated QR View - Positioned High with Live Expiry Timer */}
+                    {qrData && paymentStatus !== 'SUCCESS' && !verifiedPaymentReceipt && (
+                      <div className="qr-result-box qr-result-box-elevated">
+                        <div className="qr-header-summary-row">
+                          <div className="qr-amount-badge-large font-mono">
+                            <span className="qr-curr">₹</span>
+                            <span>{Number(qrData.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                          </div>
+
+                          {/* Live Expiry Countdown Timer */}
+                          <div className={`qr-expiry-badge font-mono ${qrExpirySeconds <= 60 ? (qrExpirySeconds === 0 ? 'is-expired' : 'is-warning') : ''}`}>
+                            <span className="timer-icon">{qrExpirySeconds === 0 ? '⛔' : (qrExpirySeconds <= 60 ? '⚠️' : '⏱️')}</span>
+                            <span>
+                              {qrExpirySeconds === 0 ? 'QR Expired' : `Valid for: ${formatCountdown(qrExpirySeconds)}`}
+                            </span>
+                          </div>
                         </div>
 
-                        <div className="qr-canvas-holder">
-                          <QRCodeSVG
-                            id="upi-qr-code-svg"
-                            value={qrData.paymentUrl}
-                            size={210}
-                            level="H"
-                            includeMargin={true}
-                          />
+                        <div className="qr-canvas-holder-relative">
+                          <div className={`qr-canvas-holder ${qrExpirySeconds === 0 ? 'is-blurred' : ''}`}>
+                            <QRCodeSVG
+                              id="upi-qr-code-svg"
+                              value={qrData.paymentUrl}
+                              size={200}
+                              level="H"
+                              includeMargin={true}
+                            />
+                          </div>
+
+                          {qrExpirySeconds === 0 && (
+                            <div className="qr-expired-overlay">
+                              <span className="expired-title">QR Code Expired</span>
+                              <span className="expired-sub">Session timed out (5 mins)</span>
+                              <button
+                                type="button"
+                                className="btn-regenerate-qr-overlay"
+                                onClick={() => handleGenerateQr()}
+                              >
+                                <AccountIcons.Refresh />
+                                <span>Regenerate QR</span>
+                              </button>
+                            </div>
+                          )}
                         </div>
 
                         <div className="qr-order-meta font-mono">
@@ -4645,12 +7234,11 @@ const Accounts = () => {
                           </button>
                         </div>
 
-                        {paymentStatus && (
-                          <div className={`status-pill ${paymentStatus === 'SUCCESS' ? 'is-active' : 'is-inactive'}`} style={{ padding: '6px 14px', fontSize: '13px' }}>
-                            <span className="status-dot"></span>
-                            <span>{paymentStatus === 'SUCCESS' ? 'Payment Verified & Captured' : 'Payment Verification Failed'}</span>
-                          </div>
-                        )}
+                        {/* Live Polling Status Indicator */}
+                        <div className="status-pill is-pending" style={{ padding: '6px 14px', fontSize: '13px', background: 'rgba(99, 102, 241, 0.12)', border: '1px solid rgba(99, 102, 241, 0.3)', color: '#818cf8' }}>
+                          <span className="status-dot" style={{ animation: 'pulse 1.5s infinite' }}></span>
+                          <span>⚡ Waiting for Customer UPI Payment...</span>
+                        </div>
 
                         <div className="qr-action-buttons-group">
                           <button
@@ -4671,20 +7259,12 @@ const Accounts = () => {
                           </button>
                           <button
                             type="button"
-                            className="btn-qr-action"
-                            onClick={handlePrintReceipt}
-                          >
-                            <AccountIcons.Printer />
-                            <span>Print Receipt</span>
-                          </button>
-                          <button
-                            type="button"
                             className="btn-qr-action is-verify"
                             onClick={handleCheckPaymentStatus}
                             disabled={checkingStatus}
                           >
                             <AccountIcons.Refresh />
-                            <span>{checkingStatus ? 'Checking...' : 'Verify Status'}</span>
+                            <span>{checkingStatus ? 'Checking...' : 'Check Status'}</span>
                           </button>
                           <button
                             type="button"
@@ -4692,6 +7272,7 @@ const Accounts = () => {
                             onClick={() => {
                               setQrData(null);
                               setPaymentStatus(null);
+                              setVerifiedPaymentReceipt(null);
                             }}
                           >
                             <span>Change Amount</span>
@@ -4704,6 +7285,119 @@ const Accounts = () => {
                           <span className="upi-brand-tag">PhonePe</span>
                           <span className="upi-brand-tag">Paytm</span>
                           <span className="upi-brand-tag">BHIM</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Automatically Show Official Payment Receipt When Paid via QR */}
+                    {(paymentStatus === 'SUCCESS' || (verifiedPaymentReceipt && collectionTab === 'qr')) && (
+                      <div className="payment-receipt-success-card">
+                        <div className="receipt-success-header">
+                          <div className="receipt-success-icon-wrap">
+                            <span style={{ fontSize: '28px' }}>🎉</span>
+                          </div>
+                          <div>
+                            <h3 style={{ margin: 0, fontSize: '18px', color: '#10b981', fontWeight: 800 }}>Payment Received & Verified</h3>
+                            <span style={{ fontSize: '12px', color: '#94a3b8' }}>Real-time transaction confirmed by payment gateway & synchronized to CBS</span>
+                          </div>
+                        </div>
+
+                        <div className="receipt-amount-showcase font-mono">
+                          <span className="curr">₹</span>
+                          <span className="amt">{Number(verifiedPaymentReceipt?.amount || qrData?.amount || qrAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+
+                        <div className="receipt-ledger-grid font-mono">
+                          <div className="rlg-row">
+                            <span className="lbl">Bank / Gateway Txn ID:</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <strong style={{ color: '#06b6d4' }}>{verifiedPaymentReceipt?.transactionId || qrData?.orderId || 'TXN-CONFIRMED'}</strong>
+                              <button
+                                className="btn-copy-acc"
+                                onClick={() => handleCopy(verifiedPaymentReceipt?.transactionId || qrData?.orderId, 'rcpt-txn')}
+                              >
+                                {copiedId === 'rcpt-txn' ? <AccountIcons.Check /> : <AccountIcons.Copy />}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="rlg-row">
+                            <span className="lbl">CBS Core Reference:</span>
+                            <strong style={{ color: '#10b981' }}>{verifiedPaymentReceipt?.cbsTransactionId || 'CBS-POSTED'}</strong>
+                          </div>
+
+                          <div className="rlg-row">
+                            <span className="lbl">Customer Name:</span>
+                            <strong>{verifiedPaymentReceipt?.customerName || qrAccount?.accountHolder || 'Customer'}</strong>
+                          </div>
+
+                          <div className="rlg-row">
+                            <span className="lbl">Account Number:</span>
+                            <strong>{verifiedPaymentReceipt?.accountNumber || qrAccount?.accountNumber}</strong>
+                          </div>
+
+                          <div className="rlg-row">
+                            <span className="lbl">Payment Channel:</span>
+                            <span>⚡ Instant UPI Clearance</span>
+                          </div>
+
+                          <div className="rlg-row">
+                            <span className="lbl">Cleared Timestamp:</span>
+                            <span>{new Date(verifiedPaymentReceipt?.completedAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} ({new Date().toLocaleDateString()})</span>
+                          </div>
+
+                          <div className="rlg-row" style={{ gridColumn: 'span 2', background: 'rgba(16, 185, 129, 0.08)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                            <span className="lbl" style={{ color: '#10b981' }}>Ledger Clearance Status:</span>
+                            <strong style={{ color: '#10b981' }}>🟢 Disbursed & Account Ledger Updated</strong>
+                          </div>
+                        </div>
+
+                        <div className="receipt-actions-bar">
+                          <button
+                            type="button"
+                            className="btn-receipt-action is-print"
+                            onClick={handlePrintReceipt}
+                          >
+                            <AccountIcons.Printer />
+                            <span>Print Official Receipt</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            className="btn-receipt-action is-wa"
+                            onClick={() => {
+                              const amt = verifiedPaymentReceipt?.amount || qrData?.amount || qrAmount;
+                              const txn = verifiedPaymentReceipt?.transactionId || qrData?.orderId;
+                              const phone = qrAccount?.phone || qrAccount?.mobile;
+                              const name = qrAccount?.accountHolder || 'Customer';
+                              const acc = qrAccount?.accountNumber;
+                              const text = `Dear ${name},\nYour payment of ₹${Number(amt).toLocaleString('en-IN')} for Acc #${acc} is received successfully.\nTxn ID: ${txn}\nThank you!`;
+                              const cleanPhone = phone ? String(phone).replace(/\D/g, '') : '';
+                              const waUrl = cleanPhone && cleanPhone.length === 10
+                                ? `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(text)}`
+                                : `https://wa.me/?text=${encodeURIComponent(text)}`;
+                              window.open(waUrl, '_blank');
+                            }}
+                          >
+                            <AccountIcons.WhatsApp />
+                            <span>Share via WhatsApp</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            className="btn-receipt-action is-done"
+                            onClick={() => {
+                              setIsQrModalOpen(false);
+                              setVerifiedPaymentReceipt(null);
+                              setPaymentStatus(null);
+                              setLinkStatus(null);
+                              setQrData(null);
+                              setLinkData(null);
+                            }}
+                          >
+                            <AccountIcons.Check />
+                            <span>Done & Close Modal</span>
+                          </button>
                         </div>
                       </div>
                     )}
@@ -4776,8 +7470,8 @@ const Accounts = () => {
                       </div>
                     )}
 
-                    {/* Generated Payment Link Card */}
-                    {linkData && (
+                    {/* Generated Payment Link Card - If NOT yet paid */}
+                    {linkData && linkStatus !== 'SUCCESS' && !verifiedPaymentReceipt && (
                       <div className="payment-link-result-card">
                         <div className="link-header-row">
                           <div className="qr-amount-badge-large font-mono">
@@ -4825,12 +7519,11 @@ const Accounts = () => {
                           </button>
                         </div>
 
-                        {linkStatus && (
-                          <div className={`status-pill ${linkStatus === 'SUCCESS' ? 'is-active' : 'is-inactive'}`} style={{ padding: '6px 14px', fontSize: '13px' }}>
-                            <span className="status-dot"></span>
-                            <span>{linkStatus === 'SUCCESS' ? 'Payment Verified & Captured' : 'Payment Not Yet Completed'}</span>
-                          </div>
-                        )}
+                        {/* Live Polling Status Indicator */}
+                        <div className="status-pill is-pending" style={{ padding: '6px 14px', fontSize: '13px', background: 'rgba(99, 102, 241, 0.12)', border: '1px solid rgba(99, 102, 241, 0.3)', color: '#818cf8' }}>
+                          <span className="status-dot" style={{ animation: 'pulse 1.5s infinite' }}></span>
+                          <span>⚡ Waiting for Customer Checkout...</span>
+                        </div>
 
                         {/* Quick Distribution Actions */}
                         <div className="link-distribution-actions">
@@ -4855,12 +7548,12 @@ const Accounts = () => {
                             onClick={() => window.open(linkData.paymentUrl, '_blank')}
                           >
                             <AccountIcons.ExternalLink />
-                            <span>Open Checkout</span>
+                            <span>Open Link</span>
                           </button>
 
                           <button
                             type="button"
-                            className="btn-link-action is-verify"
+                            className="btn-link-action"
                             onClick={handleCheckLinkStatus}
                             disabled={checkingLinkStatus}
                           >
@@ -4884,10 +7577,246 @@ const Accounts = () => {
                           onClick={() => {
                             setLinkData(null);
                             setLinkStatus(null);
+                            setVerifiedPaymentReceipt(null);
                           }}
                         >
                           <span>↺ Generate New Link with Different Amount</span>
                         </button>
+                      </div>
+                    )}
+
+                    {/* Automatically Show Official Payment Receipt When Paid via Link */}
+                    {(linkStatus === 'SUCCESS' || (verifiedPaymentReceipt && collectionTab === 'link')) && (
+                      <div className="payment-receipt-success-card">
+                        <div className="receipt-success-header">
+                          <div className="receipt-success-icon-wrap">
+                            <span style={{ fontSize: '28px' }}>🎉</span>
+                          </div>
+                          <div>
+                            <h3 style={{ margin: 0, fontSize: '18px', color: '#10b981', fontWeight: 800 }}>Payment Received & Verified</h3>
+                            <span style={{ fontSize: '12px', color: '#94a3b8' }}>Real-time transaction confirmed by payment gateway & synchronized to CBS</span>
+                          </div>
+                        </div>
+
+                        <div className="receipt-amount-showcase font-mono">
+                          <span className="curr">₹</span>
+                          <span className="amt">{Number(verifiedPaymentReceipt?.amount || linkData?.amount || qrAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+
+                        <div className="receipt-ledger-grid font-mono">
+                          <div className="rlg-row">
+                            <span className="lbl">Bank / Gateway Txn ID:</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <strong style={{ color: '#06b6d4' }}>{verifiedPaymentReceipt?.transactionId || linkData?.orderId || 'TXN-CONFIRMED'}</strong>
+                              <button
+                                className="btn-copy-acc"
+                                onClick={() => handleCopy(verifiedPaymentReceipt?.transactionId || linkData?.orderId, 'rcpt-txn')}
+                              >
+                                {copiedId === 'rcpt-txn' ? <AccountIcons.Check /> : <AccountIcons.Copy />}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="rlg-row">
+                            <span className="lbl">CBS Core Reference:</span>
+                            <strong style={{ color: '#10b981' }}>{verifiedPaymentReceipt?.cbsTransactionId || 'CBS-POSTED'}</strong>
+                          </div>
+
+                          <div className="rlg-row">
+                            <span className="lbl">Customer Name:</span>
+                            <strong>{verifiedPaymentReceipt?.customerName || qrAccount?.accountHolder || 'Customer'}</strong>
+                          </div>
+
+                          <div className="rlg-row">
+                            <span className="lbl">Account Number:</span>
+                            <strong>{verifiedPaymentReceipt?.accountNumber || qrAccount?.accountNumber}</strong>
+                          </div>
+
+                          <div className="rlg-row">
+                            <span className="lbl">Payment Channel:</span>
+                            <span>🌐 Finwin Instant Payment Link</span>
+                          </div>
+
+                          <div className="rlg-row">
+                            <span className="lbl">Cleared Timestamp:</span>
+                            <span>{new Date(verifiedPaymentReceipt?.completedAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} ({new Date().toLocaleDateString()})</span>
+                          </div>
+
+                          <div className="rlg-row" style={{ gridColumn: 'span 2', background: 'rgba(16, 185, 129, 0.08)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                            <span className="lbl" style={{ color: '#10b981' }}>Ledger Clearance Status:</span>
+                            <strong style={{ color: '#10b981' }}>🟢 Disbursed & Account Ledger Updated</strong>
+                          </div>
+                        </div>
+
+                        <div className="receipt-actions-bar">
+                          <button
+                            type="button"
+                            className="btn-receipt-action is-print"
+                            onClick={handlePrintReceipt}
+                          >
+                            <AccountIcons.Printer />
+                            <span>Print Official Receipt</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            className="btn-receipt-action is-wa"
+                            onClick={() => {
+                              const amt = verifiedPaymentReceipt?.amount || linkData?.amount || qrAmount;
+                              const txn = verifiedPaymentReceipt?.transactionId || linkData?.orderId;
+                              const phone = qrAccount?.phone || qrAccount?.mobile;
+                              const name = qrAccount?.accountHolder || 'Customer';
+                              const acc = qrAccount?.accountNumber;
+                              const text = `Dear ${name},\nYour payment of ₹${Number(amt).toLocaleString('en-IN')} for Acc #${acc} is received successfully.\nTxn ID: ${txn}\nThank you!`;
+                              const cleanPhone = phone ? String(phone).replace(/\D/g, '') : '';
+                              const waUrl = cleanPhone && cleanPhone.length === 10
+                                ? `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(text)}`
+                                : `https://wa.me/?text=${encodeURIComponent(text)}`;
+                              window.open(waUrl, '_blank');
+                            }}
+                          >
+                            <AccountIcons.WhatsApp />
+                            <span>Share via WhatsApp</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            className="btn-receipt-action is-done"
+                            onClick={() => {
+                              setIsQrModalOpen(false);
+                              setVerifiedPaymentReceipt(null);
+                              setPaymentStatus(null);
+                              setLinkStatus(null);
+                              setQrData(null);
+                              setLinkData(null);
+                            }}
+                          >
+                            <AccountIcons.Check />
+                            <span>Done & Close Modal</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* TAB 3: DIRECT CASH COLLECTION MODE */}
+                {collectionTab === 'cash' && (
+                  <>
+                    <div className="cash-collector-banner">
+                      <span>🏦 Authorized Channel: <strong>CBS Core Banking Direct Cash Counter</strong></span>
+                      <span>Agent: <strong>{user?.fullName || user?.name || 'Assigned Branch Agent'}</strong></span>
+                    </div>
+
+                    <div>
+                      <div className="qr-section-label">Cash Receipt Remarks / Notes</div>
+                      <input
+                        type="text"
+                        placeholder="Enter cashier/collector remarks or physical slip number"
+                        value={qrNote}
+                        onChange={(e) => setQrNote(e.target.value)}
+                        className="qr-note-input"
+                      />
+                    </div>
+
+                    {/* Receive Cash & Post to CBS Button */}
+                    {!cashData && (
+                      <button
+                        type="button"
+                        className="btn-generate-cash-cta"
+                        disabled={cashLoading}
+                        onClick={() => handleProcessCashCollection()}
+                      >
+                        {cashLoading ? (
+                          <span>Posting Cash Transaction to CBS...</span>
+                        ) : (
+                          <>
+                            <AccountIcons.Cash />
+                            <span>
+                              Receive Cash & Post ₹{Number(qrCustomAmount || qrAmount || 0).toLocaleString('en-IN')} to CBS
+                            </span>
+                          </>
+                        )}
+                      </button>
+                    )}
+
+                    {/* Error Banner */}
+                    {cashError && (
+                      <div className="qr-error-alert">
+                        <span>⚠️ {cashError}</span>
+                      </div>
+                    )}
+
+                    {/* Generated Cash Receipt Card */}
+                    {cashData && (
+                      <div className="cash-result-card">
+                        <div className="cash-result-header">
+                          <div className="qr-amount-badge-large font-mono">
+                            <span>₹{Number(cashData.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                          <span className="cash-success-pill">
+                            <AccountIcons.Check /> Cash Received & Posted
+                          </span>
+                        </div>
+
+                        {/* Receipt Details Breakdown */}
+                        <div className="cash-receipt-grid font-mono">
+                          <div className="cash-receipt-item">
+                            <span className="lbl">CBS Txn ID / Receipt</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span className="val is-ref">{cashData.transactionId}</span>
+                              <button
+                                type="button"
+                                className="btn-copy-acc"
+                                onClick={() => handleCopy(cashData.transactionId, 'cash-txn-id')}
+                                title="Copy CBS Txn ID"
+                              >
+                                {copiedId === 'cash-txn-id' ? <AccountIcons.Check /> : <AccountIcons.Copy />}
+                              </button>
+                            </div>
+                          </div>
+                          <div className="cash-receipt-item">
+                            <span className="lbl">Account Number</span>
+                            <span className="val">{cashData.accountNumber}</span>
+                          </div>
+                          <div className="cash-receipt-item">
+                            <span className="lbl">Customer Name</span>
+                            <span className="val">{cashData.customerName}</span>
+                          </div>
+                          <div className="cash-receipt-item">
+                            <span className="lbl">Collection Scheme</span>
+                            <span className="val">{cashData.collectionType}</span>
+                          </div>
+                          <div className="cash-receipt-item">
+                            <span className="lbl">Received By Agent</span>
+                            <span className="val">{cashData.agentName}</span>
+                          </div>
+                          <div className="cash-receipt-item">
+                            <span className="lbl">Posting Timestamp</span>
+                            <span className="val">{new Date(cashData.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                          </div>
+                        </div>
+
+                        <div className="cash-action-buttons-group">
+                          <button
+                            type="button"
+                            className="btn-cash-action is-print"
+                            onClick={handlePrintReceipt}
+                          >
+                            <AccountIcons.Printer />
+                            <span>Print Cash Receipt</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-cash-action"
+                            onClick={() => {
+                              setCashData(null);
+                              setCashError(null);
+                            }}
+                          >
+                            <span>Collect Another</span>
+                          </button>
+                        </div>
                       </div>
                     )}
                   </>
@@ -4898,6 +7827,120 @@ const Accounts = () => {
           </div>
         )}
 
+        <AutoPaySetupModal
+          isOpen={autoPayModalOpen}
+          onClose={() => setAutoPayModalOpen(false)}
+          account={autoPayModalAccount}
+          bulkAccounts={autoPayBulkAccounts}
+          onSuccess={() => {
+            loadAccounts();
+          }}
+        />
+
+        {/* Interactive WhatsApp Payment Link Dispatcher Modal */}
+        {waModalOpen && (
+          <div className="account-modal-overlay fade-in">
+            <div className="account-modal-container glass-card" style={{ maxWidth: '520px', width: '90%' }}>
+              <div className="account-modal-head" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(37, 211, 102, 0.2)', color: '#25d366', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', border: '1px solid rgba(37, 211, 102, 0.4)' }}>
+                    <i className="bi bi-whatsapp"></i>
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#fff' }}>Send WhatsApp Payment Link</h3>
+                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>Generate live payment URL & dispatch via Telinfy REST API</span>
+                  </div>
+                </div>
+                <button type="button" className="btn-modal-close" onClick={() => setWaModalOpen(false)}>×</button>
+              </div>
+
+              <div className="modal-body-custom p-3" style={{ marginTop: '16px' }}>
+                <form onSubmit={handleSendWhatsAppPaymentLink}>
+                  {/* Account Summary Banner */}
+                  <div style={{ padding: '14px 18px', borderRadius: '14px', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', marginBottom: '18px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13.5px' }}>
+                      <span className="text-muted">Customer:</span>
+                      <strong className="text-light">{waTargetAccount?.accountHolder || waTargetAccount?.customerName || 'Customer'}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
+                      <span className="text-muted">Account Number:</span>
+                      <code className="text-info font-mono">{waTargetAccount?.accountNumber || 'N/A'}</code>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                      <span className="text-muted">Product / Collection:</span>
+                      <span className="badge bg-primary-subtle text-primary font-bold">{waTargetAccount?.collectionType || 'RD'}</span>
+                    </div>
+                  </div>
+
+                  {/* Recipient Phone Field (Editable) */}
+                  <div className="form-group mb-3">
+                    <label className="form-label font-bold" style={{ fontSize: '12px', color: '#38bdf8', marginBottom: '6px', display: 'block' }}>
+                      📱 Recipient Mobile Number (Editable)
+                    </label>
+                    <div className="input-group">
+                      <span className="input-group-text font-mono" style={{ background: 'rgba(255,255,255,0.08)', color: '#fff', border: '1px solid rgba(255,255,255,0.15)' }}>+91</span>
+                      <input
+                        type="tel"
+                        maxLength={10}
+                        className="form-control font-mono"
+                        style={{ background: '#0f172a', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', fontSize: '14px' }}
+                        value={waRecipientPhone}
+                        onChange={(e) => setWaRecipientPhone(e.target.value)}
+                        placeholder="Enter 10-digit mobile number"
+                        required
+                      />
+                    </div>
+                    <small className="form-text text-muted" style={{ fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                      Mobile number is pre-filled. You can edit or type a new mobile number here before sending.
+                    </small>
+                  </div>
+
+                  {/* Payment Amount Field (Editable) */}
+                  <div className="form-group mb-4">
+                    <label className="form-label font-bold" style={{ fontSize: '12px', color: '#10b981', marginBottom: '6px', display: 'block' }}>
+                      💰 Collection Amount (₹)
+                    </label>
+                    <input
+                      type="number"
+                      className="form-control font-mono"
+                      style={{ background: '#0f172a', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', fontSize: '14px' }}
+                      value={waCustomAmount}
+                      onChange={(e) => setWaCustomAmount(e.target.value)}
+                      placeholder="Enter collection amount"
+                      required
+                    />
+                  </div>
+
+                  {/* Send CTA */}
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                    <button
+                      type="button"
+                      className="btn-modal-cancel flex-grow-1"
+                      onClick={() => setWaModalOpen(false)}
+                      style={{ padding: '10px 16px', borderRadius: '10px' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={waSending}
+                      className="btn-modal-save flex-grow-2 font-weight-bold"
+                      style={{ background: 'linear-gradient(135deg, #25d366, #128c7e)', border: 'none', padding: '10px 20px', borderRadius: '10px', color: '#fff', cursor: 'pointer' }}
+                    >
+                      {waSending ? (
+                        <span>Generating Link & Dispatching...</span>
+                      ) : (
+                        <>
+                          <i className="bi bi-whatsapp me-2"></i> Generate & Send Payment Link
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

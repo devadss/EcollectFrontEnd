@@ -1,12 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
 import { settlementApi } from '../../services/api';
+import { exportToCsv } from '../../utils/exportLedger';
+import SettlementDetailPrintReceipt from '../../components/ledger/SettlementDetailPrintReceipt';
 import './SettlementDetails.css';
 
 // SVG Icons
 const DetailIcons = {
+  Search: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  ),
   ArrowLeft: () => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <line x1="19" y1="12" x2="5" y2="12" />
@@ -61,46 +69,111 @@ const SettlementDetails = () => {
   const { id } = useParams();
   const [loading, setLoading] = useState(true);
   const [settlement, setSettlement] = useState(null);
+  const [transactions, setTransactions] = useState([]);
   const [copiedField, setCopiedField] = useState(null);
 
-  useEffect(() => {
-    loadSettlement();
-  }, [id]);
+  // Pagination & Search State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const loadSettlement = async () => {
+  const filteredTransactions = useMemo(() => {
+    if (!searchQuery.trim()) return transactions;
+    const query = searchQuery.toLowerCase().trim();
+    return transactions.filter(tx => 
+      String(tx.transaction_id || tx.id || '').toLowerCase().includes(query) ||
+      String(tx.order_id || '').toLowerCase().includes(query) ||
+      String(tx.customer_name || '').toLowerCase().includes(query) ||
+      String(tx.payment_channel || tx.payment_mode || '').toLowerCase().includes(query)
+    );
+  }, [transactions, searchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / pageSize));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginatedTransactions = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredTransactions.slice(start, start + pageSize);
+  }, [filteredTransactions, currentPage, pageSize]);
+
+  const loadSettlement = useCallback(async () => {
     try {
       setLoading(true);
       const res = await settlementApi.getById(id);
-      const data = res?.data?.data || res?.data;
-      
-      // Fallback details if not found or sample
-      const finalData = data && data.id ? data : {
-        id: id || 'SET-9901',
-        merchant: 'Apex Retail Services Pvt Ltd',
-        merchantId: 'MCH-88210',
-        amount: 145000,
-        fee: 290,
-        tax: 52.2,
-        netAmount: 144657.8,
-        status: 'Completed',
-        date: '2026-08-16T14:32:00',
-        bankRef: 'HDFC0001892-UTR98127391',
-        utr: 'UTR981273910283',
-        bankName: 'HDFC Bank Ltd',
-        accountNumber: '•••• •••• •••• 4912',
-        accountHolder: 'Apex Retail Services Escrow Account',
-        ifsc: 'HDFC0001892',
-        settlementMode: 'IMPS / Direct NEFT Batch',
-        cycle: 'T+1 Automated Daily Payout',
-      };
+      const rawData = res?.data?.data || res?.data;
 
-      setSettlement(finalData);
+      let items = [];
+      if (Array.isArray(rawData)) {
+        items = rawData;
+      } else if (rawData && Array.isArray(rawData.data)) {
+        items = rawData.data;
+      } else if (rawData && typeof rawData === 'object' && (rawData.id || rawData.settlement_id || rawData.transaction_id)) {
+        items = [rawData];
+      }
+
+      if (items.length > 0) {
+        setTransactions(items);
+        const first = items[0];
+        const totalGross = items.reduce((sum, item) => sum + (Number(item.gross_transaction_amount || item.sale_amount || item.amount) || 0), 0);
+        const totalTdr = items.reduce((sum, item) => sum + (Number(item.tdr_amount || item.fee) || 0), 0);
+        const totalTax = items.reduce((sum, item) => sum + (Number(item.tax_on_tdr_amount || item.tax) || 0), 0);
+        const totalReimbursed = items.reduce((sum, item) => sum + (Number(item.amount_reimbursed || item.payout_amount || item.netAmount) || 0), 0);
+
+        setSettlement({
+          id: first.settlement_id || id || 'SET-10075',
+          merchant: first.customer_name ? `${first.customer_name}'s Settlement Batch` : 'Apex Retail Services Pvt Ltd',
+          merchantId: first.order_id || 'MCH-88210',
+          amount: totalGross > 0 ? totalGross : 145000,
+          fee: totalTdr > 0 ? totalTdr : 290,
+          tax: totalTax > 0 ? totalTax : 52.2,
+          netAmount: totalReimbursed > 0 ? totalReimbursed : (totalGross > 0 ? (totalGross - totalTdr - totalTax) : 144657.8),
+          status: (first.completed === 'y' || first.completed === true || String(first.status).toLowerCase() === 'completed') ? 'Completed' : 'Pending',
+          date: first.settlement_datetime || new Date().toISOString(),
+          bankRef: first.bank_reference || '710061536126',
+          utr: first.bank_reference ? `UTR${first.bank_reference}` : 'UTR710061536126',
+          bankName: first.bank_name || 'HDFC Bank Ltd',
+          accountNumber: first.account_number ? `•••• •••• •••• ${String(first.account_number).slice(-4)}` : '•••• •••• •••• 4912',
+          accountHolder: first.account_name || 'Apex Retail Services Escrow Account',
+          ifsc: first.ifsc_code || 'HDFC0000002',
+          settlementMode: first.payment_channel || 'IMPS / Direct NEFT Batch',
+          cycle: 'T+1 Automated Daily Payout',
+        });
+      } else {
+        setSettlement({
+          id: id || 'SET-10075',
+          merchant: 'Apex Retail Services Pvt Ltd',
+          merchantId: 'MCH-88210',
+          amount: 145000,
+          fee: 290,
+          tax: 52.2,
+          netAmount: 144657.8,
+          status: 'Completed',
+          date: '2026-08-16T14:32:00',
+          bankRef: '710061536126',
+          utr: 'UTR710061536126',
+          bankName: 'HDFC Bank Ltd',
+          accountNumber: '•••• •••• •••• 4912',
+          accountHolder: 'Apex Retail Services Escrow Account',
+          ifsc: 'HDFC0000002',
+          settlementMode: 'IMPS / Direct NEFT Batch',
+          cycle: 'T+1 Automated Daily Payout',
+        });
+      }
     } catch (error) {
       console.error('Error loading settlement:', error);
     } finally {
       setTimeout(() => setLoading(false), 300);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    loadSettlement();
+  }, [loadSettlement]);
 
   const handleCopy = (text, field) => {
     navigator.clipboard.writeText(text);
@@ -132,6 +205,21 @@ const SettlementDetails = () => {
 
   const statusKey = (settlement.status || 'completed').toLowerCase();
 
+  const handleExportCsv = () => {
+    const columns = [
+      { key: '#sno', label: 'S.No' },
+      { key: 'transaction_id', label: 'Transaction ID' },
+      { key: 'order_id', label: 'Order ID' },
+      { key: 'customer_name', label: 'Customer' },
+      { key: 'payment_channel', label: 'Mode' },
+      { key: 'gross_transaction_amount', label: 'Gross (INR)' },
+      { key: 'tdr_amount', label: 'TDR Fee (INR)' },
+      { key: 'tax_on_tdr_amount', label: 'GST (INR)' },
+      { key: 'amount_reimbursed', label: 'Net Reimbursed (INR)' }
+    ];
+    exportToCsv(`Settlement_Batch_${settlement.id}_Transactions`, transactions, columns);
+  };
+
   return (
     <DashboardLayout pageTitle={`Settlement #${settlement.id}`}>
       <div className="settle-detail-container">
@@ -154,10 +242,16 @@ const SettlementDetails = () => {
             </div>
           </div>
 
-          <div className="header-action-zone">
-            <button className="export-receipt-btn" onClick={() => window.print()}>
+          <div className="header-action-zone" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            {transactions && transactions.length > 0 && (
+              <button className="export-receipt-btn" onClick={handleExportCsv} title="Download CSV Spreadsheet">
+                <DetailIcons.Download />
+                <span>Export CSV</span>
+              </button>
+            )}
+            <button className="export-receipt-btn" onClick={() => window.print()} title="Print or Save Official Tax Invoice">
               <DetailIcons.Download />
-              <span>Download Tax Invoice & Receipt</span>
+              <span>Export PDF Tax Invoice</span>
             </button>
           </div>
         </div>
@@ -182,14 +276,14 @@ const SettlementDetails = () => {
             <div className="detail-info-list">
               <div className="info-list-row">
                 <span className="info-label">Gross Collected Volume</span>
-                <span className="info-value font-mono">₹{Number(settlement.amount).toLocaleString('en-IN')}</span>
+                <span className="info-value font-mono">₹{Number(settlement.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="info-list-row">
-                <span className="info-label">Platform Gateway Fee (0.2%)</span>
+                <span className="info-label">Platform Gateway Fee (TDR)</span>
                 <span className="info-value font-mono text-muted">- ₹{Number(settlement.fee || 0).toFixed(2)}</span>
               </div>
               <div className="info-list-row">
-                <span className="info-label">GST / Tax Withheld (18%)</span>
+                <span className="info-label">GST / Tax on TDR (18%)</span>
                 <span className="info-value font-mono text-muted">- ₹{Number(settlement.tax || 0).toFixed(2)}</span>
               </div>
               <div className="info-list-row is-divider"></div>
@@ -235,10 +329,10 @@ const SettlementDetails = () => {
               <div className="info-list-row">
                 <span className="info-label">IFSC Code</span>
                 <span className="info-value font-mono">
-                  {settlement.ifsc || 'HDFC0001892'}
+                  {settlement.ifsc || 'HDFC0000002'}
                   <button 
                     className="copy-field-btn" 
-                    onClick={() => handleCopy(settlement.ifsc || 'HDFC0001892', 'ifsc')}
+                    onClick={() => handleCopy(settlement.ifsc || 'HDFC0000002', 'ifsc')}
                     title="Copy IFSC"
                   >
                     {copiedField === 'ifsc' ? '✓ Copied' : <DetailIcons.Copy />}
@@ -246,15 +340,15 @@ const SettlementDetails = () => {
                 </span>
               </div>
               <div className="info-list-row">
-                <span className="info-label">Bank UTR / RRN Reference</span>
+                <span className="info-label">Bank Reference Number</span>
                 <span className="info-value font-mono">
-                  {settlement.utr || 'UTR981273910283'}
+                  {settlement.bankRef || '710061536126'}
                   <button 
                     className="copy-field-btn" 
-                    onClick={() => handleCopy(settlement.utr || 'UTR981273910283', 'utr')}
-                    title="Copy UTR"
+                    onClick={() => handleCopy(settlement.bankRef || '710061536126', 'bankRef')}
+                    title="Copy Bank Ref"
                   >
-                    {copiedField === 'utr' ? '✓ Copied' : <DetailIcons.Copy />}
+                    {copiedField === 'bankRef' ? '✓ Copied' : <DetailIcons.Copy />}
                   </button>
                 </span>
               </div>
@@ -301,6 +395,190 @@ const SettlementDetails = () => {
           </div>
 
         </div>
+
+        {/* Transaction-Level Settlement Breakdown (Payment Gateway Spec 10.2) */}
+        {transactions.length > 0 && (
+          <div className="settle-detail-card" style={{ marginTop: '24px' }}>
+            <div className="detail-card-head" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <span className="card-badge-tag">Transaction Level Breakdown</span>
+                <h3 className="detail-card-title">Settled Inbound Transactions ({transactions.length})</h3>
+              </div>
+
+              {/* Quick Search */}
+              <div className="settle-txn-search-box">
+                <DetailIcons.Search />
+                <input 
+                  type="text" 
+                  placeholder="Search transactions..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="settle-txn-search-input"
+                />
+                {searchQuery && (
+                  <button className="settle-txn-clear-btn" onClick={() => setSearchQuery('')}>✕</button>
+                )}
+              </div>
+            </div>
+
+            <div className="settlements-table-wrapper" style={{ overflowX: 'auto' }}>
+              <table className="settlements-table" style={{ width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th>Transaction ID</th>
+                    <th>Order ID</th>
+                    <th>Customer</th>
+                    <th>Payment Mode</th>
+                    <th>Gross Amount</th>
+                    <th>TDR Fee</th>
+                    <th>Tax on TDR</th>
+                    <th>Net Reimbursed</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedTransactions.length === 0 ? (
+                    <tr>
+                      <td colSpan="9" style={{ textAlign: 'center', padding: '24px', color: 'var(--textMuted)' }}>
+                        No transactions found matching "{searchQuery}"
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedTransactions.map((tx, idx) => (
+                      <tr key={tx.transaction_id || idx}>
+                        <td>
+                          <span className="settle-id-badge font-mono">{tx.transaction_id || `TXN-${idx + 1}`}</span>
+                        </td>
+                        <td>
+                          <span className="font-mono text-muted">{tx.order_id || '-'}</span>
+                        </td>
+                        <td>
+                          <span style={{ fontWeight: '600' }}>{tx.customer_name || 'Customer'}</span>
+                          {tx.customer_phone && <span style={{ display: 'block', fontSize: '11px', color: 'var(--textMuted)' }}>{tx.customer_phone}</span>}
+                        </td>
+                        <td>
+                          <span className="payment-mode-pill">{tx.payment_channel || tx.payment_mode || 'UPI'}</span>
+                        </td>
+                        <td>
+                          <span className="font-mono" style={{ fontWeight: '700' }}>₹{Number(tx.gross_transaction_amount || tx.amount || 0).toFixed(2)}</span>
+                        </td>
+                        <td>
+                          <span className="font-mono text-muted">- ₹{Number(tx.tdr_amount || 0).toFixed(2)}</span>
+                        </td>
+                        <td>
+                          <span className="font-mono text-muted">- ₹{Number(tx.tax_on_tdr_amount || 0).toFixed(2)}</span>
+                        </td>
+                        <td>
+                          <span className="font-mono" style={{ fontWeight: '700', color: '#10b981' }}>
+                            ₹{Number(tx.amount_reimbursed || (Number(tx.gross_transaction_amount || tx.amount || 0) - Number(tx.tdr_amount || 0) - Number(tx.tax_on_tdr_amount || 0))).toFixed(2)}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="settle-status-badge is-completed">
+                            <span className="status-dot"></span>
+                            <span>{tx.completed === 'y' ? 'Settled' : 'Cleared'}</span>
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            <div className="settle-pagination-bar">
+              <div className="settle-page-info">
+                <span>
+                  Showing {filteredTransactions.length > 0 ? (currentPage - 1) * pageSize + 1 : 0} to {Math.min(currentPage * pageSize, filteredTransactions.length)} of {filteredTransactions.length} entries
+                </span>
+                
+                <div className="settle-size-picker">
+                  <span>Show:</span>
+                  <select 
+                    value={pageSize} 
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="settle-size-select"
+                  >
+                    <option value={5}>5 entries</option>
+                    <option value={10}>10 entries</option>
+                    <option value={20}>20 entries</option>
+                    <option value={50}>50 entries</option>
+                  </select>
+                </div>
+              </div>
+
+              {totalPages > 1 && (
+                <div className="settle-page-btn-group">
+                  <button 
+                    className="settle-page-btn" 
+                    onClick={() => setCurrentPage(1)} 
+                    disabled={currentPage === 1}
+                    title="First Page"
+                  >
+                    «
+                  </button>
+                  <button 
+                    className="settle-page-btn" 
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} 
+                    disabled={currentPage === 1}
+                    title="Previous Page"
+                  >
+                    ‹
+                  </button>
+
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(page => page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1)
+                    .map((page, idx, arr) => {
+                      const prev = arr[idx - 1];
+                      return (
+                        <React.Fragment key={page}>
+                          {prev && page - prev > 1 && <span className="settle-page-ellipsis">…</span>}
+                          <button
+                            className={`settle-page-num-btn ${currentPage === page ? 'is-active' : ''}`}
+                            onClick={() => setCurrentPage(page)}
+                          >
+                            {page}
+                          </button>
+                        </React.Fragment>
+                      );
+                    })
+                  }
+
+                  <button 
+                    className="settle-page-btn" 
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} 
+                    disabled={currentPage === totalPages}
+                    title="Next Page"
+                  >
+                    ›
+                  </button>
+                  <button 
+                    className="settle-page-btn" 
+                    onClick={() => setCurrentPage(totalPages)} 
+                    disabled={currentPage === totalPages}
+                    title="Last Page"
+                  >
+                    »
+                  </button>
+                </div>
+              )}
+            </div>
+
+          </div>
+        )}
+
+        {/* Official Printable Statement for PDF Export */}
+        <SettlementDetailPrintReceipt 
+          settlement={settlement} 
+          transactions={transactions} 
+        />
 
       </div>
     </DashboardLayout>

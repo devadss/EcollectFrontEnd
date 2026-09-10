@@ -1,14 +1,27 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import './AgentDashboard.css';
 
 const AgentDashboard = () => {
+  const navigate = useNavigate();
   const stats = [
     { label: 'Total Customers', value: '45', icon: '👥', color: 'gold' },
     { label: 'Payments Done', value: '89', icon: '💳', color: 'blue' },
     { label: 'Commission Earned', value: '₹45K', icon: '💰', color: 'green' },
     { label: 'Due Payments', value: '12', icon: '📋', color: 'purple' },
   ];
+
+  const user = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
+    } catch {
+      return {};
+    }
+  })();
+  const rawInteg = localStorage.getItem('integrationStatus') || user?.integrationStatus || user?.IntegrationStatus || 'No';
+  const isIntegratedMode = String(rawInteg).toUpperCase() === 'Y' || String(rawInteg).toUpperCase() === 'YES' || rawInteg === true;
+  const isNonIntegrated = !isIntegratedMode;
 
   return (
     <DashboardLayout role="agent">
@@ -31,18 +44,20 @@ const AgentDashboard = () => {
         </div>
 
         <div className="quick-actions">
-          <a href="#" className="quick-action">
+          <button type="button" className="quick-action" onClick={() => navigate('/transactions')}>
             <span>💳</span> New Payment
-          </a>
-          <a href="#" className="quick-action">
+          </button>
+          <button type="button" className="quick-action" onClick={() => navigate('/accounts')}>
             <span>👤</span> Add Customer
-          </a>
-          <a href="#" className="quick-action">
+          </button>
+          <button type="button" className="quick-action" onClick={() => navigate('/transactions')}>
             <span>🔗</span> Generate Link
-          </a>
-          <a href="#" className="quick-action">
-            <span>📋</span> Due List
-          </a>
+          </button>
+          {isNonIntegrated && (
+            <button type="button" className="quick-action" onClick={() => navigate('/due-list')}>
+              <span>📋</span> Due List
+            </button>
+          )}
         </div>
 
         <div className="customer-list">
