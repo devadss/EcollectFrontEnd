@@ -6,6 +6,7 @@ import './CustomerPayDecision.css';
 const CustomerPayDecision = () => {
   const [searchParams] = useSearchParams();
   const accountNumber = searchParams.get('acc') || 'ACC-982341';
+  const phone = searchParams.get('phone') || '';
 
   const [mandateInfo, setMandateInfo] = useState(null);
   const [selectedFrequency, setSelectedFrequency] = useState('MONTHLY');

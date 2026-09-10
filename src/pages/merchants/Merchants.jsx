@@ -225,18 +225,26 @@ const Merchants = () => {
     <DashboardLayout pageTitle="Merchants Directory">
       {loading && <LoadingAnimation message="Loading Merchant Records..." />}
       
-      <div className={`merchants-page ${loading ? 'content-blurred' : ''}`}>
-        
-        {/* Top Header */}
-        <div className="page-header">
-          <div>
-            <div className="header-badge">
-              <span className="pulse-dot"></span> Registered Partners
+      <DashboardLayout role="softwareadmin" pageTitle="Merchants Directory">
+        <div className={`merchants-page ${loading ? 'content-blurred' : ''}`}>
+          
+          {/* Top Header */}
+          <div className="page-header">
+            <div>
+              <div className="header-badge">
+                <span className="pulse-dot"></span> Registered Partners
+              </div>
+              <h1 className="page-title gradient-text">
+                Merchant <span className="gradient-text">Directory</span>
+              </h1>
+              <p className="page-subtitle">Manage registered business partners, access levels, and gateway status</p>
             </div>
-            <h1 className="page-title gradient-text">
+            <h1 className="merch-page-title">
               Merchant <span className="gradient-text">Directory</span>
             </h1>
-            <p className="page-subtitle">Manage registered business partners, access levels, and gateway status</p>
+            <p className="merch-page-subtitle">
+              Audit corporate credentials, gateway integration routing, settlement banks, and compliance status
+            </p>
           </div>
 
           <div className="merch-header-actions">

@@ -192,6 +192,7 @@ const Sidebar = ({
       return 'softwareadmin';
     }
   });
+  const [loading, setLoading] = useState(true);
 
   // Get user data from localStorage
   const getUserData = () => {
@@ -400,6 +401,8 @@ const Sidebar = ({
         }
       } catch (error) {
         console.error('Error loading menus:', error);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -435,7 +438,7 @@ const Sidebar = ({
   const rawInteg = localStorage.getItem('integrationStatus') || userObj?.integrationStatus || userObj?.IntegrationStatus || 'No';
   const isIntegrated = String(rawInteg).toUpperCase() === 'Y' || String(rawInteg).toUpperCase() === 'YES' || rawInteg === true;
 
-  const rawSections = (userMenus.length > 0 && formatDynamicMenus(userMenus)) || getStaticMenus(userRole);
+  const rawSections = getStaticMenus(userRole);
   const menuSections = rawSections.map(sec => ({
     ...sec,
     items: sec.items.filter(item => {

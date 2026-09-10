@@ -23,6 +23,8 @@ export const MerchantProvider = ({ children }) => {
   const normRole = rawRole.replace(/[^a-z0-9]/g, '');
 
   const isMerchantUser = normRole.includes('merchant');
+  const isBranchUser = normRole.includes('branch') && !normRole.includes('merchant');
+  const isAgentUser = normRole.includes('agent') && !normRole.includes('merchant') && !normRole.includes('software');
 
   // SoftwareAdmin is ONLY true if it explicitly contains 'software' or 'superadmin', and NOT 'merchant', 'branch', or 'agent'
   const isSoftwareAdmin = (normRole.includes('software') || normRole.includes('superadmin') || normRole === 'admin') && !normRole.includes('merchant') && !normRole.includes('branch') && !normRole.includes('agent');

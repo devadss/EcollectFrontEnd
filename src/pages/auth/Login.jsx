@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { authApi } from '../../services/api';
-import { requestOtp, resendOtp } from '../../services/smsService';
+import { requestOtp, resendOtp, verifyOtp } from '../../services/smsService';
 import { useTheme } from '../../context/ThemeContext';
 import './Login.css';
 
@@ -204,7 +204,8 @@ const Login = () => {
       setForgotSuccess(rawMsg);
       setForgotStep(2);
       setResendTimer(60);
-    } catch {
+    } catch (err) {
+      const errDetail = err?.response?.data?.message || err?.response?.data?.title || err?.message || 'Failed to dispatch security OTP.';
       setForgotSuccess('Security OTP generated. Please enter the 4-digit code sent to your mobile.');
       setForgotStep(2);
       setResendTimer(60);
