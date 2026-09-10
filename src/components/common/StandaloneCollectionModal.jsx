@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { processStandaloneCashCollection, saveStandaloneTransaction, buildStandalonePaymentPayload } from '../../services/standaloneCollectionService';
+import { processStandaloneCashCollection, saveStandaloneTransaction, buildStandalonePaymentPayload, validateMerchantApiConfiguration } from '../../services/standaloneCollectionService';
 import { sendPaymentReceiptSms, sendPaymentLinkSms } from '../../services/smsService';
 import { getDayShiftState } from '../../services/dayOperationsService';
 import { paymentApi } from '../../services/api';
@@ -50,7 +50,6 @@ const StandaloneCollectionModal = ({
         generateLink(initialAmt);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account, defaultTab]);
 
   if (!isOpen || !account) return null;
@@ -84,6 +83,7 @@ const StandaloneCollectionModal = ({
 
     try {
       let upiUrl = null;
+      let orderId = null;
 
       // Try getUpiIntent first
       try {
@@ -91,6 +91,7 @@ const StandaloneCollectionModal = ({
           const res = await paymentApi.getUpiIntent(payload);
           const data = res?.data || {};
           upiUrl = data.payment_url || data.paymentUrl || data.data?.upi_intent_url || data.data?.url || (typeof data === 'string' ? data : null);
+          orderId = data.order_id || data.orderId || data.data?.order_id;
         }
       } catch (e) {
         console.warn('getUpiIntent fallback to generateDynamicQr:', e);
@@ -100,6 +101,7 @@ const StandaloneCollectionModal = ({
         const res = await paymentApi.generateDynamicQr(payload);
         const data = res?.data || {};
         upiUrl = data.qrString || data.paymentUrl || data.data?.qr_string;
+        orderId = data.orderId || data.order_id;
       }
 
       if (!upiUrl) {

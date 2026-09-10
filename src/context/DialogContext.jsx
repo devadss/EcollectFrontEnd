@@ -110,10 +110,6 @@ export const DialogProvider = ({ children }) => {
   }, [showDialog, closeDialog]);
 
   // Toast Helpers
-  const removeToast = useCallback((id) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  }, []);
-
   const showToast = useCallback(({ type = 'info', title = '', message = '', duration = 4000 }) => {
     const id = ++toastIdRef.current;
     const newToast = { id, type, title, message, duration };
@@ -124,7 +120,11 @@ export const DialogProvider = ({ children }) => {
         removeToast(id);
       }, duration);
     }
-  }, [removeToast]);
+  }, []);
+
+  const removeToast = useCallback((id) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
 
   // Register global handler
   globalDialogHandler = {

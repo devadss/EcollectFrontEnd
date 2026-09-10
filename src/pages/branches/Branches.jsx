@@ -130,7 +130,7 @@ const BranchIcons = {
 
 const Branches = () => {
   const navigate = useNavigate();
-  const { showSuccess, showWarning, showError, showConfirm } = useDialog();
+  const { showSuccess, showError, showConfirm } = useDialog();
   const authUser = (() => {
     try {
       return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
@@ -159,6 +159,7 @@ const Branches = () => {
   const [selectedStatusTab, setSelectedStatusTab] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'PENDING' | 'INACTIVE'
   const [cityFilter, setCityFilter] = useState('');
   const [viewLayout, setViewLayout] = useState('grid'); // 'grid' | 'table'
+  const [actionMessage, setActionMessage] = useState(null);
 
   // Branch Password Reveal & Copy State
   const [revealedBranchPasswords, setRevealedBranchPasswords] = useState({});
@@ -220,28 +221,32 @@ const Branches = () => {
     try {
       if (!currentIsActive) {
         await branchApi.approve(id).catch(() => branchApi.toggleStatus(id));
-        showSuccess(`Branch "${name}" is now Active in live database!`, 'Branch Activated');
+        setActionMessage({ type: 'success', text: `✅ Branch "${name}" is now Active in live database!` });
       } else {
         await branchApi.reject(id, 'Deactivated by Software Admin').catch(() => branchApi.toggleStatus(id));
-        showWarning(`Branch "${name}" deactivated.`, 'Branch Deactivated');
+        setActionMessage({ type: 'warning', text: `⏸️ Branch "${name}" deactivated.` });
       }
+      setTimeout(() => setActionMessage(null), 4000);
       loadBranches();
     } catch (err) {
       console.error('Error toggling branch status:', err);
       setBranches(prev => prev.map(b => b.id === id ? { ...b, isActive: !currentIsActive, status: !currentIsActive ? 'Active' : 'Inactive' } : b));
-      showSuccess(`Branch "${name}" status updated!`, 'Status Updated');
+      setActionMessage({ type: 'success', text: `✅ Branch "${name}" status updated!` });
+      setTimeout(() => setActionMessage(null), 4000);
     }
   };
 
   const handleApproveBranch = async (id, name) => {
     try {
       await branchApi.approve(id);
-      showSuccess(`Branch "${name}" approved successfully by Software Admin!`, 'Branch Approved');
+      setActionMessage({ type: 'success', text: `✅ Branch "${name}" approved successfully by Software Admin!` });
+      setTimeout(() => setActionMessage(null), 4000);
       loadBranches();
     } catch (err) {
       console.error('Error approving branch:', err);
       setBranches(prev => prev.map(b => b.id === id ? { ...b, isActive: true, isApproved: true, status: 'Active' } : b));
-      showSuccess(`Branch "${name}" approved and activated!`, 'Branch Activated');
+      setActionMessage({ type: 'success', text: `✅ Branch "${name}" approved and activated!` });
+      setTimeout(() => setActionMessage(null), 4000);
     }
   };
 
@@ -329,18 +334,26 @@ const Branches = () => {
     <DashboardLayout pageTitle="Branch Network" role={rawRole}>
       {loading && <LoadingAnimation message="Loading Regional Branches..." />}
       
-      <div className={`branches-page ${loading ? 'content-blurred' : ''}`}>
-        
-        {/* Header */}
-        <div className="page-header">
-          <div>
-            <div className="header-badge">
-              <span className="pulse-dot"></span> Regional Infrastructure
+      <DashboardLayout role="softwareadmin" pageTitle="Branch Network">
+        <div className={`branches-page ${loading ? 'content-blurred' : ''}`}>
+          
+          {/* Header */}
+          <div className="page-header">
+            <div>
+              <div className="header-badge">
+                <span className="pulse-dot"></span> Regional Infrastructure
+              </div>
+              <h1 className="page-title gradient-text">
+                Branch <span className="gradient-text">Network</span>
+              </h1>
+              <p className="page-subtitle">Manage regional office locations, field teams, and localized revenue</p>
             </div>
-            <h1 className="page-title gradient-text">
+            <h1 className="branches-page-title">
               Branch <span className="gradient-text">Network</span>
             </h1>
-            <p className="page-subtitle">Manage regional office locations, field team deployments, and localized settlement revenue</p>
+            <p className="branches-page-subtitle">
+              Manage regional office locations, field team deployments, and localized settlement revenue
+            </p>
           </div>
 
           <div className="branches-header-actions">

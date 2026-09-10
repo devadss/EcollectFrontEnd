@@ -298,7 +298,7 @@ const Settings = () => {
     }
   };
 
-  const { subscription } = useMerchantContext();
+  const { subscription, isMerchantUser } = useMerchantContext();
 
   const tabs = [
     { id: 'profile', label: 'Identity & Profile', icon: <SettingsIcons.User />, badge: 'Live' },
