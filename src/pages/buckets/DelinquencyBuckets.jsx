@@ -131,7 +131,6 @@ const DelinquencyBuckets = () => {
   }, [isIntegratedMode, isSoftwareAdmin, navigate]);
 
   const [accounts, setAccounts] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [selectedBucket, setSelectedBucket] = useState('ALL'); // 'ALL' | 'B0' | 'B1' | 'B2' | 'B3' | 'NPA' | 'PTP' | 'MANDATORY_CALL'
   const [searchTerm, setSearchTerm] = useState('');
   const [agentFilter, setAgentFilter] = useState('ALL');
@@ -232,7 +231,6 @@ const DelinquencyBuckets = () => {
 
   // Load Accounts from local ledger
   const loadAccounts = useCallback(async () => {
-    setLoading(true);
     try {
       let apiAccounts = [];
       try {
@@ -269,8 +267,8 @@ const DelinquencyBuckets = () => {
           localStorage.setItem('ecollect_standalone_accounts', JSON.stringify(samples));
         }
       }
-    } finally {
-      setLoading(false);
+    } catch (e) {
+      console.warn('Accounts load error:', e);
     }
   }, [authUser]);
 
