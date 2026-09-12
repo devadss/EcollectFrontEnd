@@ -1289,13 +1289,19 @@
 .account-modal-overlay {
   position: fixed;
   inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
   background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: clamp(12px, 3vw, 24px);
   z-index: 99999;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   animation: fadeIn 0.2s ease-out;
 }
 
@@ -1308,15 +1314,17 @@
 .account-modal-container,
 .account-form-card,
 .account-dossier-card {
+  margin: auto;
   width: 100%;
-  max-width: 660px;
-  max-height: 90vh;
+  max-width: min(94vw, 660px);
+  max-height: min(90vh, calc(100dvh - 32px));
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   border-radius: 20px;
   background: var(--bgCard, #111827);
   border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.12));
   box-shadow: var(--cardShadowHover, 0 25px 50px -12px rgba(0, 0, 0, 0.6));
-  padding: 28px;
+  padding: clamp(16px, 3vw, 28px);
   display: flex;
   flex-direction: column;
   gap: 20px;

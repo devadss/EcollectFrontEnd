@@ -108,8 +108,9 @@ const Login = () => {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const canvasRef = useRef(null);
 
-  // Generate 5-character Alphanumeric Captcha Code
+  // Generate 5-character Alphanumeric Captcha Code (excluding easily confused chars)
   const generateCaptcha = () => {
     const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
     let code = '';
@@ -120,6 +121,87 @@ const Login = () => {
     setCaptchaInput('');
   };
 
+  // Draw interactive security Captcha on HTML5 canvas
+  const drawCaptchaCanvas = (code, lightMode) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const width = canvas.width || 135;
+    const height = canvas.height || 42;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, width, height);
+
+    // Background Gradient
+    const bgGrad = ctx.createLinearGradient(0, 0, width, height);
+    if (lightMode) {
+      bgGrad.addColorStop(0, '#f1f5f9');
+      bgGrad.addColorStop(1, '#e2e8f0');
+    } else {
+      bgGrad.addColorStop(0, '#0f172a');
+      bgGrad.addColorStop(1, '#1e293b');
+    }
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // Subtle Noise Background Dots
+    for (let i = 0; i < 28; i++) {
+      ctx.fillStyle = lightMode 
+        ? `rgba(${Math.floor(Math.random()*150)}, ${Math.floor(Math.random()*150)}, ${Math.floor(Math.random()*200)}, 0.2)`
+        : `rgba(${Math.floor(Math.random()*255)}, ${Math.floor(Math.random()*255)}, ${Math.floor(Math.random()*255)}, 0.15)`;
+      ctx.beginPath();
+      ctx.arc(Math.random() * width, Math.random() * height, Math.random() * 2 + 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Security Noise Distortion Lines
+    const lineColors = lightMode 
+      ? ['#6366f1', '#0284c7', '#7c3aed', '#059669', '#d97706']
+      : ['#38bdf8', '#818cf8', '#a855f7', '#34d399', '#fbbf24'];
+
+    for (let i = 0; i < 3; i++) {
+      ctx.strokeStyle = lineColors[i % lineColors.length];
+      ctx.globalAlpha = lightMode ? 0.35 : 0.45;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(Math.random() * 20, Math.random() * height);
+      ctx.bezierCurveTo(
+        width * 0.3, Math.random() * height,
+        width * 0.7, Math.random() * height,
+        width - Math.random() * 20, Math.random() * height
+      );
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1.0;
+
+    // Draw characters with distinct rotations, colors, and shadows
+    const darkColors = ['#38bdf8', '#a855f7', '#34d399', '#fbbf24', '#f472b6'];
+    const lightColors = ['#0284c7', '#7c3aed', '#059669', '#d97706', '#db2777'];
+    const charList = code ? code.split('') : ['A', '8', 'K', '9', 'X'];
+
+    const step = (width - 24) / charList.length;
+    charList.forEach((char, index) => {
+      const color = lightMode ? lightColors[index % lightColors.length] : darkColors[index % darkColors.length];
+      ctx.save();
+      const x = 14 + index * step + (Math.random() * 4 - 2);
+      const y = height / 2 + (Math.random() * 6 - 3);
+      const angle = ((Math.random() * 22) - 11) * (Math.PI / 180);
+
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+      ctx.font = 'bold 21px "JetBrains Mono", "Courier New", monospace';
+      ctx.fillStyle = color;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = lightMode ? 'rgba(0, 0, 0, 0.15)' : color;
+      ctx.shadowBlur = lightMode ? 2 : 6;
+      ctx.fillText(char, 0, 0);
+      ctx.restore();
+    });
+  };
+
   useEffect(() => {
     generateCaptcha();
     const reason = localStorage.getItem('ecollect_logout_reason');
@@ -128,6 +210,13 @@ const Login = () => {
       localStorage.removeItem('ecollect_logout_reason');
     }
   }, []);
+
+  // Redraw canvas whenever captchaCode or theme changes
+  useEffect(() => {
+    if (captchaCode) {
+      drawCaptchaCanvas(captchaCode, isLight);
+    }
+  }, [captchaCode, isLight]);
 
   // Close theme menu on click outside
   useEffect(() => {
@@ -631,14 +720,24 @@ const Login = () => {
               <div className="auth-input-group">
                 <label className="auth-input-label">Security Verification (Captcha)</label>
                 <div className="auth-captcha-row">
-                  <div className="auth-captcha-display" title="Security verification code">
-                    <span className="captcha-char char-0">{captchaCode[0] || 'A'}</span>
-                    <span className="captcha-char char-1">{captchaCode[1] || '8'}</span>
-                    <span className="captcha-char char-2">{captchaCode[2] || 'K'}</span>
-                    <span className="captcha-char char-3">{captchaCode[3] || '9'}</span>
-                    <span className="captcha-char char-4">{captchaCode[4] || 'X'}</span>
-                    <div className="captcha-noise-line line-1"></div>
-                    <div className="captcha-noise-line line-2"></div>
+                  <div 
+                    className="auth-captcha-display" 
+                    title="Click to refresh captcha security code"
+                    onClick={generateCaptcha}
+                  >
+                    <canvas 
+                      ref={canvasRef} 
+                      width={135} 
+                      height={42} 
+                      className="captcha-canvas"
+                    />
+                    <noscript>
+                      <span className="captcha-char char-0">{captchaCode[0] || 'A'}</span>
+                      <span className="captcha-char char-1">{captchaCode[1] || '8'}</span>
+                      <span className="captcha-char char-2">{captchaCode[2] || 'K'}</span>
+                      <span className="captcha-char char-3">{captchaCode[3] || '9'}</span>
+                      <span className="captcha-char char-4">{captchaCode[4] || 'X'}</span>
+                    </noscript>
                   </div>
                   <button
                     type="button"
@@ -649,18 +748,18 @@ const Login = () => {
                   >
                     <Icons.Refresh />
                   </button>
-                </div>
-                <div className="auth-input-wrapper" style={{ marginTop: '8px' }}>
-                  <span className="auth-input-icon"><Icons.ShieldCheck /></span>
-                  <input
-                    type="text"
-                    value={captchaInput}
-                    onChange={(e) => setCaptchaInput(e.target.value.toUpperCase())}
-                    placeholder="Enter the 5 characters above"
-                    className="auth-input-field font-mono"
-                    maxLength={5}
-                    required
-                  />
+                  <div className="auth-input-wrapper auth-captcha-input-wrap">
+                    <span className="auth-input-icon"><Icons.ShieldCheck /></span>
+                    <input
+                      type="text"
+                      value={captchaInput}
+                      onChange={(e) => setCaptchaInput(e.target.value.toUpperCase())}
+                      placeholder="Enter code"
+                      className="auth-input-field font-mono"
+                      maxLength={5}
+                      required
+                    />
+                  </div>
                 </div>
               </div>
 

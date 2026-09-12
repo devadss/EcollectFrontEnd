@@ -736,12 +736,58 @@
   }
 }
 
+@media (max-width: 900px) {
+  .agents-filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .agents-search-cluster {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
 @media (max-width: 768px) {
+  .agents-hero-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .agents-header-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .agents-export-btn,
+  .agents-add-btn {
+    flex: 1;
+    justify-content: center;
+  }
   .agents-kpi-grid {
     grid-template-columns: 1fr;
   }
   .agents-cards-grid {
     grid-template-columns: 1fr;
+  }
+  .status-segmented-tabs {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+  .status-segmented-tabs .tab-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .agents-search-cluster {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .agents-search-box {
+    width: 100%;
+  }
+  .merchant-filter-select {
+    width: 100%;
   }
 }
 

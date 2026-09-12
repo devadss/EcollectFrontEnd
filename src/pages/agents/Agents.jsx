@@ -305,18 +305,13 @@ const Agents = () => {
     <DashboardLayout pageTitle="Field Agents" role={rawRole}>
       {loading && <LoadingAnimation message="Loading Field Representatives..." />}
       
-      <div className={`agents-page ${loading ? 'content-blurred' : ''}`}>
-          
-          {/* Header */}
-          <div className="page-header">
-            <div>
-              <div className="header-badge">
-                <span className="pulse-dot"></span> Field Representative Portal
-              </div>
-              <h1 className="page-title gradient-text">
-                Field <span className="gradient-text">Agents</span>
-              </h1>
-              <p className="page-subtitle">Manage agent assignments, merchant links, and commission rates</p>
+      <div className={`agents-root-container ${loading ? 'content-blurred' : ''}`}>
+        
+        {/* Header */}
+        <div className="agents-hero-header">
+          <div className="agents-hero-titles">
+            <div className="agents-badge-tag">
+              <span className="pulse-dot"></span> Field Representative Portal
             </div>
             <h1 className="agents-page-title">
               Field <span className="gradient-text">Agents</span>
@@ -730,6 +725,7 @@ const Agents = () => {
           </div>
 
         </div>
+      </div>
     </DashboardLayout>
   );
 };

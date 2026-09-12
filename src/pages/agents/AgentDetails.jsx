@@ -195,27 +195,27 @@ const AgentDetails = () => {
             <h3>Statistics</h3>
             <div className="stats-grid-mini">
               <div className="stat-mini">
-                <span className="stat-mini-value">{agent.stats.totalPayments}</span>
+                <span className="stat-mini-value">{agent.stats?.totalPayments ?? agent.totalPayments ?? '0'}</span>
                 <span className="stat-mini-label">Total Payments</span>
               </div>
               <div className="stat-mini">
-                <span className="stat-mini-value">{agent.stats.totalCommission}</span>
+                <span className="stat-mini-value">{agent.stats?.totalCommission ?? agent.totalCommission ?? '₹0'}</span>
                 <span className="stat-mini-label">Total Commission</span>
               </div>
               <div className="stat-mini">
-                <span className="stat-mini-value">{agent.stats.totalCustomers}</span>
+                <span className="stat-mini-value">{agent.stats?.totalCustomers ?? agent.totalCustomers ?? '0'}</span>
                 <span className="stat-mini-label">Total Customers</span>
               </div>
               <div className="stat-mini">
-                <span className="stat-mini-value">{agent.stats.totalRevenue}</span>
+                <span className="stat-mini-value">{agent.stats?.totalRevenue ?? agent.totalRevenue ?? '₹0'}</span>
                 <span className="stat-mini-label">Total Revenue</span>
               </div>
               <div className="stat-mini">
-                <span className="stat-mini-value">{agent.stats.pendingCommission}</span>
+                <span className="stat-mini-value">{agent.stats?.pendingCommission ?? agent.pendingCommission ?? '₹0'}</span>
                 <span className="stat-mini-label">Pending Commission</span>
               </div>
               <div className="stat-mini">
-                <span className="stat-mini-value">{agent.stats.dueCustomers}</span>
+                <span className="stat-mini-value">{agent.stats?.dueCustomers ?? agent.dueCustomers ?? '0'}</span>
                 <span className="stat-mini-label">Due Customers</span>
               </div>
             </div>
