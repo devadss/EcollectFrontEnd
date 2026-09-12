@@ -917,27 +917,36 @@ const DueList = () => {
           )}
         </div>
 
-                {/* DAY OPERATIONS & SHIFT MODAL */}
+        {/* DAY OPERATIONS & SHIFT MODAL */}
         {isDayOpsModalOpen && (
           <div style={{
             position: 'fixed',
             inset: 0,
+            width: '100vw',
+            height: '100vh',
+            height: '100dvh',
             background: 'rgba(0, 0, 0, 0.75)',
             backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 9999
+            padding: '16px',
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            zIndex: 99999
           }} onClick={() => setIsDayOpsModalOpen(false)}>
             <div style={{
+              margin: 'auto',
               background: '#0f172a',
               border: '1px solid rgba(255, 255, 255, 0.15)',
               borderRadius: '20px',
               padding: '24px',
-              maxWidth: '850px',
-              width: '90%',
-              maxHeight: '90vh',
+              maxWidth: 'min(94vw, 850px)',
+              width: '100%',
+              maxHeight: 'min(90vh, calc(100dvh - 32px))',
               overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch',
               boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)'
             }} onClick={e => e.stopPropagation()}>
               
@@ -1199,20 +1208,31 @@ const DueList = () => {
           <div style={{
             position: 'fixed',
             inset: 0,
+            width: '100vw',
+            height: '100vh',
+            height: '100dvh',
             background: 'rgba(0, 0, 0, 0.75)',
             backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 9999
+            padding: '16px',
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            zIndex: 99999
           }} onClick={() => setIsUploadModalOpen(false)}>
             <div style={{
+              margin: 'auto',
               background: '#0f172a',
               border: '1px solid rgba(255, 255, 255, 0.15)',
               borderRadius: '20px',
               padding: '24px',
-              maxWidth: '650px',
-              width: '90%',
+              maxWidth: 'min(94vw, 650px)',
+              width: '100%',
+              maxHeight: 'min(90vh, calc(100dvh - 32px))',
+              overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch',
               boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)'
             }} onClick={e => e.stopPropagation()}>
               

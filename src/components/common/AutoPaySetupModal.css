@@ -6,27 +6,35 @@
   left: 0;
   right: 0;
   bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
   background: rgba(9, 13, 22, 0.82);
   backdrop-filter: blur(6px);
-  z-index: 1100;
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 99999;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: clamp(12px, 3vw, 24px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .autopay-modal-card {
+  margin: auto;
   background: var(--bgCard, #111827);
   border: 1px solid var(--borderGlow, rgba(99, 102, 241, 0.35));
   border-radius: 20px;
-  max-width: 680px;
+  max-width: min(94vw, 680px);
   width: 100%;
-  max-height: 90vh;
+  max-height: min(90vh, calc(100dvh - 32px));
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
   color: var(--textPrimary, #f8fafc);
-  overflow: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .autopay-modal-header {

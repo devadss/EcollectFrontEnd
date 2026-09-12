@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 //const API_BASE = process.env.REACT_APP_API_URL || 'https://localhost:7256/api';
-const API_BASE = process.env.REACT_APP_API_URL || 'https://dev.collect.org.in/api';
-//const API_BASE = process.env.REACT_APP_API_URL || 'https://api.collect.org.in/api';
+//const API_BASE = process.env.REACT_APP_API_URL || 'https://dev.collect.org.in/api';
+const API_BASE = process.env.REACT_APP_API_URL || 'https://api.collect.org.in/api';
 console.log('🔗 API Base URL:', API_BASE);
 
 const api = axios.create({
@@ -427,7 +427,7 @@ export const getCollectionEndpoint = (operation = 'accounts', productType = 'LOA
         return listUrl[operation][productType];
       }
     }
-  } catch (e) {}
+  } catch (e) { }
 
   const API_BASE = process.env.REACT_APP_API_URL || 'https://localhost:7256/api';
   if (operation === 'accounts') {

@@ -465,23 +465,32 @@
 .refund-modal-backdrop {
   position: fixed;
   inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
   background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(8px);
-  z-index: 9999;
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 99999;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: clamp(12px, 3vw, 24px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .refund-modal-card {
+  margin: auto;
   width: 100%;
-  max-width: 520px;
+  max-width: min(94vw, 540px);
+  max-height: min(90vh, calc(100dvh - 32px));
   background: var(--bgCard, #111827);
   border: 1px solid var(--borderGlow, rgba(99, 102, 241, 0.3));
   border-radius: var(--radius-lg, 20px);
   box-shadow: var(--cardShadowHover);
-  overflow: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
   animation: modalScale 0.2s cubic-bezier(0.16, 1, 0.3, 1);

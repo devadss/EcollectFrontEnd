@@ -335,17 +335,12 @@ const Branches = () => {
       {loading && <LoadingAnimation message="Loading Regional Branches..." />}
       
       <div className={`branches-page ${loading ? 'content-blurred' : ''}`}>
-          
-          {/* Header */}
-          <div className="page-header">
-            <div>
-              <div className="header-badge">
-                <span className="pulse-dot"></span> Regional Infrastructure
-              </div>
-              <h1 className="page-title gradient-text">
-                Branch <span className="gradient-text">Network</span>
-              </h1>
-              <p className="page-subtitle">Manage regional office locations, field teams, and localized revenue</p>
+        
+        {/* Header */}
+        <div className="branches-hero-header">
+          <div className="branches-hero-titles">
+            <div className="branches-badge-tag">
+              <span className="pulse-dot"></span> Regional Infrastructure
             </div>
             <h1 className="branches-page-title">
               Branch <span className="gradient-text">Network</span>
@@ -899,6 +894,7 @@ const Branches = () => {
           </div>
 
         </div>
+      </div>
     </DashboardLayout>
   );
 };

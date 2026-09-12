@@ -820,23 +820,32 @@
 .comm-modal-backdrop {
   position: fixed;
   inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
   background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(8px);
-  z-index: 9999;
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 99999;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: clamp(12px, 3vw, 24px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .comm-modal-card {
+  margin: auto;
   width: 100%;
-  max-width: 540px;
+  max-width: min(94vw, 540px);
+  max-height: min(90vh, calc(100dvh - 32px));
   background: var(--bgCard, #111827);
   border: 1px solid var(--borderGlow, rgba(99, 102, 241, 0.3));
   border-radius: var(--radius-lg, 20px);
   box-shadow: var(--cardShadowHover);
-  overflow: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
 }
@@ -845,7 +854,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 22px;
+  padding: 18px 24px;
   border-bottom: 1px solid var(--borderColor, rgba(255, 255, 255, 0.08));
 }
 
@@ -856,68 +865,74 @@
 }
 
 .modal-avatar {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border-radius: 10px;
   background: rgba(99, 102, 241, 0.15);
   color: #818cf8;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .modal-title {
-  font-size: 16px;
-  font-weight: 800;
-  color: #ffffff;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--textPrimary, #ffffff);
   margin: 0;
 }
 
 .modal-code {
-  font-size: 11px;
-  color: #94a3b8;
+  font-size: 13px;
+  color: var(--accent, #818cf8);
 }
 
 .modal-close-btn {
   background: transparent;
   border: none;
-  color: #94a3b8;
+  color: var(--textMuted, #94a3b8);
   cursor: pointer;
   display: flex;
   align-items: center;
+  padding: 6px;
+  border-radius: 8px;
+  transition: all var(--transition-fast);
 }
 
 .modal-close-btn:hover {
   color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .comm-modal-body {
-  padding: 22px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
 .modal-amount-hero {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 16px;
+  gap: 6px;
+  padding: 18px;
   background: var(--bgPrimary, #090d16);
   border-radius: 12px;
   border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.08));
 }
 
 .hero-amount-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
-  color: #94a3b8;
+  color: var(--textMuted, #94a3b8);
+  letter-spacing: 0.5px;
 }
 
 .hero-amount-value {
-  font-size: 26px;
+  font-size: 30px;
   font-weight: 800;
   color: #10b981;
 }
@@ -925,25 +940,27 @@
 .modal-telemetry-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  gap: 16px 20px;
 }
 
 .telemetry-item {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .item-label {
-  font-size: 10.5px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 600;
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--textMuted, #64748b);
+  letter-spacing: 0.03em;
 }
 
 .item-val {
-  font-size: 12px;
-  color: #f1f5f9;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--textPrimary, #ffffff);
 }
 
 .comm-modal-footer {
@@ -951,7 +968,7 @@
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
-  padding: 16px 22px;
+  padding: 18px 24px;
   border-top: 1px solid var(--borderColor, rgba(255, 255, 255, 0.08));
 }
 
@@ -959,24 +976,24 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 14px;
+  padding: 9px 18px;
   border-radius: 8px;
   background: transparent;
   border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.15));
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 700;
+  color: var(--textPrimary, #ffffff);
+  font-size: 13.5px;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .modal-dismiss-btn {
-  padding: 8px 16px;
+  padding: 9px 20px;
   border-radius: 8px;
   background: var(--accent, #6366f1);
   border: none;
   color: #ffffff;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 13.5px;
+  font-weight: 600;
   cursor: pointer;
 }
 

@@ -5,6 +5,9 @@
 .col-modal-overlay {
   position: fixed;
   inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
   background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -12,17 +15,21 @@
   align-items: center;
   justify-content: center;
   z-index: 99999;
-  padding: 16px;
+  padding: clamp(12px, 3vw, 24px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .col-modal-container {
+  margin: auto;
   background: var(--bgCard, #0f172a);
   border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.15));
   border-radius: 24px;
   width: 100%;
-  max-width: 580px;
-  max-height: 92vh;
+  max-width: min(94vw, 580px);
+  max-height: min(90vh, calc(100dvh - 32px));
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6);
   color: var(--textPrimary, #f8fafc);
   display: flex;

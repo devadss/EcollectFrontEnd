@@ -226,17 +226,12 @@ const Merchants = () => {
       {loading && <LoadingAnimation message="Loading Merchant Records..." />}
       
       <div className={`merchants-page ${loading ? 'content-blurred' : ''}`}>
-          
-          {/* Top Header */}
-          <div className="page-header">
-            <div>
-              <div className="header-badge">
-                <span className="pulse-dot"></span> Registered Partners
-              </div>
-              <h1 className="page-title gradient-text">
-                Merchant <span className="gradient-text">Directory</span>
-              </h1>
-              <p className="page-subtitle">Manage registered business partners, access levels, and gateway status</p>
+        
+        {/* Top Header */}
+        <div className="merch-hero-header">
+          <div className="merch-hero-titles">
+            <div className="merch-badge-tag">
+              <span className="pulse-dot"></span> Registered Partners
             </div>
             <h1 className="merch-page-title">
               Merchant <span className="gradient-text">Directory</span>
@@ -678,6 +673,7 @@ const Merchants = () => {
           </div>
 
         </div>
+      </div>
     </DashboardLayout>
   );
 };
