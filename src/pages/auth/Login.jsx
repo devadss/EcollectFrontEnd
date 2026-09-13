@@ -465,6 +465,8 @@ const Login = () => {
       localStorage.setItem('auth_user', JSON.stringify(userData));
       localStorage.setItem('user', JSON.stringify(userData));
       localStorage.setItem('userRole', backendRole);
+      localStorage.setItem('role', backendRole);
+      localStorage.setItem('user_role', backendRole);
       localStorage.setItem('admin_selected_merchant_id', 'ALL');
       if (branchId) localStorage.setItem('branchId', String(branchId));
       if (branchName) localStorage.setItem('branchName', branchName);
@@ -472,6 +474,11 @@ const Login = () => {
       if (userData.merchantId) localStorage.setItem('merchantId', String(userData.merchantId));
       if (userData.agentId) localStorage.setItem('agentId', String(userData.agentId));
       localStorage.setItem('integrationStatus', responseData.integrationStatus || 'No');
+      localStorage.setItem('ecollect_has_selected_plan', 'true');
+
+      // Initialize session activity timestamp & clear any previous logout reason
+      localStorage.setItem('ecollect_last_active_timestamp', String(Date.now()));
+      localStorage.removeItem('ecollect_logout_reason');
 
       // Store dynamic listUrl & collectionConfig for unified mobile/web API dispatch
       const listUrlObj = responseData.listUrl || responseData.collectionConfig?.listUrl || null;
@@ -637,18 +644,18 @@ const Login = () => {
                 <div className="auth-logo-frame">
                   <div className="auth-logo-ambient-glow"></div>
                   <div className="auth-logo-shimmer-sweep"></div>
-                  <div className="auth-ecollect-composite-brand">
-                    <div className="auth-logo-e-flipper-stage">
+                  <div className="auth-ecollect-brand-wrapper">
+                    <div className="auth-logo-e-flipper">
                       <img
                         src="/ecollect-e-symbol.png"
                         alt="e"
-                        className="auth-logo-e-img"
+                        className="auth-logo-e-symbol"
                       />
                     </div>
                     <img
                       src="/ecollect-collect-text.png"
-                      alt="Collect - Smart Payment Solutions"
-                      className="auth-logo-collect-img"
+                      alt="Collect"
+                      className="auth-logo-collect-text"
                     />
                   </div>
                 </div>

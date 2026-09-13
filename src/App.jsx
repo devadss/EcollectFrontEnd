@@ -88,7 +88,8 @@ const isTokenExpired = (token) => {
     );
     const payload = JSON.parse(jsonPayload);
     if (payload?.exp) {
-      const isExp = payload.exp * 1000 < Date.now();
+      // 60-second leeway buffer for clock difference between client and server
+      const isExp = (payload.exp + 60) * 1000 < Date.now();
       if (isExp) {
         console.warn('⚠️ Session expired (JWT exp timestamp reached):', {
           exp: new Date(payload.exp * 1000).toLocaleString(),
@@ -172,16 +173,23 @@ const ProtectedRoute = ({ children, allowedRoles, requireNonIntegrated = false, 
 const getRoleFromStorage = () => {
   try {
     const userDataStr = localStorage.getItem('auth_user') || localStorage.getItem('user');
+    let raw = '';
     if (userDataStr) {
       const userData = JSON.parse(userDataStr);
       if (userData?.role) {
-        return userData.role.toLowerCase();
+        raw = String(userData.role);
       }
     }
-    const userRole = localStorage.getItem('userRole');
-    if (userRole) {
-      return userRole.toLowerCase();
+    if (!raw) {
+      raw = localStorage.getItem('userRole') || localStorage.getItem('user_role') || localStorage.getItem('role') || '';
     }
+
+    const r = raw.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (r.includes('merchant')) return 'merchant';
+    if (r.includes('branch') || r.includes('bank')) return 'branchadmin';
+    if (r.includes('agent')) return 'agent';
+    if (r.includes('customer')) return 'customer';
+    if (r.includes('admin') || r.includes('software')) return 'softwareadmin';
   } catch (error) {
     console.error('Error getting role:', error);
   }
@@ -215,9 +223,14 @@ function App() {
 
   const dashboardMap = {
     softwareadmin: <SoftwareAdminDashboard />,
+    admin: <SoftwareAdminDashboard />,
+    superadmin: <SoftwareAdminDashboard />,
     merchant: <MerchantDashboard />,
+    merchantadmin: <MerchantDashboard />,
     bankadmin: <BranchDashboard />,
     branchadmin: <BranchDashboard />,
+    branch: <BranchDashboard />,
+    bank: <BranchDashboard />,
     agent: <AgentDashboard />,
     customer: <CustomerDashboard />,
   };
