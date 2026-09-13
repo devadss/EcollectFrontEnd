@@ -484,6 +484,115 @@ table td {
   border: 1px solid rgba(239, 68, 68, 0.28) !important;
 }
 
+/* Light Mode Global Typography & High Contrast Guard */
+[data-theme-mode="light"] h1,
+[data-theme-mode="light"] h2,
+[data-theme-mode="light"] h3,
+[data-theme-mode="light"] h4,
+[data-theme-mode="light"] h5,
+[data-theme-mode="light"] h6,
+[data-theme-mode="light"] .dash-main-title,
+[data-theme-mode="light"] .page-title,
+[data-theme-mode="light"] .section-title,
+[data-theme-mode="light"] .card-title,
+[data-theme-mode="light"] .panel-title,
+[data-theme-mode="light"] .table-title,
+[data-theme-mode="light"] .metric-value,
+[data-theme-mode="light"] .kpi-number,
+[data-theme-mode="light"] .stat-val,
+[data-theme-mode="light"] .stat-number {
+  color: #0f172a !important;
+}
+
+[data-theme-mode="light"] label,
+[data-theme-mode="light"] .form-label,
+[data-theme-mode="light"] .input-label,
+[data-theme-mode="light"] .filter-label,
+[data-theme-mode="light"] .dash-main-subtitle,
+[data-theme-mode="light"] .page-subtitle,
+[data-theme-mode="light"] .section-desc,
+[data-theme-mode="light"] .kpi-label,
+[data-theme-mode="light"] .stat-label {
+  color: #475569 !important;
+}
+
+/* Light Mode Universal Cards, Panels & Containers */
+[data-theme-mode="light"] .card,
+[data-theme-mode="light"] .dashboard-card,
+[data-theme-mode="light"] .kpi-card,
+[data-theme-mode="light"] .stat-card,
+[data-theme-mode="light"] .chart-card,
+[data-theme-mode="light"] .table-card,
+[data-theme-mode="light"] .filter-card,
+[data-theme-mode="light"] .analytics-card,
+[data-theme-mode="light"] .summary-card,
+[data-theme-mode="light"] .details-card,
+[data-theme-mode="light"] .content-card,
+[data-theme-mode="light"] .action-card {
+  background-color: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 6px 18px -2px rgba(15, 23, 42, 0.06) !important;
+  color: #0f172a !important;
+}
+
+/* Light Mode Universal Tables */
+[data-theme-mode="light"] table thead th,
+[data-theme-mode="light"] .table th,
+[data-theme-mode="light"] .custom-table th {
+  background: #f8fafc !important;
+  color: #334155 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+[data-theme-mode="light"] table tbody td,
+[data-theme-mode="light"] .table td,
+[data-theme-mode="light"] .custom-table td {
+  border-bottom: 1px solid #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+[data-theme-mode="light"] table tbody tr:hover,
+[data-theme-mode="light"] .table tbody tr:hover td,
+[data-theme-mode="light"] .custom-table tbody tr:hover td {
+  background-color: #f8fafc !important;
+}
+
+/* Light Mode Universal Tabs & Filter Bars */
+[data-theme-mode="light"] .tab-btn,
+[data-theme-mode="light"] .tab-item,
+[data-theme-mode="light"] .filter-tab,
+[data-theme-mode="light"] .segmented-btn {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+}
+
+[data-theme-mode="light"] .tab-btn.active,
+[data-theme-mode="light"] .tab-item.is-active,
+[data-theme-mode="light"] .filter-tab.active,
+[data-theme-mode="light"] .segmented-btn.active {
+  background: #ffffff !important;
+  border-color: var(--accent, #4f46e5) !important;
+  color: var(--accent, #4f46e5) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Light Mode Universal Pagination */
+[data-theme-mode="light"] .pagination-btn,
+[data-theme-mode="light"] .page-btn,
+[data-theme-mode="light"] .btn-page {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+[data-theme-mode="light"] .pagination-btn.active,
+[data-theme-mode="light"] .page-btn.active {
+  background: var(--accent, #4f46e5) !important;
+  border-color: var(--accent, #4f46e5) !important;
+  color: #ffffff !important;
+}
+
 /* ==========================================================================
    CROSS-BROWSER UNIVERSAL MODAL & DIALOG ENGINE
    Ensures 100% consistent sizing, centering, smooth scrolling & crisp contrast

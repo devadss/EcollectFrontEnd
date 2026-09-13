@@ -1025,3 +1025,87 @@
     align-items: flex-start;
   }
 }
+
+/* ==========================================================================
+   ULTRA-PREMIUM LIGHT MODE COMMISSIONS OVERRIDES
+   ========================================================================== */
+[data-theme-mode="light"] .comm-page-title,
+[data-theme-mode="light"] .comm-kpi-val,
+[data-theme-mode="light"] .card-main-title,
+[data-theme-mode="light"] .table-card-title,
+[data-theme-mode="light"] .comm-scope-select,
+[data-theme-mode="light"] .item-val,
+[data-theme-mode="light"] .modal-title {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .comm-scope-selector-box,
+[data-theme-mode="light"] .comm-kpi-card,
+[data-theme-mode="light"] .comm-chart-card,
+[data-theme-mode="light"] .comm-table-card,
+[data-theme-mode="light"] .comm-modal-card {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 6px 18px -2px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme-mode="light"] .comm-scope-select option {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .comm-refresh-btn,
+[data-theme-mode="light"] .comm-search-box,
+[data-theme-mode="light"] .status-filter-pills,
+[data-theme-mode="light"] .modal-amount-hero {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .comm-search-input {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .comm-search-input::placeholder {
+  color: #94a3b8;
+}
+
+[data-theme-mode="light"] .status-pill-btn {
+  color: #64748b;
+}
+
+[data-theme-mode="light"] .status-pill-btn:hover {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .status-pill-btn.is-active {
+  background: #ffffff;
+  color: var(--accent, #4f46e5);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme-mode="light"] .comm-data-table thead th {
+  background: #f8fafc !important;
+  color: #475569 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+[data-theme-mode="light"] .comm-data-table tbody td {
+  color: #0f172a !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+[data-theme-mode="light"] .comm-data-table tbody tr:hover td {
+  background: #f8fafc !important;
+}
+
+[data-theme-mode="light"] .modal-print-btn {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .modal-print-btn:hover {
+  background: #f8fafc;
+}

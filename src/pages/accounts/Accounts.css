@@ -3968,3 +3968,146 @@
   box-shadow: 0 0 16px rgba(239, 68, 68, 0.3);
 }
 
+/* ==========================================================================
+   ULTRA-PREMIUM LIGHT MODE ACCOUNTS & BANKING LEDGER OVERRIDES
+   ========================================================================== */
+[data-theme-mode="light"] .accounts-page-container {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .accounts-page-title,
+[data-theme-mode="light"] .kpi-value,
+[data-theme-mode="light"] .bank-title,
+[data-theme-mode="light"] .holder-name,
+[data-theme-mode="light"] .scheme-title,
+[data-theme-mode="light"] .balance-val,
+[data-theme-mode="light"] .dossier-ai-recommendation,
+[data-theme-mode="light"] .account-modal-title {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .acc-kpi-card,
+[data-theme-mode="light"] .accounts-filter-bar,
+[data-theme-mode="light"] .accounts-table-card,
+[data-theme-mode="light"] .account-dossier-card,
+[data-theme-mode="light"] .account-modal-container {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 6px 18px -2px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme-mode="light"] .collection-product-nav-tabs,
+[data-theme-mode="light"] .type-toggle-pills,
+[data-theme-mode="light"] .search-input-wrap,
+[data-theme-mode="light"] .status-select-dropdown,
+[data-theme-mode="light"] .form-textarea-ctrl,
+[data-theme-mode="light"] .form-input-ctrl,
+[data-theme-mode="light"] .form-select-ctrl {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .accounts-search-field {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .accounts-search-field::placeholder {
+  color: #94a3b8;
+}
+
+[data-theme-mode="light"] .collection-nav-tab {
+  color: #64748b;
+}
+
+[data-theme-mode="light"] .collection-nav-tab:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .collection-nav-tab.is-active {
+  background: #ffffff;
+  color: var(--accent, #4f46e5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-color: #cbd5e1;
+}
+
+[data-theme-mode="light"] .type-pill {
+  color: #64748b;
+}
+
+[data-theme-mode="light"] .type-pill:hover {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .type-pill.is-active {
+  background: var(--accent, #4f46e5);
+  color: #ffffff;
+}
+
+[data-theme-mode="light"] .status-select-dropdown option {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .btn-bulk-accounts {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .btn-bulk-accounts:hover {
+  background: #f8fafc;
+  border-color: var(--accent, #4f46e5);
+  color: var(--accent, #4f46e5);
+}
+
+[data-theme-mode="light"] .accounts-master-table thead th {
+  background: #f8fafc !important;
+  color: #475569 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+[data-theme-mode="light"] .accounts-master-table tbody td {
+  color: #0f172a !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+[data-theme-mode="light"] .account-row-item:hover {
+  background: #f8fafc !important;
+}
+
+[data-theme-mode="light"] .dossier-ai-card {
+  background: linear-gradient(135deg, #f8fafc, #ffffff);
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme-mode="light"] .dossier-ai-badge {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+[data-theme-mode="light"] .table-responsive-container {
+  scrollbar-color: #94a3b8 #f1f5f9;
+}
+
+[data-theme-mode="light"] .table-responsive-container::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+[data-theme-mode="light"] .table-responsive-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border: 2px solid #f1f5f9;
+}
+
+[data-theme-mode="light"] .table-responsive-container::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+[data-theme-mode="light"] .account-toast {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+

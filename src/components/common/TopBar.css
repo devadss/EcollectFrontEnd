@@ -5,7 +5,7 @@
 .ultra-topbar {
   position: sticky;
   top: 0;
-  height: 68px;
+  height: 64px;
   background: var(--bgCardGlass, rgba(17, 23, 38, 0.75));
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -13,7 +13,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 32px;
+  padding: 0 24px;
   z-index: 50;
   box-sizing: border-box;
 }
@@ -24,20 +24,23 @@
 .topbar-left-zone {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .topbar-menu-toggle {
   display: none;
-  width: 38px;
-  height: 38px;
-  border-radius: var(--radius-md, 12px);
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md, 10px);
   background: var(--bgCard, rgba(255, 255, 255, 0.05));
   border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.08));
   color: var(--textSecondary, #94a3b8);
   align-items: center;
   justify-content: center;
   transition: all var(--transition-fast);
+  flex-shrink: 0;
 }
 
 .topbar-menu-toggle:hover {
@@ -46,11 +49,15 @@
   border-color: var(--accent, #6366f1);
 }
 
-.topbar-breadcrumb-trail {
+.topbar-breadcrumb-trail,
+.topbar-breadcrumbs {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 15px;
+  gap: 8px;
+  font-size: 14.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .breadcrumb-home-link {
@@ -60,6 +67,7 @@
   color: var(--textMuted, #64748b);
   cursor: pointer;
   transition: color var(--transition-fast);
+  flex-shrink: 0;
 }
 
 .breadcrumb-home-link:hover {
@@ -69,27 +77,32 @@
 .breadcrumb-slash {
   color: var(--textMuted, #64748b);
   opacity: 0.5;
-  font-size: 14px;
+  font-size: 13px;
+  flex-shrink: 0;
 }
 
 .breadcrumb-active-title {
   font-weight: 750;
-  font-size: 15px;
+  font-size: 14.5px;
   color: var(--textPrimary, #f8fafc);
   letter-spacing: -0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .topbar-branch-emblem-badge {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  margin-left: 12px;
-  padding: 5px 14px;
+  gap: 6px;
+  margin-left: 8px;
+  padding: 4px 10px;
   border-radius: 8px;
   background: var(--accentLight, rgba(99, 102, 241, 0.12));
   border: 1px solid var(--borderGlow, rgba(99, 102, 241, 0.3));
   color: var(--accent, #6366f1);
-  font-size: 13px;
+  font-size: 12px;
+  flex-shrink: 0;
 }
 
 .topbar-branch-emblem-badge svg {
@@ -98,7 +111,7 @@
 }
 
 .branch-emblem-prefix {
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -106,7 +119,7 @@
 }
 
 .branch-emblem-bold-name {
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 800;
   color: var(--textPrimary, #ffffff);
   letter-spacing: -0.2px;
@@ -118,20 +131,26 @@
 .topbar-right-zone {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
-/* Search Bar */
+/* Flexible Search Bar */
 .topbar-search-box {
   position: relative;
   display: flex;
   align-items: center;
-  width: 320px;
+  width: 190px;
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.topbar-search-box:focus-within {
+  width: 260px;
 }
 
 .search-symbol {
   position: absolute;
-  left: 14px;
+  left: 12px;
   display: flex;
   align-items: center;
   color: var(--textMuted, #64748b);
@@ -140,13 +159,13 @@
 
 .search-field-input {
   width: 100%;
-  height: 40px;
-  padding: 0 46px 0 40px;
+  height: 36px;
+  padding: 0 38px 0 34px;
   background: var(--bgPrimary, #090d16);
   border: 1px solid var(--borderColor, rgba(255, 255, 255, 0.08));
   border-radius: var(--radius-full, 9999px);
   color: var(--textPrimary, #ffffff);
-  font-size: 14px;
+  font-size: 13px;
   transition: all var(--transition-normal);
 }
 

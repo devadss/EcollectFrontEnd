@@ -670,3 +670,22 @@
   background: #e2e8f0;
   color: #0f172a;
 }
+
+[data-theme-mode="light"] .settle-page-title {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .settle-export-btn.is-csv {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .settle-export-btn.is-csv:hover {
+  background: #f8fafc;
+  border-color: #10b981;
+}
+
+[data-theme-mode="light"] .empty-state-box h4 {
+  color: #0f172a;
+}

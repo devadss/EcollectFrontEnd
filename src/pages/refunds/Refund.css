@@ -607,3 +607,18 @@
 [data-theme-mode="light"] .refund-modal-header p {
   color: #64748b;
 }
+
+[data-theme-mode="light"] .refunds-page-title {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .refunds-export-btn {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .refunds-export-btn:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}

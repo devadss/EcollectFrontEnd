@@ -397,6 +397,21 @@
   border-bottom-color: rgba(15, 23, 42, 0.06);
 }
 
+[data-theme-mode="light"] .due-page-title {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .btn-due-export {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .btn-due-export:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
 [data-theme-mode="light"] .due-select-ctrl {
   background: #f1f5f9;
   color: #0f172a;
@@ -408,6 +423,7 @@
   color: #0f172a;
   border-color: rgba(15, 23, 42, 0.12);
 }
+
 
 
 /* ============================================================

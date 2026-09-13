@@ -1925,3 +1925,18 @@
 [data-theme-mode="light"] .mrc-desc {
   color: #64748b;
 }
+
+[data-theme-mode="light"] .merchant-page-title {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .merchant-export-btn {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .merchant-export-btn:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}

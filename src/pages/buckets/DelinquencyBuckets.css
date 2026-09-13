@@ -366,3 +366,19 @@
   color: #0f172a;
   border-color: rgba(15, 23, 42, 0.12);
 }
+
+[data-theme-mode="light"] .buckets-page-title {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .btn-buckets-export {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .btn-buckets-export:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+

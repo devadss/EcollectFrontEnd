@@ -453,7 +453,7 @@ const TopBar = ({
           </span>
           <input
             type="text"
-            placeholder="Search transactions, merchants, settlements..."
+            placeholder="Search..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="search-field-input"
@@ -461,38 +461,39 @@ const TopBar = ({
           <span className="search-key-badge">⌘K</span>
         </form>
 
-        {/* Quick Light / Dark Mode Toggle */}
-        <div className="topbar-action-item">
-          <button 
-            className="action-icon-trigger"
-            onClick={() => {
-              if (currentTheme.startsWith('light')) {
-                changeTheme('dark');
-              } else {
-                changeTheme('lightPlatinum');
-              }
-            }}
-            title={currentTheme.startsWith('light') ? "Switch to Midnight Dark Theme" : "Switch to Crisp Platinum Light Theme"}
-            style={{ fontSize: '15px' }}
-          >
-            {currentTheme.startsWith('light') ? '🌙' : '☀️'}
-          </button>
-        </div>
-
-        {/* Theme Picker Dropdown */}
+        {/* Quick Theme Toggle & Palette Popover */}
         <div className="topbar-action-item" ref={themeMenuRef}>
           <button 
             className="action-icon-trigger"
             onClick={() => { setShowThemeMenu(!showThemeMenu); setShowNotifications(false); setShowProfileMenu(false); }}
-            title="Palette Themes"
+            title={currentTheme.startsWith('light') ? "Light Theme Active (Click for Palette)" : "Dark Theme Active (Click for Palette)"}
           >
-            <TopIcons.Theme />
+            {currentTheme.startsWith('light') ? '☀️' : <TopIcons.Theme />}
           </button>
 
           {showThemeMenu && (
             <div className="floating-popover theme-popover" style={{ width: '280px', maxHeight: '460px', overflowY: 'auto' }}>
               <div className="popover-heading" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span>Theme & Color System</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    changeTheme(currentTheme.startsWith('light') ? 'dark' : 'lightPlatinum');
+                    setShowThemeMenu(false);
+                  }}
+                  style={{
+                    background: 'var(--accentLight, rgba(99, 102, 241, 0.12))',
+                    border: '1px solid var(--borderGlow, rgba(99, 102, 241, 0.3))',
+                    color: 'var(--accent, #6366f1)',
+                    borderRadius: '6px',
+                    padding: '2px 8px',
+                    fontSize: '11px',
+                    fontWeight: '700',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {currentTheme.startsWith('light') ? '🌙 Switch Dark' : '☀️ Switch Light'}
+                </button>
               </div>
               <div className="theme-swatch-list">
                 <div style={{ fontSize: '10px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--accent, #4f46e5)', padding: '6px 8px 2px 8px' }}>
@@ -539,24 +540,7 @@ const TopBar = ({
           >
             <TopIcons.Bell />
             {unreadCount > 0 && (
-              <span className="notification-bubble-dot" style={{
-                position: 'absolute',
-                top: '-4px',
-                right: '-4px',
-                background: 'linear-gradient(135deg, #ef4444, #dc2626)',
-                color: '#ffffff',
-                fontSize: '10.5px',
-                fontWeight: '800',
-                minWidth: '18px',
-                height: '18px',
-                borderRadius: '9999px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '0 4px',
-                boxShadow: '0 0 10px rgba(239, 68, 68, 0.6)',
-                border: '2px solid #0f172a'
-              }}>
+              <span className="notification-bubble-dot">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}

@@ -1338,3 +1338,18 @@
   border: 1px solid rgba(15, 23, 42, 0.1);
   box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
 }
+
+[data-theme-mode="light"] .tx-page-title {
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .tx-export-btn.is-csv {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme-mode="light"] .tx-export-btn.is-csv:hover {
+  background: #f8fafc;
+  border-color: #10b981;
+}

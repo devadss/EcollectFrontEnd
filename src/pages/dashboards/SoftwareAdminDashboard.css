@@ -1025,3 +1025,7 @@
   background: #e2e8f0;
   color: #0f172a;
 }
+
+[data-theme-mode="light"] .dash-main-title {
+  color: #0f172a;
+}
