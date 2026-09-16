@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import * as XLSX from 'xlsx';
 import DashboardLayout from '../../components/layouts/DashboardLayout';
@@ -513,6 +513,53 @@ const Accounts = () => {
   const [waRecipientPhone, setWaRecipientPhone] = useState('');
   const [waCustomAmount, setWaCustomAmount] = useState('');
   const [waSending, setWaSending] = useState(false);
+
+  // Top Synchronized Horizontal Scrollbar for Quick Grid Access
+  const topScrollRef = useRef(null);
+  const tableContainerRef = useRef(null);
+  const [tableScrollWidth, setTableScrollWidth] = useState(1300);
+  const isSyncingTop = useRef(false);
+  const isSyncingBottom = useRef(false);
+
+  const handleTopScroll = () => {
+    if (isSyncingBottom.current) return;
+    isSyncingTop.current = true;
+    if (tableContainerRef.current && topScrollRef.current) {
+      tableContainerRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+    }
+    requestAnimationFrame(() => {
+      isSyncingTop.current = false;
+    });
+  };
+
+  const handleBottomScroll = () => {
+    if (isSyncingTop.current) return;
+    isSyncingBottom.current = true;
+    if (topScrollRef.current && tableContainerRef.current) {
+      topScrollRef.current.scrollLeft = tableContainerRef.current.scrollLeft;
+    }
+    requestAnimationFrame(() => {
+      isSyncingBottom.current = false;
+    });
+  };
+
+  const updateTableScrollDimensions = useCallback(() => {
+    if (tableContainerRef.current) {
+      const scrollW = tableContainerRef.current.scrollWidth || 1300;
+      setTableScrollWidth(scrollW);
+    }
+  }, []);
+
+  useEffect(() => {
+    updateTableScrollDimensions();
+    const timer = setTimeout(updateTableScrollDimensions, 150);
+    const handleResize = () => updateTableScrollDimensions();
+    window.addEventListener('resize', handleResize);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [updateTableScrollDimensions, accounts, currentPage, pageSize]);
 
   // Calculate Days Past Due (DPD) & Loan NPA / SMA Classification (RBI Prudential Norms)
   const calculateLoanNpaStatus = (acc) => {
@@ -2062,20 +2109,48 @@ const Accounts = () => {
 
         const formatted = localList.map((item, index) => {
           const prod = (item.productType || 'LOAN').toUpperCase();
-          const accNo = item.accountNumber || `LN010427${index + 10}`;
-          const masked = accNo.length > 4 ? `•••• •••• ${accNo.slice(-4)}` : accNo;
+          const rawAcc = 
+            item.Ln_GlobalAccNo ??
+            item.ln_GlobalAccNo ??
+            item.LN_GLOBALACCNO ??
+            item.LnGlobalAccNo ??
+            item.Dep_GlobalAccNo ??
+            item.dep_GlobalAccNo ??
+            item.accountNumber ??
+            item.account_no ??
+            item.AccountNo ??
+            item.accNo ??
+            item.Acc_No ??
+            item.acno ??
+            item.Loan_AccNo ??
+            item.LoanAccNo ??
+            item.id ??
+            '';
+          const accNo = String(rawAcc).trim() || String(index + 1);
           const balanceVal = Number(item.outstandingAmount ?? item.balance ?? 0);
           const dueVal = Number(item.dueAmount ?? item.emiAmount ?? balanceVal ?? 0);
 
-          const loanKind = item.schemeName || item.loanCategory || item.loanType || (item.accountType?.includes('•') ? item.accountType.split('•')[1]?.split('(')[0]?.trim() : null) || (prod === 'LOAN' ? 'Home Loan' : prod === 'FD' ? 'Fixed Term Deposit' : prod === 'DAILY_DEPOSIT' ? 'Daily Pigmy Deposit' : 'Standard Recurring Deposit');
+          const loanKind = item.schemeName || item.loanCategory || item.loanType || item.Sch_Name || item.SchemeName || (item.accountType?.includes('•') ? item.accountType.split('•')[1]?.split('(')[0]?.trim() : null) || (prod === 'LOAN' ? 'Loan' : prod === 'FD' ? 'Fixed Term Deposit' : prod === 'DAILY_DEPOSIT' ? 'Daily Pigmy Deposit' : 'Standard Recurring Deposit');
+
+          const rawName = 
+            item.customerName ??
+            item.Cust_Name ??
+            item.cust_name ??
+            item.CustName ??
+            item.CustomerName ??
+            item.accountHolder ??
+            item.holderName ??
+            item.name ??
+            '';
+          const custName = String(rawName).trim() || 'Customer';
 
           return {
             id: item.id || index + 1,
-            accountCode: `${prod}-${item.branchCode || bCode}-${accNo.slice(-4)}`,
-            bankName: item.bankName || `${prod} Collection Portfolio`,
-            accountHolder: item.customerName || item.accountHolder || 'Customer',
+            accountCode: item.accountCode || item.code || `${prod}-${item.branchCode || bCode}-${accNo}`,
+            bankName: item.bankName || item.Bank_Name || `${loanKind || prod} Portfolio`,
+            accountHolder: custName,
             accountNumber: accNo,
-            maskedNumber: masked,
+            maskedNumber: accNo,
             ifscCode: item.ifscCode || 'STANDALONE',
             accountType: item.accountType || `${prod} • ${loanKind} (${item.emiFrequency || 'Monthly'})`,
             collectionType: prod,
@@ -2183,7 +2258,7 @@ const Accounts = () => {
             const val = root[key];
             if (Array.isArray(val) && val.length > 0) {
               if (typeof val[0] === 'object' && val[0] !== null) {
-                if (val[0].Cust_Id || val[0].Cust_Name || val[0].Dep_GlobalAccNo || val[0].Loan_AccNo || val[0].LoanAccNo || val[0].accountNumber || val[0].accountNo || val[0].Acc_No || val[0].name) {
+                if (val[0].Cust_Id || val[0].Cust_Name || val[0].Ln_GlobalAccNo || val[0].ln_GlobalAccNo || val[0].Dep_GlobalAccNo || val[0].Loan_AccNo || val[0].LoanAccNo || val[0].accountNumber || val[0].accountNo || val[0].Acc_No || val[0].name) {
                   return val;
                 }
               }
@@ -2249,6 +2324,10 @@ const Accounts = () => {
       if (combinedRawList && Array.isArray(combinedRawList) && combinedRawList.length > 0) {
         const formatted = combinedRawList.map((item, index) => {
           const isLoan = 
+            !!item.Ln_GlobalAccNo ||
+            !!item.ln_GlobalAccNo ||
+            !!item.LN_GLOBALACCNO ||
+            !!item.LnGlobalAccNo ||
             (item.productType || item.ProductType || item.collectionType || item.CollectionType || item.udf5 || '').toString().toUpperCase().includes('LOAN') ||
             (item.accountType || item.AccountType || '').toString().toUpperCase().includes('LOAN') ||
             (item.Loan_Type || item.loanType || item.LoanType || item.Sch_Name || item.SchName || '').toString().toUpperCase().includes('LOAN') ||
@@ -2260,61 +2339,154 @@ const Accounts = () => {
 
           const detectedType = isLoan ? 'LOAN' : isFd ? 'FD' : isRdcl ? 'RDCL' : 'RD';
 
-          const accNo = 
-            item.Loan_AccNo || 
-            item.LoanAccNo || 
-            item.Dep_GlobalAccNo || 
-            item.accountNumber || 
-            item.accountNo || 
-            item.Acc_No || 
-            item.AccountNo || 
-            item.accNo || 
-            item.Loan_No || 
-            item.GlobalAccNo || 
-            item.dep_GlobalAccNo || 
-            (isLoan ? `LN010427${String(index + 10)}` : `RD010427${String(index + 10)}`);
+          // Extract exact Account / Loan Number directly from API without adding artificial 'LN' or 'RD' prefixes
+          const rawAccCandidate = 
+            item.Ln_GlobalAccNo ??
+            item.ln_GlobalAccNo ??
+            item.LN_GLOBALACCNO ??
+            item.LnGlobalAccNo ??
+            item.lnGlobalAccNo ??
+            item.ln_global_acc_no ??
+            item.Ln_Global_AccNo ??
+            item.Dep_GlobalAccNo ??
+            item.dep_GlobalAccNo ??
+            item.DepGlobalAccNo ??
+            item.depGlobalAccNo ??
+            item.dep_global_acc_no ??
+            item.DEP_GLOBALACCNO ??
+            item.Loan_AccNo ??
+            item.LoanAccNo ??
+            item.Loan_Acc_No ??
+            item.loan_acc_no ??
+            item.loan_accno ??
+            item.LOAN_ACCNO ??
+            item.LOAN_ACC_NO ??
+            item.Loan_No ??
+            item.LoanNo ??
+            item.loan_no ??
+            item.loanNo ??
+            item.LoanAccountNo ??
+            item.loanAccountNo ??
+            item.GlobalAccNo ??
+            item.globalAccNo ??
+            item.Global_AccNo ??
+            item.global_acc_no ??
+            item.GLOBAL_ACC_NO ??
+            item.Acc_No ??
+            item.ACC_NO ??
+            item.acc_no ??
+            item.AccNo ??
+            item.accNo ??
+            item.acno ??
+            item.AcNo ??
+            item.ACNO ??
+            item.AccountNo ??
+            item.accountNo ??
+            item.account_no ??
+            item.Account_No ??
+            item.ACCOUNT_NO ??
+            item.accountNumber ??
+            item.AccountNumber ??
+            item.ACCOUNT_NUMBER ??
+            item.account_number ??
+            item.Cust_AccNo ??
+            item.cust_accno ??
+            item.Cust_Acc_No ??
+            item.Deposit_AccNo ??
+            item.dep_accno ??
+            item.dep_acc_no ??
+            item.Cust_Id ??
+            item.CustId ??
+            item.customerId ??
+            item.id ??
+            item.Id ??
+            '';
 
-          const masked = accNo.length > 4 ? `•••• •••• ${accNo.slice(-4)}` : accNo;
+          const accNo = String(rawAccCandidate).trim() || String(index + 1);
 
-          const custName = 
-            item.Cust_Name?.trim() || 
-            item.customerName?.trim() || 
-            item.borrowerName?.trim() || 
-            item.applicant_name?.trim() || 
-            item.CustName?.trim() || 
-            item.accountHolder?.trim() || 
-            item.CustomerName?.trim() || 
-            item.holderName?.trim() || 
-            item.name?.trim() || 
-            'Registered Customer';
+          // Extract exact Customer / Account Name from CBS API
+          const rawNameCandidate = 
+            item.Cust_Name ??
+            item.CUST_NAME ??
+            item.cust_name ??
+            item.CustName ??
+            item.CustomerName ??
+            item.customerName ??
+            item.Customer_Name ??
+            item.customer_name ??
+            item.CUSTOMER_NAME ??
+            item.AccountHolder ??
+            item.accountHolder ??
+            item.Account_Holder ??
+            item.account_holder ??
+            item.ACCOUNT_HOLDER ??
+            item.Acc_Holder ??
+            item.acc_holder ??
+            item.AccHolder ??
+            item.borrowerName ??
+            item.borrower_name ??
+            item.BorrowerName ??
+            item.Borrower_Name ??
+            item.applicant_name ??
+            item.applicantName ??
+            item.ApplicantName ??
+            item.Applicant_Name ??
+            item.holderName ??
+            item.HolderName ??
+            item.name ??
+            item.Name ??
+            item.NAME ??
+            '';
+
+          const custName = String(rawNameCandidate).trim() || 'Registered Customer';
 
           const custId = item.Cust_Id || item.CustId || item.customerId || item.id || item.AccountId || (index + 1);
           
-          const schName = 
-            item.Sch_Name || 
-            item.SchName || 
-            item.Loan_Type || 
-            item.loanType || 
-            item.schemeName || 
-            item.SchemeName || 
-            item.productName || 
-            item.scheme || 
-            (isLoan ? 'Personal Loan / Gold Loan' : isFd ? 'Fixed Deposit 12M' : isRdcl ? 'RD Closed Loan Recovery' : 'RD-12-NRL Deposit');
+          // Extract exact Scheme Name / Loan Type from CBS API
+          const rawSchemeCandidate = 
+            item.Sch_Name ??
+            item.SCH_NAME ??
+            item.sch_name ??
+            item.SchName ??
+            item.Loan_Type ??
+            item.loanType ??
+            item.LoanType ??
+            item.loan_type ??
+            item.LOAN_TYPE ??
+            item.Scheme_Name ??
+            item.scheme_name ??
+            item.SchemeName ??
+            item.schemeName ??
+            item.SCHEME_NAME ??
+            item.productName ??
+            item.ProductName ??
+            item.product_name ??
+            item.scheme ??
+            item.Scheme ??
+            item.LoanCategory ??
+            item.loanCategory ??
+            item.Loan_Category ??
+            item.loan_category ??
+            '';
+
+          const schName = String(rawSchemeCandidate).trim() || 
+            (isLoan ? 'Loan' : isFd ? 'Fixed Deposit 12M' : isRdcl ? 'RD Closed Loan Recovery' : 'RD-12-NRL Deposit');
           
           const schCode = item.Sch_Code || item.SchCode || item.schemeCode || item.SchemeCode || (isLoan ? '08' : '04');
           const ifsc = item.ifscCode || item.ifsc || item.IFSC || `DIGI000${schCode || '04'}`;
           const balanceVal = Number(item.balance ?? item.Balance ?? item.outstanding_amount ?? item.total_due ?? item.Principal_Balance ?? item.totalDeposited ?? item.monthlyAmount ?? item.Amount ?? 0);
-          const currentBranchName = item.branchName || user?.branchName || user?.branch || localStorage.getItem('branchName') || `Branch ${bCode}`;
+          const currentBranchName = item.branchName || item.Branch_Name || item.branch_name || user?.branchName || user?.branch || localStorage.getItem('branchName') || `Branch ${bCode}`;
+          const currentBankName = item.bankName || item.Bank_Name || item.bank_name || (schName ? `${schName}` : 'CBS Core Banking');
 
           return {
             id: custId,
-            accountCode: `${detectedType}-01-${custId}`,
-            bankName: schName ? `DIGICOB Bank (${schName})` : (item.bankName || 'DIGICOB Banking Pool'),
+            accountCode: item.accountCode || item.AccountCode || item.cust_code || item.Cust_Code || accNo,
+            bankName: currentBankName,
             accountHolder: custName,
             accountNumber: accNo,
-            maskedNumber: masked,
+            maskedNumber: accNo,
             ifscCode: ifsc,
-            accountType: item.accountType || (isLoan ? 'Loan Collection' : isFd ? 'Fixed Deposit' : isRdcl ? 'RDCL Recovery' : 'RD Deposit'),
+            accountType: item.accountType || schName || (isLoan ? 'Loan Collection' : isFd ? 'Fixed Deposit' : isRdcl ? 'RDCL Recovery' : 'RD Deposit'),
             collectionType: detectedType,
             branchName: currentBranchName,
             balance: balanceVal,
@@ -2331,9 +2503,10 @@ const Accounts = () => {
             customReminderNote: item.customReminderNote || '',
             schemeName: schName,
             schemeCode: schCode,
+            loanCategory: schName,
             customerId: custId,
-            phone: item.phone || item.mobile || item.Cust_Mobile || item.CustMobile || '',
-            email: item.email || item.Cust_Email || item.CustEmail || ''
+            phone: item.phone || item.mobile || item.Cust_Mobile || item.CustMobile || item.Mobile || item.Phone || '',
+            email: item.email || item.Cust_Email || item.CustEmail || item.Email || ''
           };
         });
         setAccounts(formatted);
@@ -4105,7 +4278,24 @@ const Accounts = () => {
 
         {/* Accounts Master Table */}
         <div className="accounts-table-card">
-          <div className="table-responsive-container">
+          {/* Top Synchronized Horizontal Scrollbar */}
+          <div 
+            className="top-horizontal-scrollbar-wrapper" 
+            ref={topScrollRef} 
+            onScroll={handleTopScroll}
+            title="↔ Scroll table horizontally"
+          >
+            <div 
+              className="top-horizontal-scrollbar-content" 
+              style={{ width: `${tableScrollWidth || 1300}px` }} 
+            />
+          </div>
+
+          <div 
+            className="table-responsive-container"
+            ref={tableContainerRef}
+            onScroll={handleBottomScroll}
+          >
             <table className="accounts-master-table">
               <thead>
                 <tr>
@@ -4163,25 +4353,15 @@ const Accounts = () => {
                       {/* Collection / Specific Loan Type Badge */}
                       <td>
                         {acc.collectionType === 'LOAN' ? (
-                          <span className="collection-type-tag is-loan" title={acc.loanCategory || 'Loan Portfolio'}>
-                            {acc.loanCategory?.includes('Gold') ? '🪙 Gold Loan' :
-                             acc.loanCategory?.includes('Vehicle') || acc.loanCategory?.includes('Auto') ? '🚗 Vehicle Loan' :
-                             acc.loanCategory?.includes('Home') || acc.loanCategory?.includes('Housing') ? '🏠 Home Loan' :
-                             acc.loanCategory?.includes('Personal') ? '👤 Personal Loan' :
-                             acc.loanCategory?.includes('Business') || acc.loanCategory?.includes('MSME') ? '💼 Business Loan' :
-                             acc.loanCategory?.includes('Education') ? '🎓 Education Loan' :
-                             acc.loanCategory?.includes('Agri') || acc.loanCategory?.includes('Crop') ? '🌾 Agri Loan' :
-                             acc.loanCategory?.includes('Micro') || acc.loanCategory?.includes('JLG') ? '👥 Micro Loan' :
-                             acc.loanCategory?.includes('Pigmy') ? '⚡ Pigmy Loan' :
-                             acc.loanCategory?.includes('Property') || acc.loanCategory?.includes('LAP') ? '🏢 Property Loan' :
-                             (acc.loanCategory ? `💳 ${acc.loanCategory}` : '💳 Home Loan')}
+                          <span className="collection-type-tag is-loan" title={acc.schemeName || acc.loanCategory || 'Loan Portfolio'}>
+                            💳 {acc.schemeName || acc.loanCategory || 'LOAN'}
                           </span>
                         ) : acc.collectionType === 'FD' ? (
-                          <span className="collection-type-tag is-fd">📈 FD</span>
+                          <span className="collection-type-tag is-fd">📈 {acc.schemeName || 'FD'}</span>
                         ) : acc.collectionType === 'RDCL' || acc.collectionType === 'DAILY_DEPOSIT' ? (
-                          <span className="collection-type-tag is-rdcl">🪙 RDCL</span>
+                          <span className="collection-type-tag is-rdcl">🪙 {acc.schemeName || 'RDCL'}</span>
                         ) : (
-                          <span className="collection-type-tag is-rd">🏦 RD</span>
+                          <span className="collection-type-tag is-rd">🏦 {acc.schemeName || 'RD'}</span>
                         )}
                       </td>
 
@@ -4216,7 +4396,7 @@ const Accounts = () => {
                       {/* Account Number */}
                       <td>
                         <div className="acc-number-cell font-mono">
-                          <span>{acc.maskedNumber || acc.accountNumber}</span>
+                          <span style={{ fontWeight: '700', letterSpacing: '0.5px' }}>{acc.accountNumber}</span>
                           <button 
                             className="btn-copy-acc" 
                             onClick={() => handleCopy(acc.accountNumber, acc.id)}

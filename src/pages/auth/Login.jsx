@@ -268,10 +268,10 @@ const Login = () => {
   };
 
   const handleSendOtp = async (e) => {
-    e.preventDefault();
-    const cleanId = forgotIdentifier.trim();
+    if (e) e.preventDefault();
+    const cleanId = (forgotIdentifier || '').trim();
     if (!cleanId) {
-      setForgotError('Please enter your registered 10-digit mobile number or username.');
+      setForgotError('Please enter your registered email, username, or 10-digit mobile number.');
       return;
     }
     setForgotLoading(true);
@@ -279,25 +279,40 @@ const Login = () => {
     setForgotSuccess('');
 
     try {
-      // 1. Dispatch SMS via Aanvin SMS Gateway & Save MobLogin record
-      const smsRes = await requestOtp(cleanId);
-      if (smsRes.success) {
-        setForgotSuccess(`SMS Sent Successfully! 4-digit OTP dispatched via Header ADSSPY to ${cleanId}.`);
-        setForgotStep(2);
-        setResendTimer(60);
-        return;
+      // 1. Call Backend [HttpPost("forgot-password")]
+      let backendSuccess = false;
+      let backendMsg = '';
+      try {
+        const res = await authApi.forgotPassword(cleanId);
+        backendSuccess = res?.data?.success !== false;
+        backendMsg = res?.data?.message || res?.data?.title || '';
+      } catch (backendErr) {
+        console.warn('Backend forgot-password API error:', backendErr);
+        const errMsg = backendErr?.response?.data?.message || backendErr?.response?.data?.title;
+        // If the backend specifically said user not found, show that error
+        if (errMsg && backendErr?.response?.status === 400 && errMsg.includes('No user found')) {
+          setForgotError(errMsg);
+          setForgotLoading(false);
+          return;
+        }
       }
-      
-      const res = await authApi.forgotPassword(cleanId);
-      const rawMsg = res?.data?.message || res?.data?.title || 'Security OTP has been dispatched to your registered address.';
-      setForgotSuccess(rawMsg);
+
+      // 2. Also ensure SMS is dispatched via Aanvin SMS Gateway (Header: ADSSPY)
+      const isPhone = /^\d{10}$/.test(cleanId.replace(/[^0-9]/g, '').slice(-10));
+      if (isPhone) {
+        try {
+          await requestOtp(cleanId);
+        } catch (smsErr) {
+          console.warn('Aanvin SMS Gateway notice:', smsErr);
+        }
+      }
+
+      setForgotSuccess(backendMsg || `Security OTP dispatched to your registered address / mobile ending in ${cleanId.slice(-4)}.`);
       setForgotStep(2);
       setResendTimer(60);
     } catch (err) {
-      const errDetail = err?.response?.data?.message || err?.response?.data?.title || err?.message || 'Failed to dispatch security OTP.';
-      setForgotSuccess('Security OTP generated. Please enter the 4-digit code sent to your mobile.');
-      setForgotStep(2);
-      setResendTimer(60);
+      const errDetail = err?.response?.data?.message || err?.response?.data?.title || err?.message || 'Failed to dispatch security OTP. Please try again.';
+      setForgotError(errDetail);
     } finally {
       setForgotLoading(false);
     }
@@ -308,9 +323,10 @@ const Login = () => {
     setForgotLoading(true);
     setForgotError('');
     try {
-      const cleanId = forgotIdentifier.trim();
-      await resendOtp(cleanId);
-      setForgotSuccess('Fresh 4-digit OTP re-sent via SMS (ADSSPY).');
+      const cleanId = (forgotIdentifier || '').trim();
+      await authApi.forgotPassword(cleanId).catch(() => {});
+      await resendOtp(cleanId).catch(() => {});
+      setForgotSuccess('Fresh 4-digit security OTP re-sent via SMS (ADSSPY).');
       setResendTimer(60);
     } catch (err) {
       setForgotSuccess('A fresh verification code has been dispatched.');
@@ -321,16 +337,20 @@ const Login = () => {
   };
 
   const handleResetPasswordSubmit = async (e) => {
-    e.preventDefault();
-    if (!forgotOtp.trim()) {
+    if (e) e.preventDefault();
+    const cleanOtp = (forgotOtp || '').trim();
+    const cleanNewPwd = forgotNewPassword || '';
+    const cleanConfirmPwd = forgotConfirmPassword || '';
+
+    if (!cleanOtp) {
       setForgotError('Please enter the verification OTP code.');
       return;
     }
-    if (!forgotNewPassword || forgotNewPassword.length < 6) {
+    if (!cleanNewPwd || cleanNewPwd.length < 6) {
       setForgotError('New password must be at least 6 characters.');
       return;
     }
-    if (forgotNewPassword !== forgotConfirmPassword) {
+    if (cleanNewPwd !== cleanConfirmPwd) {
       setForgotError('New password and confirm password do not match.');
       return;
     }
@@ -340,19 +360,33 @@ const Login = () => {
     setForgotSuccess('');
 
     try {
-      await authApi.resetPassword({
+      const resetPayload = {
+        EmailOrPhone: forgotIdentifier.trim(),
         emailOrPhone: forgotIdentifier.trim(),
-        otp: forgotOtp.trim(),
-        newPassword: forgotNewPassword,
-        confirmPassword: forgotConfirmPassword
-      });
+        Username: forgotIdentifier.trim(),
+        username: forgotIdentifier.trim(),
+        Otp: cleanOtp,
+        otp: cleanOtp,
+        NewPassword: cleanNewPwd,
+        newPassword: cleanNewPwd,
+        ConfirmPassword: cleanConfirmPwd,
+        confirmPassword: cleanConfirmPwd
+      };
+
+      await authApi.resetPassword(resetPayload);
       setForgotStep(3);
     } catch (err) {
+      console.warn('Reset password error, trying changePassword fallback:', err);
       try {
         await authApi.changePassword({
           username: forgotIdentifier.trim(),
-          otp: forgotOtp.trim(),
-          newPassword: forgotNewPassword
+          Username: forgotIdentifier.trim(),
+          otp: cleanOtp,
+          Otp: cleanOtp,
+          newPassword: cleanNewPwd,
+          NewPassword: cleanNewPwd,
+          confirmPassword: cleanConfirmPwd,
+          ConfirmPassword: cleanConfirmPwd
         });
         setForgotStep(3);
       } catch (nestedErr) {

@@ -16,6 +16,7 @@ import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
 import { settlementApi } from '../../services/api';
 import { useMerchantContext } from '../../context/MerchantContext';
+import { INDIAN_BANKS_LIST } from '../../services/bankService';
 import { exportToCsv } from '../../utils/exportLedger';
 import SettlementPrintLedger from '../../components/ledger/SettlementPrintLedger';
 import './Settlements.css';
@@ -174,23 +175,40 @@ const Settlements = () => {
       console.log('📦 Loaded settlements data from API:', safeData.length, safeData);
 
       // Normalize settlement fields from Payment Gateway Spec (Section 10.1)
-      const formatted = safeData.map((item, idx) => ({
-        id: item.settlement_id || item.id || `SET-${10075 + idx}`,
-        merchant: item.account_name || selectedMerchant?.name || 'Primary Merchant',
-        merchantId: item.merchant_id || selectedMerchantId,
-        amount: Number(item.payout_amount !== undefined && item.payout_amount !== null ? item.payout_amount : (item.sale_amount || item.amount || 0)),
-        saleAmount: Number(item.sale_amount || item.amount || 0),
-        chargebackAmount: Number(item.chargeback_amount || 0),
-        refundAmount: Number(item.refund_amount || 0),
-        date: item.settlement_datetime || item.date || new Date().toISOString(),
-        bankRef: item.bank_reference || item.bankRef || 'NA',
-        bankName: item.bank_name || 'Bank Destination',
-        bankBranch: item.bank_branch || '',
-        accountNumber: item.account_number || '',
-        ifsc: item.ifsc_code || '',
-        vendorCode: item.vendor_code || null,
-        status: (item.completed === 'y' || item.completed === true || String(item.status).toLowerCase() === 'completed' || String(item.status).toLowerCase() === 'success') ? 'Completed' : 'Pending'
-      }));
+      const formatted = safeData.map((item, idx) => {
+        const ifscCandidate = item.ifsc_code || item.ifsc || item.IFSC_Code || item.ifscCode || '';
+        let dynamicBankName = item.bank_name || item.bankName || item.BankName || item.bank || item.beneficiary_bank || '';
+
+        if (!dynamicBankName && ifscCandidate) {
+          const prefix = ifscCandidate.trim().substring(0, 4).toUpperCase();
+          const matched = INDIAN_BANKS_LIST.find(b => b.ifscPrefix === prefix || b.code === prefix);
+          if (matched) {
+            dynamicBankName = matched.name;
+          }
+        }
+
+        if (!dynamicBankName && (selectedMerchant?.bankName || selectedMerchant?.settlementAccounts?.[0]?.bankName)) {
+          dynamicBankName = selectedMerchant.bankName || selectedMerchant.settlementAccounts?.[0]?.bankName;
+        }
+
+        return {
+          id: item.settlement_id || item.id || `SET-${10075 + idx}`,
+          merchant: item.merchant_name || item.merchantName || item.account_name || selectedMerchant?.merchantName || selectedMerchant?.name || 'Primary Merchant',
+          merchantId: item.merchant_id || item.merchantId || selectedMerchantId,
+          amount: Number(item.payout_amount !== undefined && item.payout_amount !== null ? item.payout_amount : (item.sale_amount || item.amount || 0)),
+          saleAmount: Number(item.sale_amount || item.amount || 0),
+          chargebackAmount: Number(item.chargeback_amount || 0),
+          refundAmount: Number(item.refund_amount || 0),
+          date: item.settlement_datetime || item.date || item.created_at || new Date().toISOString(),
+          bankRef: item.bank_reference || item.bankRef || item.bank_ref || item.utr || 'NA',
+          bankName: dynamicBankName || 'Partner Bank',
+          bankBranch: item.bank_branch || item.bankBranch || item.branch || selectedMerchant?.settlementAccounts?.[0]?.bankBranch || '',
+          accountNumber: item.account_number || item.accountNumber || selectedMerchant?.accountNumber || selectedMerchant?.settlementAccounts?.[0]?.accountNumber || '',
+          ifsc: ifscCandidate,
+          vendorCode: item.vendor_code || null,
+          status: (item.completed === 'y' || item.completed === true || String(item.status).toLowerCase() === 'completed' || String(item.status).toLowerCase() === 'success') ? 'Completed' : 'Pending'
+        };
+      });
 
       setSettlements(formatted);
       calculateStats(formatted);
@@ -204,7 +222,7 @@ const Settlements = () => {
         setLoading(false);
       }, 350);
     }
-  }, [selectedMerchantId, selectedMerchant?.name, calculateStats]);
+  }, [selectedMerchantId, selectedMerchant, calculateStats]);
 
   useEffect(() => {
     loadSettlements();
@@ -654,7 +672,7 @@ const Settlements = () => {
                         <td style={{ textAlign: 'right' }}>
                           <button 
                             className="table-row-action-btn" 
-                            onClick={() => navigate(`/settlements/${s.id}`)}
+                            onClick={() => navigate(`/settlements/${s.id}`, { state: { settlement: s } })}
                             title="View Settlement Details"
                           >
                             <SettleIcons.Eye />

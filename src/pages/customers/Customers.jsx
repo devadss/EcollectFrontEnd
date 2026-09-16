@@ -115,7 +115,7 @@ const Customers = () => {
       if (rawList && Array.isArray(rawList) && rawList.length > 0) {
         const formatted = rawList.map((item, index) => ({
           id: item.Cust_Id || item.id || (index + 1),
-          accountNo: item.Dep_GlobalAccNo || item.accountNo || `RD-01-${String(index + 1).padStart(6, '0')}`,
+          accountNo: item.Ln_GlobalAccNo || item.ln_GlobalAccNo || item.Dep_GlobalAccNo || item.dep_GlobalAccNo || item.accountNo || item.accountNumber || String(item.Cust_Id || index + 1),
           customerName: item.Cust_Name?.trim() || item.customerName || 'Customer',
           mobileNo: item.mobileNo || item.Phone || `+91 98450 ${String(item.Cust_Id || index).padStart(5, '0')}`,
           monthlyAmount: item.monthlyAmount || item.Amount || 2000,

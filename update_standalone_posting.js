@@ -200,15 +200,31 @@ namespace Ecollect.Services
 
                     if (request.CollectionType == "LOAN")
                     {
-                        isSuccess = parsedResponse?.receipt?.data?.status?.ToString() == "Y";
+                        isSuccess = parsedResponse?.receipt?.data?.status?.ToString() == "Y"
+                            || parsedResponse?.receipt?.status?.ToString() == "Y"
+                            || parsedResponse?.status?.ToString() == "1"
+                            || parsedResponse?.status?.ToString() == "Y";
+
                         vendorTxnId = parsedResponse?.receipt?.TRAN_ID?.ToString()
                             ?? parsedResponse?.receipt?.data?.TRAN_ID?.ToString()
+                            ?? parsedResponse?.data?.TRAN_ID?.ToString()
+                            ?? parsedResponse?.TRAN_ID?.ToString()
                             ?? "0";
                     }
                     else
                     {
-                        isSuccess = parsedResponse?.status?.ToString() == "1";
-                        vendorTxnId = parsedResponse?.data?.TRAN_ID?.ToString() ?? "0";
+                        isSuccess = parsedResponse?.status?.ToString() == "1"
+                            || parsedResponse?.status?.ToString() == "Y"
+                            || parsedResponse?.receipt?.status?.ToString() == "1"
+                            || parsedResponse?.receipt?.status?.ToString() == "Y";
+
+                        vendorTxnId = parsedResponse?.receipt?.TRAN_ID?.ToString()
+                            ?? parsedResponse?.receipt?.data?.TRAN_ID?.ToString()
+                            ?? parsedResponse?.data?.TRAN_ID?.ToString()
+                            ?? parsedResponse?.TRAN_ID?.ToString()
+                            ?? parsedResponse?.receipt?.tran_id?.ToString()
+                            ?? parsedResponse?.tran_id?.ToString()
+                            ?? "0";
                     }
 
                     if (!isSuccess)

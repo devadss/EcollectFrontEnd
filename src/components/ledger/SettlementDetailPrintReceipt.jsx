@@ -64,7 +64,7 @@ const SettlementDetailPrintReceipt = ({ settlement = {}, transactions = [] }) =>
         <div className="summary-strip-card">
           <span className="summary-strip-label">Beneficiary Account</span>
           <span className="summary-strip-val" style={{ fontSize: '8.5pt' }}>
-            {settlement.bankName || 'Bank'} ({settlement.accountNumber || '••••'})
+            {settlement.bankName || 'Partner Bank'} ({settlement.accountNumber || '••••'})
           </span>
         </div>
       </div>

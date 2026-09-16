@@ -862,8 +862,21 @@ export const authApi = {
       .catch(() => api.post('/Auth/verify-reset-password', payload));
   },
   changePassword: (data) => {
-    console.log('🔑 authApi.changePassword called');
-    return api.post('/Auth/change-password', data);
+    console.log('🔑 authApi.changePassword called with payload keys:', Object.keys(data || {}));
+    const payload = {
+      CurrentPassword: data?.currentPassword || data?.CurrentPassword || '',
+      currentPassword: data?.currentPassword || data?.CurrentPassword || '',
+      NewPassword: data?.newPassword || data?.NewPassword || data?.password || '',
+      newPassword: data?.newPassword || data?.NewPassword || data?.password || '',
+      ConfirmNewPassword: data?.confirmPassword || data?.confirmNewPassword || data?.ConfirmNewPassword || data?.ConfirmPassword || data?.newPassword || '',
+      confirmNewPassword: data?.confirmPassword || data?.confirmNewPassword || data?.ConfirmNewPassword || data?.ConfirmPassword || data?.newPassword || '',
+      ConfirmPassword: data?.confirmPassword || data?.confirmNewPassword || data?.ConfirmNewPassword || data?.ConfirmPassword || data?.newPassword || '',
+      confirmPassword: data?.confirmPassword || data?.confirmNewPassword || data?.ConfirmNewPassword || data?.ConfirmPassword || data?.newPassword || '',
+      ...data
+    };
+    return api.post('/Auth/change-password', payload)
+      .catch(() => api.post('/Auth/changepassword', payload))
+      .catch(() => api.post('/Auth/update-password', payload));
   },
   logout: () => {
     console.log('🚪 authApi.logout called');

@@ -11,6 +11,7 @@ import {
   sendSmsMessage, 
   DLT_TEMPLATES 
 } from '../../services/smsService';
+import { authApi } from '../../services/api';
 import WhatsAppConfig from './WhatsAppConfig';
 import './Settings.css';
 
@@ -190,8 +191,57 @@ const Settings = () => {
     setProfile({ ...profile, [e.target.name]: e.target.value });
   };
 
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+
   const handleSecurityChange = (e) => {
     setSecurity({ ...security, [e.target.name]: e.target.value });
+  };
+
+  const handleUpdatePassword = async (e) => {
+    if (e) e.preventDefault();
+
+    if (!security.currentPassword) {
+      showError('Please enter your current password.', 'Validation Error');
+      return;
+    }
+
+    if (!security.newPassword) {
+      showError('Please enter a new password.', 'Validation Error');
+      return;
+    }
+
+    if (security.newPassword.length < 6) {
+      showError('New password must be at least 6 characters long.', 'Validation Error');
+      return;
+    }
+
+    if (security.newPassword !== security.confirmPassword) {
+      showError('New password and confirm password do not match.', 'Validation Error');
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    try {
+      const res = await authApi.changePassword({
+        currentPassword: security.currentPassword,
+        newPassword: security.newPassword,
+        confirmPassword: security.confirmPassword,
+        confirmNewPassword: security.confirmPassword,
+      });
+
+      showSuccess(res?.data?.message || 'Password credentials updated successfully!', 'Password Updated');
+      setSecurity(prev => ({
+        ...prev,
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      }));
+    } catch (err) {
+      const errMsg = err?.response?.data?.message || err?.response?.data?.title || err?.message || 'Failed to update password. Please check your current password.';
+      showError(errMsg, 'Update Failed');
+    } finally {
+      setIsUpdatingPassword(false);
+    }
   };
 
   const handleNotificationToggle = (key) => {
@@ -630,12 +680,11 @@ const Settings = () => {
                   <button 
                     type="button" 
                     className="settings-action-btn"
-                    onClick={() => {
-                      showSuccess('Password credentials and authentication protocols updated successfully!', 'Security Updated');
-                    }}
+                    disabled={isUpdatingPassword}
+                    onClick={handleUpdatePassword}
                   >
                     <SettingsIcons.Key />
-                    <span>Update Access Password</span>
+                    <span>{isUpdatingPassword ? 'Updating Password...' : 'Update Access Password'}</span>
                   </button>
                 </div>
               </div>

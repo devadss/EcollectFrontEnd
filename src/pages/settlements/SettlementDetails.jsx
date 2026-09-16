@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
-import { settlementApi } from '../../services/api';
+import { settlementApi, merchantApi } from '../../services/api';
+import { useMerchantContext } from '../../context/MerchantContext';
+import { lookupIFSC, INDIAN_BANKS_LIST } from '../../services/bankService';
 import { exportToCsv } from '../../utils/exportLedger';
 import SettlementDetailPrintReceipt from '../../components/ledger/SettlementDetailPrintReceipt';
 import './SettlementDetails.css';
@@ -66,7 +68,12 @@ const DetailIcons = {
 
 const SettlementDetails = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
+  
+  const passedSettlement = location.state?.settlement;
+  const { selectedMerchant, merchants, selectedMerchantId } = useMerchantContext();
+
   const [loading, setLoading] = useState(true);
   const [settlement, setSettlement] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -104,72 +111,145 @@ const SettlementDetails = () => {
   const loadSettlement = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await settlementApi.getById(id);
-      const rawData = res?.data?.data || res?.data;
-
+      let directSettlement = passedSettlement || null;
       let items = [];
-      if (Array.isArray(rawData)) {
-        items = rawData;
-      } else if (rawData && Array.isArray(rawData.data)) {
-        items = rawData.data;
-      } else if (rawData && typeof rawData === 'object' && (rawData.id || rawData.settlement_id || rawData.transaction_id)) {
-        items = [rawData];
+      let rawData = null;
+
+      try {
+        const res = await settlementApi.getById(id);
+        rawData = res?.data?.data || res?.data;
+
+        if (Array.isArray(rawData)) {
+          items = rawData;
+        } else if (rawData && Array.isArray(rawData.data)) {
+          items = rawData.data;
+        } else if (rawData && typeof rawData === 'object' && (rawData.id || rawData.settlement_id || rawData.transaction_id)) {
+          items = [rawData];
+        }
+      } catch (err) {
+        console.warn('Direct settlementApi.getById error:', err);
       }
+
+      // If items is empty or lacks bank info, try to find in settlementApi.getAll
+      if ((!items || items.length === 0 || (!items[0]?.bank_name && !items[0]?.bankName)) && !directSettlement) {
+        try {
+          const listRes = await settlementApi.getAll();
+          const listData = listRes?.data?.data || listRes?.data || [];
+          if (Array.isArray(listData)) {
+            const found = listData.find(s => String(s.settlement_id || s.id) === String(id));
+            if (found) {
+              directSettlement = found;
+              if (items.length === 0) {
+                items = [found];
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Fallback settlement list lookup error:', e);
+        }
+      }
+
+      const first = (items && items.length > 0) ? items[0] : (directSettlement || {});
+
+      // Determine Merchant ID
+      const mId = first.merchant_id || first.merchantId || directSettlement?.merchantId || directSettlement?.merchant_id || selectedMerchantId;
+
+      // Find Merchant in context
+      const merch = (merchants && merchants.length > 0 && mId && mId !== 'ALL')
+        ? merchants.find(m => String(m.id) === String(mId) || String(m.merchantId) === String(mId))
+        : selectedMerchant;
+
+      // Extract IFSC code
+      const ifscCode = first.ifsc_code || first.ifsc || first.IFSC_Code || first.ifscCode || 
+                       directSettlement?.ifsc || directSettlement?.ifsc_code ||
+                       merch?.ifsc || merch?.IFSC_Code || merch?.settlementAccounts?.[0]?.ifscCode || '';
+
+      // Determine Dynamic Bank Name
+      let dynamicBankName = first.bank_name || first.bankName || first.BankName || first.bank || first.beneficiary_bank || first.destination_bank ||
+                            directSettlement?.bankName || directSettlement?.bank_name ||
+                            merch?.bankName || merch?.bank_name || merch?.settlementAccounts?.[0]?.bankName || '';
+
+      // If bank name is still empty, match from IFSC prefix using INDIAN_BANKS_LIST
+      if ((!dynamicBankName || dynamicBankName === 'Bank Destination' || dynamicBankName === 'Bank') && ifscCode) {
+        const prefix = ifscCode.trim().substring(0, 4).toUpperCase();
+        const matchedBank = INDIAN_BANKS_LIST.find(b => b.ifscPrefix === prefix || b.code === prefix);
+        if (matchedBank) {
+          dynamicBankName = matchedBank.name;
+        }
+      }
+
+      // If IFSC is present and 11 chars, trigger async lookupIFSC to enrich bankName and branch
+      if (ifscCode && ifscCode.length === 11) {
+        lookupIFSC(ifscCode).then(lookupRes => {
+          if (lookupRes?.success && lookupRes.data?.bankName) {
+            setSettlement(prev => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                bankName: lookupRes.data.bankName,
+                bankBranch: lookupRes.data.branch || prev.bankBranch
+              };
+            });
+          }
+        }).catch(err => console.warn('IFSC lookup error:', err));
+      }
+
+      const totalGross = (items && items.length > 0)
+        ? items.reduce((sum, item) => sum + (Number(item.gross_transaction_amount || item.sale_amount || item.amount) || 0), 0)
+        : Number(directSettlement?.amount || directSettlement?.saleAmount || 0);
+
+      const totalTdr = (items && items.length > 0)
+        ? items.reduce((sum, item) => sum + (Number(item.tdr_amount || item.fee) || 0), 0)
+        : Number(directSettlement?.fee || 0);
+
+      const totalTax = (items && items.length > 0)
+        ? items.reduce((sum, item) => sum + (Number(item.tax_on_tdr_amount || item.tax) || 0), 0)
+        : Number(directSettlement?.tax || 0);
+
+      const totalReimbursed = (items && items.length > 0)
+        ? items.reduce((sum, item) => sum + (Number(item.amount_reimbursed || item.payout_amount || item.netAmount) || 0), 0)
+        : Number(directSettlement?.amount || directSettlement?.payout_amount || (totalGross - totalTdr - totalTax));
+
+      const rawAcc = first.account_number || first.accountNumber || first.account_no || directSettlement?.accountNumber || directSettlement?.account_number || merch?.accountNumber || merch?.settlementAccounts?.[0]?.accountNumber;
+      const formattedAcc = rawAcc ? `•••• •••• •••• ${String(rawAcc).slice(-4)}` : (merch?.accountNumber ? `•••• •••• •••• ${String(merch.accountNumber).slice(-4)}` : '•••• •••• •••• —');
+
+      const merchantDisplayName = first.merchant_name || first.merchantName || first.account_name || directSettlement?.merchant || merch?.merchantName || merch?.businessName || merch?.name || 'Primary Merchant';
+
+      const accountHolderName = first.account_name || first.accountHolder || first.account_holder_name || directSettlement?.accountHolder || merch?.accountHolder || merch?.merchantName || merchantDisplayName;
+
+      const bankRefNum = first.bank_reference || first.bankRef || first.bank_ref || first.utr || directSettlement?.bankRef || directSettlement?.bank_reference || directSettlement?.utr || 'NA';
 
       if (items.length > 0) {
-        setTransactions(items);
-        const first = items[0];
-        const totalGross = items.reduce((sum, item) => sum + (Number(item.gross_transaction_amount || item.sale_amount || item.amount) || 0), 0);
-        const totalTdr = items.reduce((sum, item) => sum + (Number(item.tdr_amount || item.fee) || 0), 0);
-        const totalTax = items.reduce((sum, item) => sum + (Number(item.tax_on_tdr_amount || item.tax) || 0), 0);
-        const totalReimbursed = items.reduce((sum, item) => sum + (Number(item.amount_reimbursed || item.payout_amount || item.netAmount) || 0), 0);
-
-        setSettlement({
-          id: first.settlement_id || id || 'SET-10075',
-          merchant: first.customer_name ? `${first.customer_name}'s Settlement Batch` : 'Apex Retail Services Pvt Ltd',
-          merchantId: first.order_id || 'MCH-88210',
-          amount: totalGross > 0 ? totalGross : 145000,
-          fee: totalTdr > 0 ? totalTdr : 290,
-          tax: totalTax > 0 ? totalTax : 52.2,
-          netAmount: totalReimbursed > 0 ? totalReimbursed : (totalGross > 0 ? (totalGross - totalTdr - totalTax) : 144657.8),
-          status: (first.completed === 'y' || first.completed === true || String(first.status).toLowerCase() === 'completed') ? 'Completed' : 'Pending',
-          date: first.settlement_datetime || new Date().toISOString(),
-          bankRef: first.bank_reference || '710061536126',
-          utr: first.bank_reference ? `UTR${first.bank_reference}` : 'UTR710061536126',
-          bankName: first.bank_name || 'HDFC Bank Ltd',
-          accountNumber: first.account_number ? `•••• •••• •••• ${String(first.account_number).slice(-4)}` : '•••• •••• •••• 4912',
-          accountHolder: first.account_name || 'Apex Retail Services Escrow Account',
-          ifsc: first.ifsc_code || 'HDFC0000002',
-          settlementMode: first.payment_channel || 'IMPS / Direct NEFT Batch',
-          cycle: 'T+1 Automated Daily Payout',
-        });
-      } else {
-        setSettlement({
-          id: id || 'SET-10075',
-          merchant: 'Apex Retail Services Pvt Ltd',
-          merchantId: 'MCH-88210',
-          amount: 145000,
-          fee: 290,
-          tax: 52.2,
-          netAmount: 144657.8,
-          status: 'Completed',
-          date: '2026-08-16T14:32:00',
-          bankRef: '710061536126',
-          utr: 'UTR710061536126',
-          bankName: 'HDFC Bank Ltd',
-          accountNumber: '•••• •••• •••• 4912',
-          accountHolder: 'Apex Retail Services Escrow Account',
-          ifsc: 'HDFC0000002',
-          settlementMode: 'IMPS / Direct NEFT Batch',
-          cycle: 'T+1 Automated Daily Payout',
-        });
+        setTransactions(items.filter(it => it.transaction_id || it.order_id || it.id));
       }
+
+      setSettlement({
+        id: first.settlement_id || first.id || directSettlement?.id || id || 'SET-BATCH',
+        merchant: merchantDisplayName,
+        merchantId: mId || 'MCH-—',
+        amount: totalGross,
+        fee: totalTdr,
+        tax: totalTax,
+        netAmount: totalReimbursed > 0 ? totalReimbursed : (totalGross > 0 ? (totalGross - totalTdr - totalTax) : 0),
+        status: (first.completed === 'y' || first.completed === true || String(first.status || directSettlement?.status).toLowerCase() === 'completed' || String(first.status || directSettlement?.status).toLowerCase() === 'success') ? 'Completed' : 'Pending',
+        date: first.settlement_datetime || first.date || directSettlement?.date || new Date().toISOString(),
+        bankRef: bankRefNum,
+        utr: first.bank_reference ? `UTR${first.bank_reference}` : (directSettlement?.utr || (bankRefNum !== 'NA' ? (String(bankRefNum).startsWith('UTR') ? bankRefNum : `UTR${bankRefNum}`) : 'NA')),
+        bankName: dynamicBankName || 'Partner Bank',
+        bankBranch: first.bank_branch || first.bankBranch || directSettlement?.bankBranch || merch?.settlementAccounts?.[0]?.bankBranch || '',
+        accountNumber: formattedAcc,
+        rawAccountNumber: rawAcc || '',
+        accountHolder: accountHolderName,
+        ifsc: ifscCode || '—',
+        settlementMode: first.payment_channel || first.payment_mode || directSettlement?.settlementMode || 'IMPS / Direct NEFT Batch',
+        cycle: 'T+1 Automated Daily Payout',
+      });
     } catch (error) {
       console.error('Error loading settlement:', error);
     } finally {
       setTimeout(() => setLoading(false), 300);
     }
-  }, [id]);
+  }, [id, passedSettlement, selectedMerchant, merchants, selectedMerchantId]);
 
   useEffect(() => {
     loadSettlement();
@@ -316,40 +396,49 @@ const SettlementDetails = () => {
                 <DetailIcons.Building />
               </div>
               <div className="bank-meta-text">
-                <span className="bank-institution-name">{settlement.bankName || 'HDFC Bank Ltd'}</span>
-                <span className="bank-account-masked font-mono">{settlement.accountNumber || '•••• •••• •••• 4912'}</span>
+                <span className="bank-institution-name">{settlement.bankName || 'Partner Bank'}</span>
+                <span className="bank-account-masked font-mono">{settlement.accountNumber || '•••• •••• •••• —'}</span>
+                {settlement.bankBranch && (
+                  <span style={{ fontSize: '12px', color: 'var(--textSecondary, #94a3b8)', display: 'block', marginTop: '3px' }}>
+                    🏢 {settlement.bankBranch}
+                  </span>
+                )}
               </div>
             </div>
 
             <div className="detail-info-list">
               <div className="info-list-row">
                 <span className="info-label">Account Holder Name</span>
-                <span className="info-value font-bold">{settlement.accountHolder || settlement.merchant}</span>
+                <span className="info-value font-bold">{settlement.accountHolder || settlement.merchant || 'Merchant Account'}</span>
               </div>
               <div className="info-list-row">
                 <span className="info-label">IFSC Code</span>
                 <span className="info-value font-mono">
-                  {settlement.ifsc || 'HDFC0000002'}
-                  <button 
-                    className="copy-field-btn" 
-                    onClick={() => handleCopy(settlement.ifsc || 'HDFC0000002', 'ifsc')}
-                    title="Copy IFSC"
-                  >
-                    {copiedField === 'ifsc' ? '✓ Copied' : <DetailIcons.Copy />}
-                  </button>
+                  {settlement.ifsc || '—'}
+                  {settlement.ifsc && settlement.ifsc !== '—' && (
+                    <button 
+                      className="copy-field-btn" 
+                      onClick={() => handleCopy(settlement.ifsc, 'ifsc')}
+                      title="Copy IFSC"
+                    >
+                      {copiedField === 'ifsc' ? '✓ Copied' : <DetailIcons.Copy />}
+                    </button>
+                  )}
                 </span>
               </div>
               <div className="info-list-row">
                 <span className="info-label">Bank Reference Number</span>
                 <span className="info-value font-mono">
-                  {settlement.bankRef || '710061536126'}
-                  <button 
-                    className="copy-field-btn" 
-                    onClick={() => handleCopy(settlement.bankRef || '710061536126', 'bankRef')}
-                    title="Copy Bank Ref"
-                  >
-                    {copiedField === 'bankRef' ? '✓ Copied' : <DetailIcons.Copy />}
-                  </button>
+                  {settlement.bankRef || 'NA'}
+                  {settlement.bankRef && settlement.bankRef !== 'NA' && (
+                    <button 
+                      className="copy-field-btn" 
+                      onClick={() => handleCopy(settlement.bankRef, 'bankRef')}
+                      title="Copy Bank Ref"
+                    >
+                      {copiedField === 'bankRef' ? '✓ Copied' : <DetailIcons.Copy />}
+                    </button>
+                  )}
                 </span>
               </div>
               <div className="info-list-row">
