@@ -563,7 +563,12 @@ const Branches = () => {
                     return (
                     <div key={branch.id} className="branch-profile-card">
                       
-                      <div className="branch-card-header">
+                      <div 
+                        className="branch-card-header"
+                        onClick={() => navigate(`/branches/${branch.id}`, { state: { branch } })}
+                        style={{ cursor: 'pointer' }}
+                        title="Click to view full branch dossier"
+                      >
                         <div className="branch-avatar-bubble">
                           <BranchIcons.Building />
                         </div>
@@ -684,7 +689,7 @@ const Branches = () => {
 
                         <button 
                           className="action-link-btn is-view" 
-                          onClick={() => navigate(`/branches/${branch.id}`)}
+                          onClick={() => navigate(`/branches/${branch.id}`, { state: { branch } })}
                         >
                           <BranchIcons.Eye />
                           <span>View Profile</span>
@@ -745,7 +750,16 @@ const Branches = () => {
                       const isCopied = copiedBranchId === branch.id;
 
                       return (
-                      <tr key={branch.id} className="branches-table-row">
+                      <tr 
+                        key={branch.id} 
+                        className="branches-table-row"
+                        onClick={(e) => {
+                          if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select')) return;
+                          navigate(`/branches/${branch.id}`, { state: { branch } });
+                        }}
+                        style={{ cursor: 'pointer' }}
+                        title="Click to view full branch dossier"
+                      >
                         <td className="row-index font-mono">{String(index + 1).padStart(2, '0')}</td>
                         <td>
                           <div className="table-partner-chip">
@@ -865,7 +879,11 @@ const Branches = () => {
                                 ✓ Make Active
                               </button>
                             )}
-                            <button className="table-action-btn is-view" onClick={() => navigate(`/branches/${branch.id}`)} title="View Branch">
+                            <button 
+                              className="table-action-btn is-view" 
+                              onClick={() => navigate(`/branches/${branch.id}`, { state: { branch } })} 
+                              title="View Branch Dossier"
+                            >
                               <BranchIcons.Eye />
                             </button>
                             {isSoftwareAdmin && (

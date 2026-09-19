@@ -128,8 +128,8 @@ const Login = () => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const width = canvas.width || 135;
-    const height = canvas.height || 42;
+    const width = canvas.width || 120;
+    const height = canvas.height || 34;
 
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
@@ -768,8 +768,8 @@ const Login = () => {
                   >
                     <canvas 
                       ref={canvasRef} 
-                      width={135} 
-                      height={42} 
+                      width={120} 
+                      height={34} 
                       className="captcha-canvas"
                     />
                     <noscript>

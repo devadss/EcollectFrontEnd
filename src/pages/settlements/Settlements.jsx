@@ -31,6 +31,51 @@ ChartJS.register(
   ArcElement
 );
 
+// Comprehensive Multi-Format Date Parser
+export const parseAnyDate = (raw) => {
+  if (!raw) return null;
+  if (raw instanceof Date && !isNaN(raw.getTime())) return raw;
+  if (typeof raw === 'number') {
+    const ms = raw < 10000000000 ? raw * 1000 : raw;
+    const d = new Date(ms);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const str = String(raw).trim();
+  if (!str) return null;
+
+  // 1. ISO or YYYY-MM-DD format (with optional time)
+  const ymdMatch = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/i);
+  if (ymdMatch) {
+    const year = parseInt(ymdMatch[1], 10);
+    const month = parseInt(ymdMatch[2], 10) - 1;
+    const day = parseInt(ymdMatch[3], 10);
+    const hours = ymdMatch[4] ? parseInt(ymdMatch[4], 10) : 0;
+    const minutes = ymdMatch[5] ? parseInt(ymdMatch[5], 10) : 0;
+    const seconds = ymdMatch[6] ? parseInt(ymdMatch[6], 10) : 0;
+    const d = new Date(year, month, day, hours, minutes, seconds);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // 2. DD-MM-YYYY or DD/MM/YYYY format (Indian banking format)
+  const dmyMatch = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/i);
+  if (dmyMatch) {
+    const day = parseInt(dmyMatch[1], 10);
+    const month = parseInt(dmyMatch[2], 10) - 1;
+    const year = parseInt(dmyMatch[3], 10);
+    const hours = dmyMatch[4] ? parseInt(dmyMatch[4], 10) : 0;
+    const minutes = dmyMatch[5] ? parseInt(dmyMatch[5], 10) : 0;
+    const seconds = dmyMatch[6] ? parseInt(dmyMatch[6], 10) : 0;
+    const d = new Date(year, month, day, hours, minutes, seconds);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // 3. Fallback native parse
+  const nativeParsed = new Date(str);
+  if (!isNaN(nativeParsed.getTime())) return nativeParsed;
+
+  return null;
+};
+
 // Crisp SVG Icons
 const SettleIcons = {
   Download: () => (
@@ -126,6 +171,7 @@ const Settlements = () => {
   const [settlements, setSettlements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [chartHorizon, setChartHorizon] = useState('6months'); // '6months' | 'year' | '30days'
   const [stats, setStats] = useState({
     totalSettled: 0,
     pendingSettlements: 0,
@@ -145,19 +191,30 @@ const Settlements = () => {
 
   const calculateStats = useCallback((data) => {
     const total = data.reduce((sum, s) => sum + (Number(s.amount || s.saleAmount) || 0), 0);
-    const pending = data.filter(s => (s.status || '').toLowerCase() === 'pending').length;
-    const completed = data.filter(s => (s.status || '').toLowerCase() === 'completed' || (s.status || '').toLowerCase() === 'success').length;
-    const month = data.filter(s => {
-      if (!s.date) return false;
-      const d = new Date(s.date);
-      return d.getMonth() === new Date().getMonth();
+    const pending = data.filter(s => {
+      const st = String(s.status || '').toLowerCase().trim();
+      return st === 'pending' || st === 'pending approval';
+    }).length;
+    const completed = data.filter(s => {
+      const st = String(s.status || '').toLowerCase().trim();
+      return st === 'completed' || st === 'success' || st === 'settled';
+    }).length;
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+
+    const monthTotal = data.filter(s => {
+      const d = parseAnyDate(s.date);
+      if (!d) return false;
+      return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
     }).reduce((sum, s) => sum + (Number(s.amount || s.saleAmount) || 0), 0);
 
     setStats({
       totalSettled: completed,
       pendingSettlements: pending,
       totalAmount: total,
-      thisMonth: month || total,
+      thisMonth: monthTotal,
     });
   }, []);
 
@@ -179,8 +236,8 @@ const Settlements = () => {
 
       // Normalize settlement fields from Payment Gateway Spec (Section 10.1)
       const formatted = safeData.map((item, idx) => {
-        const ifscCandidate = item.ifsc_code || item.ifsc || item.IFSC_Code || item.ifscCode || '';
-        let dynamicBankName = item.bank_name || item.bankName || item.BankName || item.bank || item.beneficiary_bank || '';
+        const ifscCandidate = item.ifsc_code || item.ifsc || item.IFSC_Code || item.ifscCode || item.IfscCode || item.IFSC || '';
+        let dynamicBankName = item.bank_name || item.bankName || item.BankName || item.bank || item.Bank || item.beneficiary_bank || item.BeneficiaryBank || '';
 
         if (!dynamicBankName && ifscCandidate) {
           const prefix = ifscCandidate.trim().substring(0, 4).toUpperCase();
@@ -194,22 +251,48 @@ const Settlements = () => {
           dynamicBankName = selectedMerchant.bankName || selectedMerchant.settlementAccounts?.[0]?.bankName;
         }
 
+        const rawDate = item.settlement_datetime || item.SettlementDateTime || item.settlementDateTime ||
+                        item.settlement_date || item.SettlementDate || item.settlementDate ||
+                        item.date || item.Date ||
+                        item.created_at || item.CreatedAt || item.createdAt ||
+                        item.trans_date || item.TransDate || item.transDate ||
+                        item.timestamp || item.Timestamp;
+        const parsedDate = parseAnyDate(rawDate);
+        const resolvedDate = parsedDate ? parsedDate.toISOString() : (rawDate || new Date().toISOString());
+
+        const rawPayout = item.payout_amount ?? item.PayoutAmount ?? item.payoutAmount ??
+                          item.net_amount ?? item.NetAmount ?? item.netAmount ??
+                          item.settled_amount ?? item.SettledAmount ?? item.settledAmount ??
+                          item.amount_reimbursed ?? item.AmountReimbursed ??
+                          item.amount ?? item.Amount;
+        
+        const rawSale = item.sale_amount ?? item.SaleAmount ?? item.saleAmount ??
+                        item.gross_transaction_amount ?? item.GrossTransactionAmount ??
+                        item.gross_amount ?? item.GrossAmount ?? item.grossAmount ??
+                        item.amount ?? item.Amount;
+
+        const payoutVal = Number(rawPayout !== undefined && rawPayout !== null ? rawPayout : (rawSale || 0));
+        const saleVal = Number(rawSale !== undefined && rawSale !== null ? rawSale : payoutVal);
+
+        const statusRaw = String(item.status || item.Status || (item.completed === 'y' || item.completed === true ? 'Completed' : (item.completed === 'n' ? 'Pending' : 'Completed'))).trim();
+        const isCompleted = statusRaw.toLowerCase() === 'completed' || statusRaw.toLowerCase() === 'success' || statusRaw.toLowerCase() === 'settled' || item.completed === 'y' || item.completed === true;
+
         return {
-          id: item.settlement_id || item.id || `SET-${10075 + idx}`,
-          merchant: item.merchant_name || item.merchantName || item.account_name || selectedMerchant?.merchantName || selectedMerchant?.name || 'Primary Merchant',
-          merchantId: item.merchant_id || item.merchantId || selectedMerchantId,
-          amount: Number(item.payout_amount !== undefined && item.payout_amount !== null ? item.payout_amount : (item.sale_amount || item.amount || 0)),
-          saleAmount: Number(item.sale_amount || item.amount || 0),
-          chargebackAmount: Number(item.chargeback_amount || 0),
-          refundAmount: Number(item.refund_amount || 0),
-          date: item.settlement_datetime || item.date || item.created_at || new Date().toISOString(),
-          bankRef: item.bank_reference || item.bankRef || item.bank_ref || item.utr || 'NA',
+          id: item.settlement_id || item.SettlementId || item.id || item.Id || `SET-${10075 + idx}`,
+          merchant: item.merchant_name || item.MerchantName || item.merchantName || item.account_name || item.AccountName || selectedMerchant?.merchantName || selectedMerchant?.name || 'Primary Merchant',
+          merchantId: item.merchant_id || item.MerchantId || item.merchantId || selectedMerchantId,
+          amount: payoutVal,
+          saleAmount: saleVal,
+          chargebackAmount: Number(item.chargeback_amount || item.ChargebackAmount || 0),
+          refundAmount: Number(item.refund_amount || item.RefundAmount || 0),
+          date: resolvedDate,
+          bankRef: item.bank_reference || item.BankReference || item.bankReference || item.bank_ref || item.BankRef || item.bankRef || item.utr || item.Utr || item.UTR || 'NA',
           bankName: dynamicBankName || 'Partner Bank',
-          bankBranch: item.bank_branch || item.bankBranch || item.branch || selectedMerchant?.settlementAccounts?.[0]?.bankBranch || '',
-          accountNumber: item.account_number || item.accountNumber || selectedMerchant?.accountNumber || selectedMerchant?.settlementAccounts?.[0]?.accountNumber || '',
+          bankBranch: item.bank_branch || item.BankBranch || item.bankBranch || item.branch || item.Branch || selectedMerchant?.settlementAccounts?.[0]?.bankBranch || '',
+          accountNumber: item.account_number || item.AccountNumber || item.accountNumber || item.account_no || item.AccountNo || selectedMerchant?.accountNumber || selectedMerchant?.settlementAccounts?.[0]?.accountNumber || '',
           ifsc: ifscCandidate,
-          vendorCode: item.vendor_code || null,
-          status: (item.completed === 'y' || item.completed === true || String(item.status).toLowerCase() === 'completed' || String(item.status).toLowerCase() === 'success') ? 'Completed' : 'Pending'
+          vendorCode: item.vendor_code || item.VendorCode || null,
+          status: isCompleted ? 'Completed' : (statusRaw.toLowerCase().includes('fail') ? 'Failed' : (statusRaw.toLowerCase().includes('process') ? 'Processing' : 'Pending'))
         };
       });
 
@@ -231,28 +314,120 @@ const Settlements = () => {
     loadSettlements();
   }, [loadSettlements]);
 
-  // Settlement Bar Chart Data
-  const chartData = useMemo(() => ({
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-    datasets: [{
-      label: 'Settlement Volume (₹)',
-      data: [45000, 52000, 38000, 65000, 48000, 72000, 56000, 83000, 61000, 78000, 92000, 105000],
-      backgroundColor: (context) => {
-        const chart = context.chart;
-        const { ctx, chartArea } = chart;
-        if (!chartArea) return 'rgba(99, 102, 241, 0.6)';
-        const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-        gradient.addColorStop(0, 'rgba(6, 182, 212, 0.85)');
-        gradient.addColorStop(1, 'rgba(99, 102, 241, 0.35)');
-        return gradient;
-      },
-      borderColor: '#06b6d4',
-      borderWidth: 2,
-      borderRadius: 6,
-      barPercentage: 0.55,
-      hoverBackgroundColor: '#38bdf8',
-    }]
-  }), []);
+  // Settlement Bar Chart Data (Dynamic aggregation with multi-horizon support)
+  const chartData = useMemo(() => {
+    const now = new Date();
+    let labels = [];
+    let dataValues = [];
+    let countValues = [];
+
+    if (chartHorizon === '6months') {
+      // Last 6 trailing calendar months including current month
+      const monthBuckets = [];
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const mName = d.toLocaleString('en-IN', { month: 'short' });
+        const yNum = d.getFullYear();
+        monthBuckets.push({
+          key: `${yNum}-${d.getMonth()}`,
+          label: `${mName} '${String(yNum).slice(2)}`,
+          volume: 0,
+          count: 0
+        });
+      }
+
+      settlements.forEach((s) => {
+        const d = parseAnyDate(s.date);
+        if (!d) return;
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        const bucket = monthBuckets.find(b => b.key === key);
+        if (bucket) {
+          const amt = Number(s.amount || s.saleAmount || 0);
+          bucket.volume += amt;
+          bucket.count += 1;
+        }
+      });
+
+      labels = monthBuckets.map(b => b.label);
+      dataValues = monthBuckets.map(b => b.volume);
+      countValues = monthBuckets.map(b => b.count);
+
+    } else if (chartHorizon === '30days') {
+      // Last 30 daily buckets
+      const dayBuckets = [];
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+        const dKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+        const dLabel = `${d.getDate()} ${d.toLocaleString('en-IN', { month: 'short' })}`;
+        dayBuckets.push({
+          key: dKey,
+          label: dLabel,
+          volume: 0,
+          count: 0
+        });
+      }
+
+      settlements.forEach((s) => {
+        const d = parseAnyDate(s.date);
+        if (!d) return;
+        const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+        const bucket = dayBuckets.find(b => b.key === key);
+        if (bucket) {
+          const amt = Number(s.amount || s.saleAmount || 0);
+          bucket.volume += amt;
+          bucket.count += 1;
+        }
+      });
+
+      labels = dayBuckets.map(b => b.label);
+      dataValues = dayBuckets.map(b => b.volume);
+      countValues = dayBuckets.map(b => b.count);
+
+    } else {
+      // Full Calendar Year (Jan - Dec)
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthlyVolumes = new Array(12).fill(0);
+      const monthlyCounts = new Array(12).fill(0);
+
+      settlements.forEach((s) => {
+        const d = parseAnyDate(s.date);
+        if (!d) return;
+        const monthIdx = d.getMonth();
+        if (monthIdx >= 0 && monthIdx < 12) {
+          const amt = Number(s.amount || s.saleAmount || 0);
+          monthlyVolumes[monthIdx] += amt;
+          monthlyCounts[monthIdx] += 1;
+        }
+      });
+
+      labels = monthNames;
+      dataValues = monthlyVolumes;
+      countValues = monthlyCounts;
+    }
+
+    return {
+      labels,
+      datasets: [{
+        label: 'Settlement Volume (₹)',
+        data: dataValues,
+        counts: countValues,
+        backgroundColor: (context) => {
+          const chart = context.chart;
+          const { ctx, chartArea } = chart;
+          if (!chartArea) return 'rgba(99, 102, 241, 0.6)';
+          const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+          gradient.addColorStop(0, 'rgba(6, 182, 212, 0.85)');
+          gradient.addColorStop(1, 'rgba(99, 102, 241, 0.35)');
+          return gradient;
+        },
+        borderColor: '#06b6d4',
+        borderWidth: 2,
+        borderRadius: 6,
+        barPercentage: chartHorizon === '30days' ? 0.75 : 0.55,
+        hoverBackgroundColor: '#38bdf8',
+      }]
+    };
+  }, [settlements, chartHorizon]);
 
   const chartOptions = useMemo(() => ({
     responsive: true,
@@ -260,17 +435,26 @@ const Settlements = () => {
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: 'rgba(15, 23, 42, 0.92)',
+        backgroundColor: 'rgba(15, 23, 42, 0.95)',
         titleColor: '#f8fafc',
         bodyColor: '#cbd5e1',
         cornerRadius: 10,
         padding: 12,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderColor: 'rgba(255, 255, 255, 0.12)',
         borderWidth: 1,
         titleFont: { family: 'Plus Jakarta Sans', size: 12, weight: '700' },
         bodyFont: { family: 'JetBrains Mono', size: 12, weight: '600' },
         callbacks: {
-          label: (context) => ` Settlement: ₹${context.parsed.y.toLocaleString('en-IN')}`
+          label: (context) => {
+            const val = context.parsed.y || 0;
+            const idx = context.dataIndex;
+            const dataset = context.dataset;
+            const count = dataset.counts ? dataset.counts[idx] : 0;
+            return [
+              ` Disbursed: ₹${val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              ` Batches: ${count} settlement${count !== 1 ? 's' : ''}`
+            ];
+          }
         }
       }
     },
@@ -280,28 +464,61 @@ const Settlements = () => {
         ticks: {
           color: '#64748b',
           font: { family: 'JetBrains Mono', size: 11 },
-          callback: (value) => value >= 1000 ? `₹${(value/1000).toFixed(0)}k` : `₹${value}`
+          callback: (value) => {
+            if (value >= 10000000) return `₹${(value / 10000000).toFixed(1)}Cr`;
+            if (value >= 100000) return `₹${(value / 100000).toFixed(1)}L`;
+            if (value >= 1000) return `₹${(value / 1000).toFixed(0)}k`;
+            return `₹${value}`;
+          }
         },
         grid: { color: 'rgba(255, 255, 255, 0.05)', drawBorder: false }
       },
       x: {
-        ticks: { color: '#94a3b8', font: { family: 'Plus Jakarta Sans', size: 11, weight: '600' } },
+        ticks: { 
+          color: '#94a3b8', 
+          font: { family: 'Plus Jakarta Sans', size: chartHorizon === '30days' ? 9.5 : 11, weight: '600' },
+          maxRotation: chartHorizon === '30days' ? 45 : 0
+        },
         grid: { display: false }
       }
     }
-  }), []);
+  }), [chartHorizon]);
 
-  // Status Doughnut Distribution
-  const statusData = useMemo(() => ({
-    labels: ['Completed', 'Pending', 'Processing', 'Failed'],
-    datasets: [{
-      data: [60, 20, 12, 8],
-      backgroundColor: ['#10b981', '#f59e0b', '#06b6d4', '#ef4444'],
-      borderColor: 'rgba(19, 29, 51, 0.8)',
-      borderWidth: 3,
-      hoverOffset: 8,
-    }]
-  }), []);
+  // Status Doughnut Distribution (Dynamic calculation from live settlements)
+  const statusData = useMemo(() => {
+    let completed = 0;
+    let pending = 0;
+    let processing = 0;
+    let failed = 0;
+
+    settlements.forEach((s) => {
+      const st = String(s.status || '').toLowerCase().trim();
+      if (st === 'completed' || st === 'success' || st === 'settled') {
+        completed++;
+      } else if (st === 'pending' || st === 'pending approval') {
+        pending++;
+      } else if (st === 'processing' || st === 'in progress' || st === 'cleared') {
+        processing++;
+      } else if (st === 'failed' || st === 'rejected' || st === 'error') {
+        failed++;
+      } else {
+        completed++;
+      }
+    });
+
+    const total = completed + pending + processing + failed;
+
+    return {
+      labels: ['Completed', 'Pending', 'Processing', 'Failed'],
+      datasets: [{
+        data: total > 0 ? [completed, pending, processing, failed] : [0, 0, 0, 0],
+        backgroundColor: ['#10b981', '#f59e0b', '#06b6d4', '#ef4444'],
+        borderColor: 'rgba(19, 29, 51, 0.8)',
+        borderWidth: 3,
+        hoverOffset: 8,
+      }]
+    };
+  }, [settlements]);
 
   const statusOptions = useMemo(() => ({
     responsive: true,
@@ -328,7 +545,12 @@ const Settlements = () => {
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.1)',
         callbacks: {
-          label: (context) => ` ${context.label}: ${context.parsed}%`
+          label: (context) => {
+            const count = context.raw || 0;
+            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+            const pct = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+            return ` ${context.label}: ${count} settlements (${pct}%)`;
+          }
         }
       }
     }
@@ -505,7 +727,34 @@ const Settlements = () => {
                 <h3 className="settle-chart-title">
                   Settlement <span className="gradient-text">Overview</span>
                 </h3>
-                <p className="settle-chart-subtitle">Monthly payout disbursement trajectory</p>
+                <p className="settle-chart-subtitle">
+                  {chartHorizon === '6months' && 'Rolling 6-month disbursement velocity'}
+                  {chartHorizon === 'year' && 'Full calendar year monthly disbursement trajectory'}
+                  {chartHorizon === '30days' && 'Daily settlement volume across the last 30 days'}
+                </p>
+              </div>
+              <div className="settle-horizon-pills">
+                <button
+                  type="button"
+                  className={`horizon-pill-btn ${chartHorizon === '6months' ? 'is-active' : ''}`}
+                  onClick={() => setChartHorizon('6months')}
+                >
+                  Last 6M
+                </button>
+                <button
+                  type="button"
+                  className={`horizon-pill-btn ${chartHorizon === 'year' ? 'is-active' : ''}`}
+                  onClick={() => setChartHorizon('year')}
+                >
+                  12 Months
+                </button>
+                <button
+                  type="button"
+                  className={`horizon-pill-btn ${chartHorizon === '30days' ? 'is-active' : ''}`}
+                  onClick={() => setChartHorizon('30days')}
+                >
+                  30 Days
+                </button>
               </div>
             </div>
             <div className="settle-chart-wrapper" style={{ height: '280px' }}>
