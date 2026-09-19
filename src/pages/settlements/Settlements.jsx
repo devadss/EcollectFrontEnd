@@ -165,9 +165,12 @@ const Settlements = () => {
     try {
       setLoading(true);
       setError(null);
-      const queryParams = selectedMerchantId && selectedMerchantId !== 'ALL' 
-        ? { merchantId: selectedMerchantId, merchant_id: selectedMerchantId } 
-        : {};
+      const queryParams = {
+        ...(selectedMerchantId && selectedMerchantId !== 'ALL' ? { merchantId: selectedMerchantId, merchant_id: selectedMerchantId } : {}),
+        ...(filter.dateFrom ? { date_from: filter.dateFrom, dateFrom: filter.dateFrom } : {}),
+        ...(filter.dateTo ? { date_to: filter.dateTo, dateTo: filter.dateTo } : {}),
+        ...(filter.status ? { completed: filter.status === 'Completed' ? 'y' : (filter.status === 'Pending' ? 'n' : undefined) } : {})
+      };
       const res = await settlementApi.getAll(queryParams);
       const rawData = res?.data?.data || res?.data || [];
       const safeData = Array.isArray(rawData) ? rawData : [];
@@ -222,7 +225,7 @@ const Settlements = () => {
         setLoading(false);
       }, 350);
     }
-  }, [selectedMerchantId, selectedMerchant, calculateStats]);
+  }, [selectedMerchantId, selectedMerchant, filter.dateFrom, filter.dateTo, filter.status, calculateStats]);
 
   useEffect(() => {
     loadSettlements();
