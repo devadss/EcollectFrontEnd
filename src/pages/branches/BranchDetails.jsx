@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import DashboardLayout from '../../components/layouts/DashboardLayout'; 
 import LoadingAnimation from '../../components/common/LoadingAnimation';
 import { branchApi } from '../../services/api';  
@@ -100,22 +100,28 @@ const Icons = {
 const BranchDetails = () => {
   const navigate = useNavigate();
   const { id } = useParams();
-  const [branch, setBranch] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const location = useLocation();
+  const [branch, setBranch] = useState(location.state?.branch || null);
+  const [loading, setLoading] = useState(!location.state?.branch);
   const [copied, setCopied] = useState(false);
   const [actionMsg, setActionMsg] = useState(null);
 
   const loadBranch = useCallback(async () => {
     try {
       const res = await branchApi.getById(id);
-      setBranch(res?.data?.data || res?.data || null);
+      const branchData = res?.data?.data || res?.data || null;
+      if (branchData) {
+        setBranch(branchData);
+      }
     } catch (error) {
       console.error('Error loading branch:', error);
-      setBranch(null);
+      if (!location.state?.branch) {
+        setBranch(null);
+      }
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, location.state?.branch]);
 
   useEffect(() => {
     loadBranch();
