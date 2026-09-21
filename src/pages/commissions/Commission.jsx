@@ -13,7 +13,7 @@ import {
 
 import DashboardLayout from '../../components/layouts/DashboardLayout'; 
 import LoadingAnimation from '../../components/common/LoadingAnimation';
-import { transactionApi, merchantApi } from '../../services/api';  
+import { transactionApi, merchantApi, commissionApi } from '../../services/api';  
 import { useDialog } from '../../context/DialogContext';
 import './Commission.css';
 
@@ -135,6 +135,62 @@ const CommIcons = {
   )
 };
 
+// Robust Merchant Rate Extractor supporting all backend DTO/DB property variations
+export const extractMerchantRates = (m) => {
+  if (!m) {
+    return {
+      pgVendorPercentage: 0.15,
+      platformPercentage: 0.50,
+      settlementPercentage: 0.65
+    };
+  }
+
+  // PG Vendor Rate candidates
+  const rawPg = m.pgVendorPercentage ?? m.PgVendorPercentage ?? m.pg_vendor_percentage ?? 
+                m.vendorPercentage ?? m.VendorPercentage ?? m.vendor_percentage ??
+                m.pgVendorRate ?? m.PgVendorRate ?? m.pgPercentage ?? m.PgPercentage ?? 
+                m.pgRate ?? m.PgRate ?? m.gatewayPercentage ?? m.GatewayPercentage ?? 
+                m.pgFeePercentage ?? m.vendorRate ?? m.VendorRate ?? m.pgCut ?? m.pg_fee_rate;
+
+  // Platform Margin Rate candidates
+  const rawPlat = m.platformPercentage ?? m.PlatformPercentage ?? m.platform_percentage ?? 
+                  m.platformCommission ?? m.PlatformCommission ?? m.platform_commission ??
+                  m.platformRate ?? m.PlatformRate ?? m.ourPercentage ?? m.OurPercentage ?? 
+                  m.commissionPercentage ?? m.CommissionPercentage ?? m.commission_percentage ?? 
+                  m.marginPercentage ?? m.MarginPercentage ?? m.platformMargin ?? m.PlatformMargin ??
+                  m.ourMargin ?? m.OurMargin ?? m.ourCommission;
+
+  // Settlement / Total TDR Rate candidates
+  const rawSet = m.settlementPercentage ?? m.SettlementPercentage ?? m.settlement_percentage ?? 
+                 m.tdrPercentage ?? m.TdrPercentage ?? m.tdr_percentage ?? 
+                 m.tdrRate ?? m.TdrRate ?? m.totalTdr ?? m.TotalTdr ?? 
+                 m.settlementRate ?? m.SettlementRate ?? m.mdrPercentage ?? m.mdrRate;
+
+  let pgVendorPercentage = 0.15;
+  if (rawPg !== undefined && rawPg !== null && rawPg !== '') {
+    const parsed = Number(rawPg);
+    if (!isNaN(parsed) && parsed >= 0) pgVendorPercentage = parsed;
+  }
+
+  let platformPercentage = 0.50;
+  if (rawPlat !== undefined && rawPlat !== null && rawPlat !== '') {
+    const parsed = Number(rawPlat);
+    if (!isNaN(parsed) && parsed >= 0) platformPercentage = parsed;
+  }
+
+  let settlementPercentage = Number((pgVendorPercentage + platformPercentage).toFixed(2));
+  if (rawSet !== undefined && rawSet !== null && rawSet !== '') {
+    const parsed = Number(rawSet);
+    if (!isNaN(parsed) && parsed > 0) settlementPercentage = parsed;
+  }
+
+  return {
+    pgVendorPercentage,
+    platformPercentage,
+    settlementPercentage
+  };
+};
+
 const Commission = () => {
   const { showWarning } = useDialog();
   const [loading, setLoading] = useState(true);
@@ -160,9 +216,11 @@ const Commission = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [txRes, merchRes] = await Promise.allSettled([
+      const [txRes, merchRes, configRes, commRes] = await Promise.allSettled([
         transactionApi.getHistory({ count: 500, pageSize: 500 }),
-        merchantApi.getAll()
+        merchantApi.getAll(),
+        merchantApi.getAllMerchantConfig ? merchantApi.getAllMerchantConfig() : Promise.resolve(null),
+        commissionApi.getAll ? commissionApi.getAll() : Promise.resolve(null)
       ]);
 
       let rawTxList = [];
@@ -176,60 +234,127 @@ const Commission = () => {
         const m = merchRes.value?.data?.data || merchRes.value?.data;
         if (Array.isArray(m)) rawMerchants = m;
       }
-      setMerchants(rawMerchants);
+
+      let rawConfigs = [];
+      if (configRes?.status === 'fulfilled' && configRes.value) {
+        const c = configRes.value?.data?.data || configRes.value?.data;
+        if (Array.isArray(c)) rawConfigs = c;
+      }
+
+      let rawDirectCommissions = [];
+      if (commRes?.status === 'fulfilled' && commRes.value) {
+        const c = commRes.value?.data?.data || commRes.value?.data;
+        if (Array.isArray(c)) rawDirectCommissions = c;
+      }
+
+      let txListToMap = rawTxList.length > 0 ? rawTxList : rawDirectCommissions;
+
+      // Merge config parameters into merchants if needed
+      const configMap = {};
+      rawConfigs.forEach(cfg => {
+        const mKey = String(cfg.merchantId || cfg.merchant_id || cfg.id || '');
+        if (mKey) configMap[mKey] = cfg;
+      });
+
+      const enrichedMerchants = rawMerchants.map(m => {
+        const cfg = configMap[String(m.id || m.merchantId || '')] || {};
+        const rates = extractMerchantRates({ ...cfg, ...m });
+        return {
+          ...m,
+          ...rates,
+          merchantName: m.merchantName || m.companyLegalName || m.merchantTradeName || m.name || cfg.merchantName || `Merchant #${m.id}`
+        };
+      });
+
+      setMerchants(enrichedMerchants);
 
       // Create a merchant rate lookup map
       const merchantRateMap = {};
-      rawMerchants.forEach(m => {
+      enrichedMerchants.forEach(m => {
         merchantRateMap[String(m.id)] = {
-          name: m.merchantName || m.name || `Merchant #${m.id}`,
-          pgVendorPercentage: Number(m.pgVendorPercentage !== undefined ? m.pgVendorPercentage : 0.15),
-          platformPercentage: Number(m.platformPercentage !== undefined ? m.platformPercentage : 0.50),
-          settlementPercentage: Number(m.settlementPercentage !== undefined ? m.settlementPercentage : 0.65)
+          name: m.merchantName,
+          pgVendorPercentage: m.pgVendorPercentage,
+          platformPercentage: m.platformPercentage,
+          settlementPercentage: m.settlementPercentage
         };
       });
 
       // Map Transactions into Commission & Settlement Vouchers
-      const mapped = rawTxList.map((t, idx) => {
-        const rawMid = String(t.merchantId || t.MerchantId || '');
+      const mapped = txListToMap.map((t, idx) => {
+        const rawMid = String(t.merchantId || t.MerchantId || t.merchant_id || '');
         const merchInfo = merchantRateMap[rawMid] || {
-          name: t.merchantName || `Merchant #${rawMid || 1}`,
+          name: t.merchantName || t.merchant_name || `Merchant #${rawMid || 1}`,
           pgVendorPercentage: 0.15,
           platformPercentage: 0.50,
           settlementPercentage: 0.65
         };
 
-        const paymentModeNorm = String(t.paymentMode || t.mode || 'UPI').trim().toUpperCase();
+        const paymentModeNorm = String(t.paymentMode || t.mode || t.payment_mode || t.payment_channel || 'UPI').trim().toUpperCase();
         const isUpi = paymentModeNorm.includes('UPI');
-        const grossAmount = Number(t.amount || t.amountNum || 0);
+        const grossAmount = Number(t.amount || t.gross_transaction_amount || t.sale_amount || t.amountNum || 0);
 
-        // Commission only applicable on UPI transactions
-        const vendorRate = isUpi ? merchInfo.pgVendorPercentage : 0;
-        const platformRate = isUpi ? merchInfo.platformPercentage : 0;
-        const totalTdrRate = isUpi ? (vendorRate + platformRate) : 0;
+        // Extract rates from transaction if provided directly by backend, else use merchant rates
+        const rawTxPg = t.pgVendorPercentage ?? t.PgVendorPercentage ?? t.pgRate ?? t.vendorRate ?? t.pg_vendor_percentage ?? t.vendorPercentage;
+        const rawTxPlat = t.platformPercentage ?? t.PlatformPercentage ?? t.platformRate ?? t.commissionPercentage ?? t.platformCommissionRate;
+        const rawTxTdr = t.totalTdrRate ?? t.tdrRate ?? t.settlementPercentage ?? t.tdrPercentage;
 
-        const vendorFee = Number(((grossAmount * vendorRate) / 100).toFixed(2));
-        const platformCommission = Number(((grossAmount * platformRate) / 100).toFixed(2));
-        const totalTdrDeducted = Number((vendorFee + platformCommission).toFixed(2));
-        const netSettlement = Number((grossAmount - totalTdrDeducted).toFixed(2));
+        let vendorRate = isUpi ? merchInfo.pgVendorPercentage : 0;
+        if (rawTxPg !== undefined && rawTxPg !== null && rawTxPg !== '' && isUpi) {
+          const p = Number(rawTxPg);
+          if (!isNaN(p)) vendorRate = p;
+        }
 
-        const statusRaw = String(t.status || t.transactionStatus || 'Completed').toLowerCase();
+        let platformRate = isUpi ? merchInfo.platformPercentage : 0;
+        if (rawTxPlat !== undefined && rawTxPlat !== null && rawTxPlat !== '' && isUpi) {
+          const p = Number(rawTxPlat);
+          if (!isNaN(p)) platformRate = p;
+        }
+
+        let totalTdrRate = isUpi ? Number((vendorRate + platformRate).toFixed(2)) : 0;
+        if (rawTxTdr !== undefined && rawTxTdr !== null && rawTxTdr !== '' && isUpi) {
+          const p = Number(rawTxTdr);
+          if (!isNaN(p)) totalTdrRate = p;
+        }
+
+        // Fees: If backend already provided pre-calculated fee/commission, prioritize exact DB values
+        const rawVendorFee = t.vendorFee ?? t.vendor_fee ?? t.pgFee ?? t.pg_fee ?? t.pgVendorFee ?? t.gatewayFee ?? t.pg_charges ?? t.pgCharges;
+        const rawPlatformCommission = t.platformCommission ?? t.platform_commission ?? t.commission ?? t.commissionAmount ?? t.platformFee ?? t.ourCommission ?? t.margin;
+        const rawTdrDeducted = t.totalTdrDeducted ?? t.tdrDeducted ?? t.tdrAmount ?? t.tdr_amount ?? t.fee ?? t.charges ?? t.totalTdr ?? t.tdr;
+        const rawNetSettlement = t.netSettlement ?? t.netAmount ?? t.net_amount ?? t.payoutAmount ?? t.payout_amount ?? t.amount_reimbursed ?? t.settled_amount;
+
+        const vendorFee = (isUpi && rawVendorFee !== undefined && rawVendorFee !== null && !isNaN(Number(rawVendorFee)))
+          ? Number(Number(rawVendorFee).toFixed(2))
+          : Number(((grossAmount * vendorRate) / 100).toFixed(2));
+
+        const platformCommission = (isUpi && rawPlatformCommission !== undefined && rawPlatformCommission !== null && !isNaN(Number(rawPlatformCommission)))
+          ? Number(Number(rawPlatformCommission).toFixed(2))
+          : Number(((grossAmount * platformRate) / 100).toFixed(2));
+
+        const totalTdrDeducted = (isUpi && rawTdrDeducted !== undefined && rawTdrDeducted !== null && !isNaN(Number(rawTdrDeducted)))
+          ? Number(Number(rawTdrDeducted).toFixed(2))
+          : Number((vendorFee + platformCommission).toFixed(2));
+
+        const netSettlement = (rawNetSettlement !== undefined && rawNetSettlement !== null && !isNaN(Number(rawNetSettlement)))
+          ? Number(Number(rawNetSettlement).toFixed(2))
+          : Number((grossAmount - totalTdrDeducted).toFixed(2));
+
+        const statusRaw = String(t.status || t.transactionStatus || t.completed === 'y' ? 'Completed' : 'Completed').toLowerCase();
         let statusNorm = 'Paid';
         if (statusRaw.includes('pending') || statusRaw.includes('initiated')) statusNorm = 'Pending';
         else if (statusRaw.includes('fail') || statusRaw.includes('reject')) statusNorm = 'Failed';
 
-        const rawDate = t.transactionDate || t.createdAt || t.date || new Date().toISOString();
+        const rawDate = t.transactionDate || t.createdAt || t.date || t.transDate || new Date().toISOString();
         const dateObj = new Date(rawDate);
 
         return {
-          id: t.id || t.transactionId || `TX-${1000 + idx}`,
-          orderId: t.orderId || t.externalOrderId || `ORD-${t.id || idx}`,
-          utr: t.bankReference || t.utrNumber || t.rRN || t.utr || 'N/A',
+          id: t.id || t.transactionId || t.transaction_id || `TX-${1000 + idx}`,
+          orderId: t.orderId || t.order_id || t.externalOrderId || `ORD-${t.id || idx}`,
+          utr: t.bankReference || t.bank_reference || t.utrNumber || t.rRN || t.utr || 'N/A',
           merchantId: rawMid,
           merchantName: merchInfo.name,
           agentName: t.agentName || t.agent || 'Direct Branch',
           agentCode: t.agentCode || 'AG-DEL-101',
-          customer: t.customerName || t.customer || 'Standard Customer',
+          customer: t.customerName || t.customer_name || t.customer || 'Standard Customer',
           paymentMode: isUpi ? 'UPI' : 'CASH',
           isUpi,
           grossAmount,
@@ -243,7 +368,7 @@ const Commission = () => {
           status: statusNorm,
           dateObj,
           dateStr: rawDate,
-          payoutRef: t.bankReference || `CMS-${10000 + idx}`
+          payoutRef: t.bankReference || t.bank_reference || `CMS-${10000 + idx}`
         };
       });
 
@@ -358,6 +483,24 @@ const Commission = () => {
     });
 
     const totalRecords = filteredCommissions.length;
+    
+    // Effective Dynamic Percentages based on live backend data
+    const effectivePlatformRate = totalUpiGrossVolume > 0 
+      ? ((totalPlatformCommission / totalUpiGrossVolume) * 100).toFixed(2)
+      : '0.50';
+
+    const effectiveVendorRate = totalUpiGrossVolume > 0 
+      ? ((totalPgVendorFee / totalUpiGrossVolume) * 100).toFixed(2)
+      : '0.15';
+
+    const effectiveTdrRate = totalUpiGrossVolume > 0 
+      ? ((totalTdrDeducted / totalUpiGrossVolume) * 100).toFixed(2)
+      : '0.65';
+
+    const effectiveNetRate = totalUpiGrossVolume > 0 
+      ? ((totalNetSettlement / totalUpiGrossVolume) * 100).toFixed(2)
+      : '99.35';
+
     return {
       totalGrossVolume,
       totalUpiGrossVolume,
@@ -367,7 +510,11 @@ const Commission = () => {
       totalNetSettlement,
       totalRecords,
       upiCount,
-      cashCount
+      cashCount,
+      effectivePlatformRate,
+      effectiveVendorRate,
+      effectiveTdrRate,
+      effectiveNetRate
     };
   }, [filteredCommissions]);
 
@@ -466,7 +613,7 @@ const Commission = () => {
               Settlement <span className="gradient-text">Commissions</span>
             </h1>
             <p className="comm-page-subtitle">
-              Real-time audit of UPI transaction TDR splits • PG Vendor Fees (0.15%) • Our Platform Margin (0.50%) • Net Merchant Payouts
+              Real-time audit of UPI transaction TDR splits • PG Vendor Fees ({stats.effectiveVendorRate}%) • Our Platform Margin ({stats.effectivePlatformRate}%) • Net Merchant Payouts
             </p>
           </div>
 
@@ -524,7 +671,7 @@ const Commission = () => {
             </div>
             <div className="comm-kpi-value font-mono text-green">₹{stats.totalPlatformCommission.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
             <div className="comm-kpi-footer">
-              <span className="comm-trend-tag is-up"><CommIcons.ArrowUp /> ~0.50% Platform Margin</span>
+              <span className="comm-trend-tag is-up"><CommIcons.ArrowUp /> {stats.effectivePlatformRate}% Platform Margin</span>
             </div>
           </div>
 
@@ -537,7 +684,7 @@ const Commission = () => {
             </div>
             <div className="comm-kpi-value font-mono text-amber">₹{stats.totalPgVendorFee.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
             <div className="comm-kpi-footer">
-              <span className="comm-trend-tag is-down"><CommIcons.ArrowUp /> ~0.15% Vendor Cost</span>
+              <span className="comm-trend-tag is-down"><CommIcons.ArrowUp /> {stats.effectiveVendorRate}% Vendor Cost</span>
             </div>
           </div>
 
@@ -550,7 +697,7 @@ const Commission = () => {
             </div>
             <div className="comm-kpi-value font-mono">₹{stats.totalNetSettlement.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
             <div className="comm-kpi-footer">
-              <span className="comm-trend-tag is-up"><CommIcons.ArrowUp /> Net Bank Credited</span>
+              <span className="comm-trend-tag is-up"><CommIcons.ArrowUp /> Net Bank Credited ({stats.effectiveNetRate}%)</span>
             </div>
           </div>
 
@@ -563,7 +710,7 @@ const Commission = () => {
             <div className="chart-header-zone">
               <div>
                 <h3 className="chart-title">Commission & Revenue Trajectory</h3>
-                <span className="chart-subtitle">Platform Margin (0.50%) vs PG Vendor Surcharge (0.15%) Split</span>
+                <span className="chart-subtitle">Platform Margin ({stats.effectivePlatformRate}%) vs PG Vendor Surcharge ({stats.effectiveVendorRate}%) Split</span>
               </div>
               <span className="velocity-metric-badge font-mono">UPI Rails Live</span>
             </div>
@@ -630,7 +777,11 @@ const Commission = () => {
             <div className="chart-canvas-box doughnut-wrap">
               <Doughnut
                 data={{
-                  labels: ['Net Merchant Share (99.35%)', 'Platform Profit (0.50%)', 'PG Vendor Fee (0.15%)'],
+                  labels: [
+                    `Net Merchant Share (${stats.effectiveNetRate}%)`, 
+                    `Platform Profit (${stats.effectivePlatformRate}%)`, 
+                    `PG Vendor Fee (${stats.effectiveVendorRate}%)`
+                  ],
                   datasets: [{
                     data: [
                       stats.totalNetSettlement || 9935,
@@ -662,7 +813,7 @@ const Commission = () => {
                 }}
               />
               <div className="doughnut-center-info">
-                <span className="center-bold font-mono">0.65%</span>
+                <span className="center-bold font-mono">{stats.effectiveTdrRate}%</span>
                 <span className="center-tag">Total TDR</span>
               </div>
             </div>

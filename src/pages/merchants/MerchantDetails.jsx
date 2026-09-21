@@ -150,6 +150,47 @@ const MerchantDetails = () => {
     return 'Merchant@123';
   };
 
+  const extractMerchantRates = (m) => {
+    if (!m) return { pgVendorPercentage: 0.15, platformPercentage: 0.50, settlementPercentage: 0.65 };
+    const rawPg = m.pgVendorPercentage ?? m.PgVendorPercentage ?? m.pg_vendor_percentage ?? 
+                  m.vendorPercentage ?? m.VendorPercentage ?? m.vendor_percentage ??
+                  m.pgVendorRate ?? m.PgVendorRate ?? m.pgPercentage ?? m.PgPercentage ?? 
+                  m.pgRate ?? m.PgRate ?? m.gatewayPercentage ?? m.GatewayPercentage ?? 
+                  m.pgFeePercentage ?? m.vendorRate ?? m.VendorRate ?? m.pgCut ?? m.pg_fee_rate;
+
+    const rawPlat = m.platformPercentage ?? m.PlatformPercentage ?? m.platform_percentage ?? 
+                    m.platformCommission ?? m.PlatformCommission ?? m.platform_commission ??
+                    m.platformRate ?? m.PlatformRate ?? m.ourPercentage ?? m.OurPercentage ?? 
+                    m.commissionPercentage ?? m.CommissionPercentage ?? m.commission_percentage ?? 
+                    m.marginPercentage ?? m.MarginPercentage ?? m.platformMargin ?? m.PlatformMargin ??
+                    m.ourMargin ?? m.OurMargin ?? m.ourCommission;
+
+    const rawSet = m.settlementPercentage ?? m.SettlementPercentage ?? m.settlement_percentage ?? 
+                   m.tdrPercentage ?? m.TdrPercentage ?? m.tdr_percentage ?? 
+                   m.tdrRate ?? m.TdrRate ?? m.totalTdr ?? m.TotalTdr ?? 
+                   m.settlementRate ?? m.SettlementRate ?? m.mdrPercentage ?? m.mdrRate;
+
+    let pgVendorPercentage = 0.15;
+    if (rawPg !== undefined && rawPg !== null && rawPg !== '') {
+      const parsed = Number(rawPg);
+      if (!isNaN(parsed) && parsed >= 0) pgVendorPercentage = parsed;
+    }
+
+    let platformPercentage = 0.50;
+    if (rawPlat !== undefined && rawPlat !== null && rawPlat !== '') {
+      const parsed = Number(rawPlat);
+      if (!isNaN(parsed) && parsed >= 0) platformPercentage = parsed;
+    }
+
+    let settlementPercentage = Number((pgVendorPercentage + platformPercentage).toFixed(2));
+    if (rawSet !== undefined && rawSet !== null && rawSet !== '') {
+      const parsed = Number(rawSet);
+      if (!isNaN(parsed) && parsed > 0) settlementPercentage = parsed;
+    }
+
+    return { pgVendorPercentage, platformPercentage, settlementPercentage };
+  };
+
   const loadMerchant = useCallback(async () => {
     try {
       setLoading(true);
@@ -598,6 +639,93 @@ const MerchantDetails = () => {
                   </div>
                 </div>
               </div>
+
+              {/* UPI Settlement & Commission Rates (TDR Configuration) */}
+              {(() => {
+                const rates = extractMerchantRates(merchant);
+                return (
+                  <div className="glass-info-card full-width">
+                    <div className="card-top-header">
+                      <div className="card-icon-title">
+                        <div className="card-icon-pill indigo">
+                          <DetailIcons.Percent />
+                        </div>
+                        <div>
+                          <h3 className="card-main-title">UPI Settlement & Commission Rates (TDR Configuration)</h3>
+                          <p className="card-sub-title">Live gateway deduction and platform margin rates for {merchant.merchantName}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+                      <div className="field-pair" style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '12px 14px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                        <span className="field-lbl">PG Vendor Cut / Rate (%)</span>
+                        <span className="field-val font-mono font-bold text-amber text-lg">{rates.pgVendorPercentage}%</span>
+                        <span style={{ fontSize: '11px', color: '#94a3b8' }}>Gateway surcharge</span>
+                      </div>
+
+                      <div className="field-pair" style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '12px 14px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                        <span className="field-lbl">Platform Commission Margin (%)</span>
+                        <span className="field-val font-mono font-bold text-emerald text-lg">{rates.platformPercentage}%</span>
+                        <span style={{ fontSize: '11px', color: '#94a3b8' }}>Our platform profit</span>
+                      </div>
+
+                      <div className="field-pair" style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '12px 14px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                        <span className="field-lbl">Total Settlement TDR (%)</span>
+                        <span className="field-val font-mono font-bold text-cyan text-lg">{rates.settlementPercentage}%</span>
+                        <span style={{ fontSize: '11px', color: '#94a3b8' }}>Combined deduction</span>
+                      </div>
+                    </div>
+
+                    {/* Live ₹10,000 Payout Simulator */}
+                    <div style={{
+                      background: 'rgba(15, 23, 42, 0.75)',
+                      border: '1px solid rgba(99, 102, 241, 0.25)',
+                      borderRadius: '12px',
+                      padding: '14px 18px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '10px'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                        <span style={{ fontSize: '12px', fontWeight: '700', color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          ⚡ Live UPI Settlement Breakdown Simulator (Sample ₹10,000 Collection)
+                        </span>
+                        <span style={{ fontSize: '11px', color: '#818cf8', fontWeight: '700', background: 'rgba(99, 102, 241, 0.15)', padding: '2px 8px', borderRadius: '6px' }}>
+                          UPI Rail Only
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px' }}>
+                        <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '10px 12px', borderRadius: '8px' }}>
+                          <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block' }}>PG Vendor Fee ({rates.pgVendorPercentage}%)</span>
+                          <strong style={{ fontSize: '14px', color: '#f59e0b', fontFamily: 'monospace' }}>
+                            ₹{((10000 * rates.pgVendorPercentage) / 100).toFixed(2)}
+                          </strong>
+                        </div>
+                        <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '10px 12px', borderRadius: '8px' }}>
+                          <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block' }}>Platform Margin ({rates.platformPercentage}%)</span>
+                          <strong style={{ fontSize: '14px', color: '#10b981', fontFamily: 'monospace' }}>
+                            ₹{((10000 * rates.platformPercentage) / 100).toFixed(2)}
+                          </strong>
+                        </div>
+                        <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '10px 12px', borderRadius: '8px' }}>
+                          <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block' }}>Total TDR ({rates.settlementPercentage}%)</span>
+                          <strong style={{ fontSize: '14px', color: '#ef4444', fontFamily: 'monospace' }}>
+                            -₹{((10000 * rates.settlementPercentage) / 100).toFixed(2)}
+                          </strong>
+                        </div>
+                        <div style={{ background: 'rgba(16, 185, 129, 0.08)', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
+                          <span style={{ fontSize: '11px', color: '#6ee7b7', display: 'block' }}>Net Merchant Payout</span>
+                          <strong style={{ fontSize: '15px', color: '#10b981', fontFamily: 'monospace' }}>
+                            ₹{(10000 - ((10000 * rates.settlementPercentage) / 100)).toFixed(2)}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
             </div>
           )}

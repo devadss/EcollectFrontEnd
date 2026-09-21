@@ -464,11 +464,25 @@ const AddMerchant = () => {
 
     setLoading(true);
     try {
+      const vendorRate = formData.pgVendorPercentage !== undefined && formData.pgVendorPercentage !== '' ? Number(formData.pgVendorPercentage) : 0.15;
+      const platformRate = formData.platformPercentage !== undefined && formData.platformPercentage !== '' ? Number(formData.platformPercentage) : 0.50;
+      const settlementRate = formData.settlementPercentage !== undefined && formData.settlementPercentage !== '' ? Number(formData.settlementPercentage) : Number((vendorRate + platformRate).toFixed(2));
+
+      const payload = {
+        ...formData,
+        pgVendorPercentage: vendorRate,
+        PgVendorPercentage: vendorRate,
+        platformPercentage: platformRate,
+        PlatformPercentage: platformRate,
+        settlementPercentage: settlementRate,
+        SettlementPercentage: settlementRate
+      };
+
       if (isEdit) {
-        await merchantApi.update(id, formData);
+        await merchantApi.update(id, payload);
         showSuccess("Merchant corporate records and gateway parameters updated successfully.", "Merchant Updated");
       } else {
-        await merchantApi.create(formData);
+        await merchantApi.create(payload);
         showSuccess("Enterprise Merchant registered and gateway provisioned successfully.", "Merchant Registered");
       }
       navigate('/merchants');
