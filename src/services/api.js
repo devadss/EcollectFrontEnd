@@ -326,35 +326,85 @@ export const agentApi = {
   getAll: (params) => {
     console.log('📡 agentApi.getAll called with params:', params);
     return api.get('/Agent/get-all', { params: typeof params === 'object' ? params : undefined })
-      .catch(() => api.get('/Agent', { params: typeof params === 'object' ? params : undefined }));
+      .catch(() => api.get('/Agent', { params: typeof params === 'object' ? params : undefined }))
+      .catch(() => api.get('/agent/get-all', { params: typeof params === 'object' ? params : undefined }))
+      .catch(() => api.get('/agent', { params: typeof params === 'object' ? params : undefined }));
   },
   getById: (id) => {
     console.log('📡 agentApi.getById called for id:', id);
-    return api.get(`/Agent/${id}`);
+    return api.get(`/Agent/${id}`)
+      .catch(() => api.get(`/Agent/get-by-id/${id}`))
+      .catch(() => api.get(`/agent/${id}`));
   },
   create: (data) => {
     console.log('📡 agentApi.create called with data:', data);
-    return api.post('/Agent/create', data);
+    return api.post('/Agent/create', data)
+      .catch(() => api.post('/Agent/register', data))
+      .catch(() => api.post('/Agent', data))
+      .catch(() => api.post('/agent/create', data));
   },
   update: (id, data) => {
-    console.log('📡 agentApi.update called for id:', id);
-    return api.put(`/Agent/${id}`, data);
+    console.log('📡 agentApi.update called for id:', id, data);
+    const numId = !isNaN(Number(id)) ? Number(id) : id;
+    const enriched = {
+      id: numId,
+      Id: numId,
+      agentId: numId,
+      AgentId: numId,
+      ...data,
+      name: data?.name || data?.agentName || data?.Name || data?.AgentName,
+      Name: data?.name || data?.agentName || data?.Name || data?.AgentName,
+      agentName: data?.name || data?.agentName || data?.Name || data?.AgentName,
+      AgentName: data?.name || data?.agentName || data?.Name || data?.AgentName,
+      agentCode: data?.agentCode || data?.AgentCode || data?.code || data?.Code || data?.external_agent_id,
+      AgentCode: data?.agentCode || data?.AgentCode || data?.code || data?.Code || data?.external_agent_id,
+      code: data?.agentCode || data?.AgentCode || data?.code || data?.Code,
+      Code: data?.agentCode || data?.AgentCode || data?.code || data?.Code,
+      phone: data?.phone || data?.Phone || data?.mobile || data?.MobileNo || data?.mobileNo,
+      Phone: data?.phone || data?.Phone || data?.mobile || data?.MobileNo || data?.mobileNo,
+      email: data?.email || data?.Email,
+      Email: data?.email || data?.Email,
+      merchantId: data?.merchantId != null && data?.merchantId !== '' ? Number(data.merchantId) : data?.merchantId,
+      MerchantId: data?.merchantId != null && data?.merchantId !== '' ? Number(data.merchantId) : data?.merchantId,
+      branchId: data?.branchId != null && data?.branchId !== '' ? Number(data.branchId) : data?.branchId,
+      BranchId: data?.branchId != null && data?.branchId !== '' ? Number(data.branchId) : data?.branchId,
+      commissionRate: data?.commissionRate !== undefined && data?.commissionRate !== '' ? Number(data.commissionRate) : 0,
+      CommissionRate: data?.commissionRate !== undefined && data?.commissionRate !== '' ? Number(data.commissionRate) : 0,
+    };
+
+    return api.put(`/Agent/update/${id}`, enriched)
+      .catch(() => api.put(`/Agent/${id}`, enriched))
+      .catch(() => api.post(`/Agent/update/${id}`, enriched))
+      .catch(() => api.put(`/Agent/Update/${id}`, enriched))
+      .catch(() => api.post(`/Agent/update`, enriched))
+      .catch(() => api.put('/Agent', enriched))
+      .catch(() => api.put(`/agent/${id}`, enriched))
+      .catch(() => api.patch(`/Agent/${id}`, enriched));
   },
   delete: (id) => {
     console.log('📡 agentApi.delete called for id:', id);
-    return api.delete(`/Agent/${id}`);
+    return api.delete(`/Agent/delete/${id}`)
+      .catch(() => api.delete(`/Agent/${id}`))
+      .catch(() => api.post(`/Agent/delete/${id}`))
+      .catch(() => api.delete(`/agent/${id}`));
   },
   approve: (id) => {
     console.log('📡 agentApi.approve called for id:', id);
-    return api.post(`/Agent/${id}/approve`).catch(() => api.patch(`/Agent/${id}/verify`));
+    return api.post(`/Agent/${id}/approve`)
+      .catch(() => api.put(`/Agent/${id}/approve`))
+      .catch(() => api.patch(`/Agent/${id}/verify`))
+      .catch(() => api.patch(`/Agent/${id}/toggle-status`));
   },
   reject: (id, reason) => {
     console.log('📡 agentApi.reject called for id:', id);
-    return api.post(`/Agent/${id}/reject`, { reason }).catch(() => api.patch(`/Agent/${id}/toggle-status`));
+    return api.post(`/Agent/${id}/reject`, { reason })
+      .catch(() => api.put(`/Agent/${id}/reject`, { reason }))
+      .catch(() => api.patch(`/Agent/${id}/toggle-status`));
   },
   getByMerchant: (merchantId) => {
     console.log('📡 agentApi.getByMerchant called for merchantId:', merchantId);
-    return api.get(`/agent/merchant/${merchantId}`);
+    return api.get(`/Agent/merchant/${merchantId}`)
+      .catch(() => api.get(`/agent/merchant/${merchantId}`));
   },
   fetchAgentList: (params) => {
     console.log('📡 agentApi.fetchAgentList called with params:', params);
