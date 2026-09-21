@@ -14,6 +14,7 @@ import {
 import DashboardLayout from '../../components/layouts/DashboardLayout'; 
 import LoadingAnimation from '../../components/common/LoadingAnimation';
 import { transactionApi, merchantApi, commissionApi } from '../../services/api';  
+import { useMerchantContext } from '../../context/MerchantContext';
 import { useDialog } from '../../context/DialogContext';
 import './Commission.css';
 
@@ -199,8 +200,13 @@ const Commission = () => {
   const [selectedCommission, setSelectedCommission] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
 
+  // Global Merchant Scope from MerchantContext
+  const { 
+    selectedMerchantId, 
+    setSelectedMerchantId 
+  } = useMerchantContext();
+
   // Filter States
-  const [selectedMerchantId, setSelectedMerchantId] = useState('ALL');
   const [selectedPaymentMode, setSelectedPaymentMode] = useState('UPI'); // Default 'UPI' since commission is active on UPI
   const [statusTab, setStatusTab] = useState('ALL'); // 'ALL' | 'PAID' | 'PENDING'
   const [searchQuery, setSearchQuery] = useState('');
@@ -268,22 +274,31 @@ const Commission = () => {
 
       setMerchants(enrichedMerchants);
 
-      // Create a merchant rate lookup map
+      // Create a comprehensive merchant rate lookup map indexed by all IDs and Names
       const merchantRateMap = {};
       enrichedMerchants.forEach(m => {
-        merchantRateMap[String(m.id)] = {
+        const rates = {
           name: m.merchantName,
           pgVendorPercentage: m.pgVendorPercentage,
           platformPercentage: m.platformPercentage,
-          settlementPercentage: m.settlementPercentage
+          settlementPercentage: m.settlementPercentage,
+          id: m.id,
+          merchantId: m.merchantId
         };
+        if (m.id != null) merchantRateMap[String(m.id)] = rates;
+        if (m.merchantId != null) merchantRateMap[String(m.merchantId)] = rates;
+        if (m.MerchantId != null) merchantRateMap[String(m.MerchantId)] = rates;
+        if (m.merchantTradeName) merchantRateMap[m.merchantTradeName.toLowerCase().trim()] = rates;
+        if (m.merchantName) merchantRateMap[m.merchantName.toLowerCase().trim()] = rates;
+        if (m.companyLegalName) merchantRateMap[m.companyLegalName.toLowerCase().trim()] = rates;
       });
 
       // Map Transactions into Commission & Settlement Vouchers
       const mapped = txListToMap.map((t, idx) => {
-        const rawMid = String(t.merchantId || t.MerchantId || t.merchant_id || '');
-        const merchInfo = merchantRateMap[rawMid] || {
-          name: t.merchantName || t.merchant_name || `Merchant #${rawMid || 1}`,
+        const rawMid = String(t.merchantId ?? t.MerchantId ?? t.merchant_id ?? t.mid ?? '');
+        const rawMname = String(t.merchantName || t.merchant_name || t.merchant || '').toLowerCase().trim();
+        const merchInfo = merchantRateMap[rawMid] || merchantRateMap[rawMname] || {
+          name: t.merchantName || t.merchant_name || (rawMid ? `Merchant #${rawMid}` : 'Standard Partner'),
           pgVendorPercentage: 0.15,
           platformPercentage: 0.50,
           settlementPercentage: 0.65
@@ -401,10 +416,23 @@ const Commission = () => {
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
+    const isGlobal = !selectedMerchantId || selectedMerchantId === 'ALL' || selectedMerchantId === 'undefined' || selectedMerchantId === 'null';
+    const selId = String(selectedMerchantId);
+    const selMerch = !isGlobal ? merchants.find(m => String(m.id) === selId || String(m.merchantId) === selId || String(m.MerchantId) === selId) : null;
+    const selName = selMerch ? (selMerch.merchantName || selMerch.merchantTradeName || selMerch.companyLegalName || '').toLowerCase().trim() : '';
+
     return transactions.filter(c => {
       // 1. Merchant Scope Filter
-      if (selectedMerchantId !== 'ALL' && String(c.merchantId) !== String(selectedMerchantId)) {
-        return false;
+      if (!isGlobal) {
+        const mIdMatches = c.merchantId && (
+          String(c.merchantId) === selId ||
+          (selMerch && (String(c.merchantId) === String(selMerch.id) || String(c.merchantId) === String(selMerch.merchantId)))
+        );
+        const mNameMatches = selName && c.merchantName && c.merchantName.toLowerCase().trim() === selName;
+
+        if (!mIdMatches && !mNameMatches) {
+          return false;
+        }
       }
 
       // 2. Payment Rail Filter
@@ -454,7 +482,7 @@ const Commission = () => {
 
       return true;
     });
-  }, [transactions, selectedMerchantId, selectedPaymentMode, statusTab, searchQuery, dateFilter, customStartDate, customEndDate]);
+  }, [transactions, selectedMerchantId, merchants, selectedPaymentMode, statusTab, searchQuery, dateFilter, customStartDate, customEndDate]);
 
   // Aggregate KPI Metrics
   const stats = useMemo(() => {
@@ -483,23 +511,30 @@ const Commission = () => {
     });
 
     const totalRecords = filteredCommissions.length;
+
+    // Find active merchant profile rates if specific merchant selected
+    const activeMerchant = (selectedMerchantId && selectedMerchantId !== 'ALL' && selectedMerchantId !== 'undefined' && selectedMerchantId !== 'null')
+      ? merchants.find(m => String(m.id) === String(selectedMerchantId) || String(m.merchantId) === String(selectedMerchantId))
+      : null;
+
+    const defaultPlat = activeMerchant ? activeMerchant.platformPercentage.toFixed(2) : '0.50';
+    const defaultVendor = activeMerchant ? activeMerchant.pgVendorPercentage.toFixed(2) : '0.15';
+    const defaultTdr = activeMerchant ? activeMerchant.settlementPercentage.toFixed(2) : '0.65';
     
-    // Effective Dynamic Percentages based on live backend data
+    // Effective Dynamic Percentages based on live backend data or merchant's configured rate
     const effectivePlatformRate = totalUpiGrossVolume > 0 
       ? ((totalPlatformCommission / totalUpiGrossVolume) * 100).toFixed(2)
-      : '0.50';
+      : defaultPlat;
 
     const effectiveVendorRate = totalUpiGrossVolume > 0 
       ? ((totalPgVendorFee / totalUpiGrossVolume) * 100).toFixed(2)
-      : '0.15';
+      : defaultVendor;
 
     const effectiveTdrRate = totalUpiGrossVolume > 0 
       ? ((totalTdrDeducted / totalUpiGrossVolume) * 100).toFixed(2)
-      : '0.65';
+      : defaultTdr;
 
-    const effectiveNetRate = totalUpiGrossVolume > 0 
-      ? ((totalNetSettlement / totalUpiGrossVolume) * 100).toFixed(2)
-      : '99.35';
+    const effectiveNetRate = (100 - Number(effectiveTdrRate)).toFixed(2);
 
     return {
       totalGrossVolume,
@@ -516,7 +551,7 @@ const Commission = () => {
       effectiveTdrRate,
       effectiveNetRate
     };
-  }, [filteredCommissions]);
+  }, [filteredCommissions, selectedMerchantId, merchants]);
 
   // Pagination Slicing
   const totalPages = Math.ceil(filteredCommissions.length / pageSize) || 1;
@@ -629,7 +664,7 @@ const Commission = () => {
                 <option value="ALL">All Partner Merchants ({merchants.length})</option>
                 {merchants.map(m => (
                   <option key={m.id} value={m.id}>
-                    {m.merchantName || m.name} (TDR: {m.settlementPercentage || '0.65'}%)
+                    {m.merchantName || m.name} (TDR: {m.settlementPercentage ?? '0.65'}% | PG: {m.pgVendorPercentage ?? '0.15'}% | Margin: {m.platformPercentage ?? '0.50'}%)
                   </option>
                 ))}
               </select>

@@ -214,6 +214,62 @@ const DashIcons = {
   )
 };
 
+// Robust Merchant Rate Extractor supporting all backend DTO/DB property variations
+export const extractMerchantRates = (m) => {
+  if (!m) {
+    return {
+      pgVendorPercentage: 0.15,
+      platformPercentage: 0.50,
+      settlementPercentage: 0.65
+    };
+  }
+
+  // PG Vendor Rate candidates
+  const rawPg = m.pgVendorPercentage ?? m.PgVendorPercentage ?? m.pg_vendor_percentage ?? 
+                m.vendorPercentage ?? m.VendorPercentage ?? m.vendor_percentage ??
+                m.pgVendorRate ?? m.PgVendorRate ?? m.pgPercentage ?? m.PgPercentage ?? 
+                m.pgRate ?? m.PgRate ?? m.gatewayPercentage ?? m.GatewayPercentage ?? 
+                m.pgFeePercentage ?? m.vendorRate ?? m.VendorRate ?? m.pgCut ?? m.pg_fee_rate;
+
+  // Platform Margin Rate candidates
+  const rawPlat = m.platformPercentage ?? m.PlatformPercentage ?? m.platform_percentage ?? 
+                  m.platformCommission ?? m.PlatformCommission ?? m.platform_commission ??
+                  m.platformRate ?? m.PlatformRate ?? m.ourPercentage ?? m.OurPercentage ?? 
+                  m.commissionPercentage ?? m.CommissionPercentage ?? m.commission_percentage ?? 
+                  m.marginPercentage ?? m.MarginPercentage ?? m.platformMargin ?? m.PlatformMargin ??
+                  m.ourMargin ?? m.OurMargin ?? m.ourCommission;
+
+  // Settlement / Total TDR Rate candidates
+  const rawSet = m.settlementPercentage ?? m.SettlementPercentage ?? m.settlement_percentage ?? 
+                 m.tdrPercentage ?? m.TdrPercentage ?? m.tdr_percentage ?? 
+                 m.tdrRate ?? m.TdrRate ?? m.totalTdr ?? m.TotalTdr ?? 
+                 m.settlementRate ?? m.SettlementRate ?? m.mdrPercentage ?? m.mdrRate;
+
+  let pgVendorPercentage = 0.15;
+  if (rawPg !== undefined && rawPg !== null && rawPg !== '') {
+    const parsed = Number(rawPg);
+    if (!isNaN(parsed) && parsed >= 0) pgVendorPercentage = parsed;
+  }
+
+  let platformPercentage = 0.50;
+  if (rawPlat !== undefined && rawPlat !== null && rawPlat !== '') {
+    const parsed = Number(rawPlat);
+    if (!isNaN(parsed) && parsed >= 0) platformPercentage = parsed;
+  }
+
+  let settlementPercentage = Number((pgVendorPercentage + platformPercentage).toFixed(2));
+  if (rawSet !== undefined && rawSet !== null && rawSet !== '') {
+    const parsed = Number(rawSet);
+    if (!isNaN(parsed) && parsed > 0) settlementPercentage = parsed;
+  }
+
+  return {
+    pgVendorPercentage,
+    platformPercentage,
+    settlementPercentage
+  };
+};
+
 const SoftwareAdminDashboard = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -343,6 +399,7 @@ const SoftwareAdminDashboard = () => {
       // Concurrently query live backend repositories
       const [
         merchantsRes,
+        configsRes,
         branchesRes,
         agentsRes,
         txRes,
@@ -350,6 +407,7 @@ const SoftwareAdminDashboard = () => {
         statsRes
       ] = await Promise.allSettled([
         merchantApi.getAll(),
+        merchantApi.getAllMerchantConfig ? merchantApi.getAllMerchantConfig() : Promise.resolve(null),
         branchApi.getAll(),
         agentApi.getAll(),
         transactionApi.getAll({ count: 500 }).catch(() => transactionApi.getHistory({ count: 500 })),
@@ -365,20 +423,56 @@ const SoftwareAdminDashboard = () => {
         }
       }
 
-      // 1. Raw Merchants
+      // 1. Raw Merchants & Configs
       const rawMerchants = merchantsRes.status === 'fulfilled' 
         ? (merchantsRes.value?.data?.data || merchantsRes.value?.data?.items || merchantsRes.value?.data?.result || merchantsRes.value?.data || []) 
         : [];
       const safeMerchants = Array.isArray(rawMerchants) ? rawMerchants : [];
-      setMerchantsList(safeMerchants);
 
-      // Merchant ID Lookup Map
+      let rawConfigs = [];
+      if (configsRes?.status === 'fulfilled' && configsRes.value) {
+        const c = configsRes.value?.data?.data || configsRes.value?.data?.items || configsRes.value?.data;
+        if (Array.isArray(c)) rawConfigs = c;
+      }
+
+      // Merge config parameters into merchants
+      const configMap = {};
+      rawConfigs.forEach(cfg => {
+        const mKey = String(cfg.merchantId || cfg.merchant_id || cfg.id || '');
+        if (mKey) configMap[mKey] = cfg;
+      });
+
+      const enrichedMerchants = safeMerchants.map(m => {
+        const cfg = configMap[String(m.id || m.merchantId || '')] || {};
+        const rates = extractMerchantRates({ ...cfg, ...m });
+        return {
+          ...m,
+          ...rates,
+          merchantName: m.merchantName || m.companyLegalName || m.merchantTradeName || m.name || cfg.merchantName || `Merchant #${m.id}`
+        };
+      });
+      setMerchantsList(enrichedMerchants);
+
+      // Merchant ID Lookup Map & Enriched Map
       const mLookup = {};
-      safeMerchants.forEach(m => {
-        const mId = m.id ?? m.merchantId ?? m.MerchantId;
-        if (mId != null) {
-          mLookup[mId] = m.merchantTradeName || m.merchantName || m.companyLegalName || m.name || `Merchant #${mId}`;
+      const enrichedMerchantsMap = {};
+      enrichedMerchants.forEach(m => {
+        const name = m.merchantTradeName || m.merchantName || m.companyLegalName || m.name || `Merchant #${m.id}`;
+        if (m.id != null) {
+          mLookup[m.id] = name;
+          enrichedMerchantsMap[String(m.id)] = m;
         }
+        if (m.merchantId != null) {
+          mLookup[m.merchantId] = name;
+          enrichedMerchantsMap[String(m.merchantId)] = m;
+        }
+        if (m.MerchantId != null) {
+          mLookup[m.MerchantId] = name;
+          enrichedMerchantsMap[String(m.MerchantId)] = m;
+        }
+        if (m.merchantTradeName) enrichedMerchantsMap[m.merchantTradeName.toLowerCase().trim()] = m;
+        if (m.merchantName) enrichedMerchantsMap[m.merchantName.toLowerCase().trim()] = m;
+        if (m.companyLegalName) enrichedMerchantsMap[m.companyLegalName.toLowerCase().trim()] = m;
       });
 
       // 2. Raw Branches
@@ -467,7 +561,7 @@ const SoftwareAdminDashboard = () => {
       setPendingAgents(pAgents);
 
       console.log('📊 SoftwareAdminDashboard live datasets loaded:', {
-        merchants: safeMerchants.length,
+        merchants: enrichedMerchants.length,
         branches: safeBranches.length,
         agents: safeAgents.length,
         transactions: safeTx.length,
@@ -497,45 +591,71 @@ const SoftwareAdminDashboard = () => {
     return merchantsList.find(m => String(m.id ?? m.merchantId ?? m.MerchantId) === String(selectedMerchantId)) || null;
   }, [isGlobalView, selectedMerchantId, merchantsList]);
 
-  // Scoped Branches
+  // Scoped Branches (Strict filter - no fallback to all merchants)
   const scopedBranches = useMemo(() => {
     if (isGlobalView) return branchesList;
-    const filtered = branchesList.filter(b => String(b.merchantId ?? b.MerchantId) === String(selectedMerchantId));
-    return filtered.length > 0 ? filtered : branchesList;
-  }, [isGlobalView, branchesList, selectedMerchantId]);
+    const smId = String(selectedMerchantId);
+    const smName = currentSelectedMerchant 
+      ? (currentSelectedMerchant.merchantTradeName || currentSelectedMerchant.merchantName || currentSelectedMerchant.companyLegalName || currentSelectedMerchant.name || '').toLowerCase().trim()
+      : '';
+    return branchesList.filter(b => {
+      const mId = b.merchantId ?? b.MerchantId;
+      if (mId != null && String(mId) === smId) return true;
+      if (currentSelectedMerchant && (String(mId) === String(currentSelectedMerchant.id) || String(mId) === String(currentSelectedMerchant.merchantId))) return true;
+      if (smName && b.merchantName && b.merchantName.toLowerCase().trim() === smName) return true;
+      return false;
+    });
+  }, [isGlobalView, branchesList, selectedMerchantId, currentSelectedMerchant]);
 
-  // Scoped Agents
+  // Scoped Agents (Strict filter - no fallback to all merchants)
   const scopedAgents = useMemo(() => {
     if (isGlobalView) return agentsList;
-    const filtered = agentsList.filter(a => String(a.merchantId ?? a.MerchantId) === String(selectedMerchantId));
-    return filtered.length > 0 ? filtered : agentsList;
-  }, [isGlobalView, agentsList, selectedMerchantId]);
+    const smId = String(selectedMerchantId);
+    const smName = currentSelectedMerchant 
+      ? (currentSelectedMerchant.merchantTradeName || currentSelectedMerchant.merchantName || currentSelectedMerchant.companyLegalName || currentSelectedMerchant.name || '').toLowerCase().trim()
+      : '';
+    return agentsList.filter(a => {
+      const mId = a.merchantId ?? a.MerchantId;
+      if (mId != null && String(mId) === smId) return true;
+      if (currentSelectedMerchant && (String(mId) === String(currentSelectedMerchant.id) || String(mId) === String(currentSelectedMerchant.merchantId))) return true;
+      if (smName && a.merchantName && a.merchantName.toLowerCase().trim() === smName) return true;
+      return false;
+    });
+  }, [isGlobalView, agentsList, selectedMerchantId, currentSelectedMerchant]);
 
-  // Scoped Transactions
+  // Scoped Transactions (Strict filter - no fallback to all merchants)
   const scopedTransactions = useMemo(() => {
     if (isGlobalView) return transactionsList;
     const smId = String(selectedMerchantId);
     const smName = currentSelectedMerchant 
-      ? (currentSelectedMerchant.merchantTradeName || currentSelectedMerchant.merchantName || currentSelectedMerchant.companyLegalName || currentSelectedMerchant.name || '').toLowerCase()
+      ? (currentSelectedMerchant.merchantTradeName || currentSelectedMerchant.merchantName || currentSelectedMerchant.companyLegalName || currentSelectedMerchant.name || '').toLowerCase().trim()
       : '';
 
-    const filtered = transactionsList.filter(t => {
-      const mId = t.merchantId ?? t.MerchantId;
-      if (mId && String(mId) === smId) return true;
-      if (smName && t.merchantName && t.merchantName.toLowerCase() === smName) return true;
-      if (smName && t.merchant && t.merchant.toLowerCase() === smName) return true;
+    return transactionsList.filter(t => {
+      const mId = t.merchantId ?? t.MerchantId ?? t.merchant_id;
+      if (mId != null && String(mId) === smId) return true;
+      if (currentSelectedMerchant && (String(mId) === String(currentSelectedMerchant.id) || String(mId) === String(currentSelectedMerchant.merchantId))) return true;
+      if (smName && t.merchantName && t.merchantName.toLowerCase().trim() === smName) return true;
+      if (smName && t.merchant && t.merchant.toLowerCase().trim() === smName) return true;
       return false;
     });
-
-    return filtered.length > 0 ? filtered : transactionsList;
   }, [isGlobalView, transactionsList, selectedMerchantId, currentSelectedMerchant]);
 
-  // Scoped Settlements
+  // Scoped Settlements (Strict filter - no fallback to all merchants)
   const scopedSettlements = useMemo(() => {
     if (isGlobalView) return settlementsList;
-    const filtered = settlementsList.filter(s => String(s.merchantId ?? s.MerchantId) === String(selectedMerchantId));
-    return filtered.length > 0 ? filtered : settlementsList;
-  }, [isGlobalView, settlementsList, selectedMerchantId]);
+    const smId = String(selectedMerchantId);
+    const smName = currentSelectedMerchant 
+      ? (currentSelectedMerchant.merchantTradeName || currentSelectedMerchant.merchantName || currentSelectedMerchant.companyLegalName || currentSelectedMerchant.name || '').toLowerCase().trim()
+      : '';
+    return settlementsList.filter(s => {
+      const mId = s.merchantId ?? s.MerchantId ?? s.merchant_id;
+      if (mId != null && String(mId) === smId) return true;
+      if (currentSelectedMerchant && (String(mId) === String(currentSelectedMerchant.id) || String(mId) === String(currentSelectedMerchant.merchantId))) return true;
+      if (smName && s.merchantName && s.merchantName.toLowerCase().trim() === smName) return true;
+      return false;
+    });
+  }, [isGlobalView, settlementsList, selectedMerchantId, currentSelectedMerchant]);
 
   // Scoped Pending Approvals
   const scopedPendingBranches = useMemo(() => {
@@ -1096,9 +1216,12 @@ const SoftwareAdminDashboard = () => {
                 {merchantsList.map(m => {
                   const tName = m.merchantTradeName || m.companyLegalName || m.name || `Merchant #${m.id}`;
                   const isY = m.integrationStatus === 'Y' || m.IntegrationStatus === 'Y';
+                  const tdrStr = m.settlementPercentage !== undefined ? `${m.settlementPercentage}%` : '0.65%';
+                  const pgStr = m.pgVendorPercentage !== undefined ? `${m.pgVendorPercentage}%` : '0.15%';
+                  const marginStr = m.platformPercentage !== undefined ? `${m.platformPercentage}%` : '0.50%';
                   return (
                     <option key={m.id} value={m.id}>
-                      🏢 {tName} (#{m.id}) — [{isY ? 'API Integrated (Y)' : 'Standard (N)'}]
+                      🏢 {tName} (#{m.id}) — [TDR: {tdrStr} | PG: {pgStr} | Margin: {marginStr}] — [{isY ? 'API Integrated (Y)' : 'Standard (N)'}]
                     </option>
                   );
                 })}
@@ -1202,6 +1325,27 @@ const SoftwareAdminDashboard = () => {
               <div className="info-item">
                 <span className="info-label">Phone Hotline</span>
                 <span className="info-value font-mono">{currentSelectedMerchant.registeredPhone || currentSelectedMerchant.phone || 'N/A'}</span>
+              </div>
+
+              <div className="info-item">
+                <span className="info-label">TDR Settlement Rate</span>
+                <span className="info-value font-mono" style={{ color: '#10b981', fontWeight: '800' }}>
+                  {currentSelectedMerchant.settlementPercentage ?? '0.65'}%
+                </span>
+              </div>
+
+              <div className="info-item">
+                <span className="info-label">PG Vendor Fee</span>
+                <span className="info-value font-mono" style={{ color: '#f59e0b', fontWeight: '700' }}>
+                  {currentSelectedMerchant.pgVendorPercentage ?? '0.15'}%
+                </span>
+              </div>
+
+              <div className="info-item">
+                <span className="info-label">Platform Margin</span>
+                <span className="info-value font-mono" style={{ color: '#6366f1', fontWeight: '800' }}>
+                  {currentSelectedMerchant.platformPercentage ?? '0.50'}%
+                </span>
               </div>
 
               <div className="info-item">
@@ -2553,7 +2697,7 @@ const SoftwareAdminDashboard = () => {
                         </div>
                       </div>
 
-                      {/* Middle: Badges and Counts */}
+                      {/* Middle: Badges, Rates, and Counts */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                         <span style={{
                           fontSize: '11px',
@@ -2584,6 +2728,26 @@ const SoftwareAdminDashboard = () => {
                           marginLeft: 'auto'
                         }}>
                           🏢 {mBranchesCount} BR • 👤 {mAgentsCount} AG
+                        </span>
+                      </div>
+
+                      {/* TDR Commission Rates Pill */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        background: 'rgba(16, 185, 129, 0.08)',
+                        border: '1px solid rgba(16, 185, 129, 0.2)',
+                        borderRadius: '8px',
+                        padding: '6px 10px',
+                        fontSize: '11.5px'
+                      }}>
+                        <span style={{ color: '#10b981', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span>💰 TDR:</span>
+                          <span className="font-mono">{m.settlementPercentage ?? '0.65'}%</span>
+                        </span>
+                        <span style={{ color: 'var(--textMuted, #94a3b8)', fontSize: '11px' }}>
+                          PG: <span style={{ color: '#f59e0b', fontWeight: '700' }}>{m.pgVendorPercentage ?? '0.15'}%</span> • Margin: <span style={{ color: '#6366f1', fontWeight: '800' }}>{m.platformPercentage ?? '0.50'}%</span>
                         </span>
                       </div>
 
@@ -2755,6 +2919,7 @@ const SoftwareAdminDashboard = () => {
                   <tr>
                     <th>Merchant Entity</th>
                     <th>Category</th>
+                    <th>TDR Rates (%)</th>
                     <th>PAN / Tax ID</th>
                     <th>Contact Hotline</th>
                     <th>Merchant Password</th>
@@ -2798,6 +2963,16 @@ const SoftwareAdminDashboard = () => {
                           <span style={{ color: 'var(--accent, #6366f1)', fontSize: '12px', fontWeight: '600' }}>
                             {m.businessCategory || 'General Partner'}
                           </span>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <span style={{ color: '#10b981', fontWeight: '800', fontSize: '12px' }}>
+                              {m.settlementPercentage ?? '0.65'}% TDR
+                            </span>
+                            <span style={{ fontSize: '10.5px', color: 'var(--textMuted, #94a3b8)' }}>
+                              PG: {m.pgVendorPercentage ?? '0.15'}% | Margin: {m.platformPercentage ?? '0.50'}%
+                            </span>
+                          </div>
                         </td>
                         <td>
                           <span className="font-mono" style={{ fontSize: '12px', fontWeight: '700', color: 'var(--textPrimary, #ffffff)' }}>
