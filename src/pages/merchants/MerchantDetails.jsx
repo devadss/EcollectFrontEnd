@@ -127,6 +127,29 @@ const MerchantDetails = () => {
   const [verifiedBankDetails, setVerifiedBankDetails] = useState({});
   const { showSuccess, showError, showConfirm } = useDialog();
 
+  const getMerchantPassword = (m) => {
+    if (!m) return 'Merchant@123';
+    let raw = m.merchantPassword || m.password || m.Password || m.tempPassword || m.loginPassword || m.plainPassword || m.decryptedPassword;
+    if (raw && typeof raw === 'string' && raw.trim() !== '') {
+      if (/^[A-Za-z0-9+/=]{12,}$/.test(raw.trim()) && !raw.includes('@') && !raw.includes(' ')) {
+        try {
+          const decoded = atob(raw.trim());
+          if (decoded && /^[\x20-\x7E]+$/.test(decoded)) {
+            return decoded;
+          }
+        } catch {
+          // fallback
+        }
+      }
+      return raw.trim();
+    }
+    const name = m.merchantTradeName || m.companyLegalName || m.merchantName || m.name || '';
+    if (name) {
+      return `${name.trim()}@123`;
+    }
+    return 'Merchant@123';
+  };
+
   const loadMerchant = useCallback(async () => {
     try {
       setLoading(true);
@@ -527,7 +550,7 @@ const MerchantDetails = () => {
                     <div className="copyable-field-box">
                       <span className="field-val font-mono font-bold text-amber">
                         {showPassword 
-                          ? (merchant.password || merchant.Password || merchant.tempPassword || merchant.loginPassword || 'Merchant@2026')
+                          ? getMerchantPassword(merchant)
                           : '••••••••••••'}
                       </span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -541,9 +564,9 @@ const MerchantDetails = () => {
                           <span>{showPassword ? 'Hide' : 'Show'}</span>
                         </button>
                         <button 
-                          type="button"
+                          type="button" 
                           className="copy-btn-mini"
-                          onClick={() => handleCopy(merchant.password || merchant.Password || merchant.tempPassword || merchant.loginPassword || 'Merchant@2026', 'password')}
+                          onClick={() => handleCopy(getMerchantPassword(merchant), 'password')}
                           title="Copy Password"
                         >
                           {copiedField === 'password' ? '✓ Copied' : <DetailIcons.Copy />}

@@ -113,7 +113,45 @@ const Merchants = () => {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [viewLayout, setViewLayout] = useState('table'); // 'grid' | 'table'
   const [approvingId, setApprovingId] = useState(null);
+  const [revealedMerchantPasswords, setRevealedMerchantPasswords] = useState({});
+  const [copiedMerchantId, setCopiedMerchantId] = useState(null);
   const { showSuccess, showError, showConfirm } = useDialog();
+
+  const toggleRevealMerchantPassword = (merchantId) => {
+    setRevealedMerchantPasswords(prev => ({
+      ...prev,
+      [merchantId]: !prev[merchantId]
+    }));
+  };
+
+  const copyMerchantPassword = (merchantId, password) => {
+    navigator.clipboard.writeText(password);
+    setCopiedMerchantId(merchantId);
+    setTimeout(() => setCopiedMerchantId(null), 2000);
+  };
+
+  const getMerchantPassword = (m) => {
+    if (!m) return 'Merchant@123';
+    let raw = m.merchantPassword || m.password || m.Password || m.tempPassword || m.loginPassword || m.plainPassword || m.decryptedPassword;
+    if (raw && typeof raw === 'string' && raw.trim() !== '') {
+      if (/^[A-Za-z0-9+/=]{12,}$/.test(raw.trim()) && !raw.includes('@') && !raw.includes(' ')) {
+        try {
+          const decoded = atob(raw.trim());
+          if (decoded && /^[\x20-\x7E]+$/.test(decoded)) {
+            return decoded;
+          }
+        } catch {
+          // fallback
+        }
+      }
+      return raw.trim();
+    }
+    const name = m.merchantTradeName || m.companyLegalName || m.merchantName || m.name || '';
+    if (name) {
+      return `${name.trim()}@123`;
+    }
+    return 'Merchant@123';
+  };
 
   const authUser = (() => {
     try {
@@ -468,6 +506,55 @@ const Merchants = () => {
                           <span className="detail-label">Phone:</span>
                           <span className="detail-val font-mono">{m.registeredPhone || m.phone || 'N/A'}</span>
                         </div>
+                        <div className="detail-row" style={{ alignItems: 'center' }}>
+                          <span className="detail-label">Password:</span>
+                          {(() => {
+                            const mPass = getMerchantPassword(m);
+                            const isRevealed = !!revealedMerchantPasswords[m.id];
+                            const isCopied = copiedMerchantId === m.id;
+                            return (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
+                                <span className="detail-val font-mono font-bold" style={{
+                                  color: isRevealed ? '#10b981' : '#94a3b8',
+                                  letterSpacing: isRevealed ? '0.5px' : '2px'
+                                }}>
+                                  {isRevealed ? mPass : '••••••••'}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); toggleRevealMerchantPassword(m.id); }}
+                                  style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: '#94a3b8',
+                                    cursor: 'pointer',
+                                    fontSize: '12px',
+                                    padding: '2px 4px'
+                                  }}
+                                  title={isRevealed ? "Hide Password" : "Show Password"}
+                                >
+                                  {isRevealed ? '👁️‍🗨️' : '👁️'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); copyMerchantPassword(m.id, mPass); }}
+                                  style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: isCopied ? '#10b981' : '#94a3b8',
+                                    cursor: 'pointer',
+                                    fontSize: '11px',
+                                    fontWeight: '700',
+                                    padding: '2px 4px'
+                                  }}
+                                  title="Copy Password"
+                                >
+                                  {isCopied ? '✓' : '📋'}
+                                </button>
+                              </div>
+                            );
+                          })()}
+                        </div>
                         {m.panNumber && (
                           <div className="detail-row">
                             <span className="detail-label">PAN:</span>
@@ -516,6 +603,7 @@ const Merchants = () => {
                     <th style={{ width: '50px' }}>#</th>
                     <th>Merchant Partner</th>
                     <th>Contact Credentials</th>
+                    <th>Portal Password</th>
                     <th>Business Category</th>
                     <th>Integration Gateway</th>
                     <th>Compliance Status</th>
@@ -525,7 +613,7 @@ const Merchants = () => {
                 <tbody>
                   {filteredMerchants.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="empty-merch-cell">
+                      <td colSpan="8" className="empty-merch-cell">
                         <div className="empty-merch-box">
                           <span className="empty-glyph">🏪</span>
                           <h4>No Merchant Partners Found</h4>
@@ -581,6 +669,58 @@ const Merchants = () => {
                                 <MerchIcons.Phone /> {m.registeredPhone || m.phone || 'N/A'}
                               </span>
                             </div>
+                          </td>
+
+                          {/* Portal Password Column */}
+                          <td>
+                            {(() => {
+                              const mPass = getMerchantPassword(m);
+                              const isRevealed = !!revealedMerchantPasswords[m.id];
+                              const isCopied = copiedMerchantId === m.id;
+                              return (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <span className="font-mono font-bold" style={{
+                                    fontSize: '12px',
+                                    color: isRevealed ? '#10b981' : 'var(--textMuted, #94a3b8)',
+                                    letterSpacing: isRevealed ? '0.5px' : '2px',
+                                    minWidth: '70px'
+                                  }}>
+                                    {isRevealed ? mPass : '••••••••'}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); toggleRevealMerchantPassword(m.id); }}
+                                    style={{
+                                      background: 'transparent',
+                                      border: 'none',
+                                      color: 'var(--textSecondary, #cbd5e1)',
+                                      cursor: 'pointer',
+                                      fontSize: '12px',
+                                      padding: '2px 4px'
+                                    }}
+                                    title={isRevealed ? "Hide Password" : "Show Password"}
+                                  >
+                                    {isRevealed ? '👁️‍🗨️' : '👁️'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); copyMerchantPassword(m.id, mPass); }}
+                                    style={{
+                                      background: 'transparent',
+                                      border: 'none',
+                                      color: isCopied ? '#10b981' : 'var(--textSecondary, #cbd5e1)',
+                                      cursor: 'pointer',
+                                      fontSize: '11px',
+                                      fontWeight: '700',
+                                      padding: '2px 4px'
+                                    }}
+                                    title="Copy Password"
+                                  >
+                                    {isCopied ? '✓' : '📋'}
+                                  </button>
+                                </div>
+                              );
+                            })()}
                           </td>
 
                           {/* Business Category */}
