@@ -325,10 +325,25 @@ const BranchDashboard = () => {
         setRecentTxns([]);
       }
 
+      // Helper to strictly identify completed/successful transactions (excluding pending QRs and failed attempts)
+      const isTxSuccess = (t) => {
+        if (!t) return false;
+        const st = String(t.status || t.Status || t.transactionStatus || '').toUpperCase().trim();
+        if (st === 'SUCCESS' || st === 'COMPLETED' || st === 'SETTLED' || st === 'CAPTURED' || st === 'PAID' || st === 'SUCCESSFUL') return true;
+        if (st.includes('SUCCESS') || st.includes('COMPLETED') || st.includes('SETTLE') || st.includes('CAPTURED') || st.includes('PAID')) {
+          if (!st.includes('PENDING') && !st.includes('FAIL') && !st.includes('CANCEL') && !st.includes('REJECT') && !st.includes('INITIAT') && !st.includes('QR')) {
+            return true;
+          }
+        }
+        return false;
+      };
+
+      const successfulTxs = txList.filter(isTxSuccess);
+
       if (data.volumeChart && Array.isArray(data.volumeChart.labels) && data.volumeChart.labels.length > 0 && Array.isArray(data.volumeChart.data) && data.volumeChart.data.some(v => Number(v) > 0)) {
         setRevenueDataLabels(data.volumeChart.labels);
         setRevenueDataValues(data.volumeChart.data);
-      } else if (txList.length > 0) {
+      } else if (successfulTxs.length > 0) {
         const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         const now = new Date();
         const chartLabels = [];
@@ -341,7 +356,7 @@ const BranchDashboard = () => {
         }
 
         let matched = 0;
-        txList.forEach(t => {
+        successfulTxs.forEach(t => {
           const diffDays = Math.floor((now - t.dateObj) / 86400000);
           if (diffDays >= 0 && diffDays < 7) {
             const idx = 6 - diffDays;
@@ -351,7 +366,7 @@ const BranchDashboard = () => {
         });
 
         if (matched === 0) {
-          txList.forEach(t => {
+          successfulTxs.forEach(t => {
             const dIdx = t.dateObj.getDay();
             const targetDay = days[dIdx];
             const lIdx = chartLabels.lastIndexOf(targetDay);
@@ -369,9 +384,9 @@ const BranchDashboard = () => {
           label: m.method || m.label || 'Unknown',
           value: Number(m.value) || Number(m.count) || 0
         })));
-      } else if (txList.length > 0) {
+      } else if (successfulTxs.length > 0) {
         const methodCounts = {};
-        txList.forEach(t => {
+        successfulTxs.forEach(t => {
           const m = t.mode || 'UPI';
           methodCounts[m] = (methodCounts[m] || 0) + t.amount;
         });

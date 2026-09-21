@@ -560,25 +560,32 @@ const Branches = () => {
                 <div className="branches-cards-grid">
                   {filteredBranches.map((branch) => {
                     const isPending = branch.isApproved === false || branch.status === 'Pending Approval' || branch.status === 'Pending';
+                    const branchPass = branch.branchPassword || branch.password || branch.name || 'Branch@123';
+                    const isRevealed = !!revealedBranchPasswords[branch.id];
+                    const isCopied = copiedBranchId === branch.id;
+
                     return (
-                    <div key={branch.id} className="branch-profile-card">
+                    <div 
+                      key={branch.id} 
+                      className="branch-profile-card"
+                      onClick={() => navigate(`/branches/${branch.id}`, { state: { branch } })}
+                    >
+                      <div className="branch-card-glow"></div>
                       
-                      <div 
-                        className="branch-card-header"
-                        onClick={() => navigate(`/branches/${branch.id}`, { state: { branch } })}
-                        style={{ cursor: 'pointer' }}
-                        title="Click to view full branch dossier"
-                      >
+                      {/* Card Header */}
+                      <div className="branch-card-header">
                         <div className="branch-avatar-bubble">
                           <BranchIcons.Building />
                         </div>
                         <div className="branch-titles">
-                          <h3 className="branch-name-text">{branch.name || 'Regional Office'}</h3>
+                          <h3 className="branch-name-text" title={branch.name || 'Regional Office'}>
+                            {branch.name || 'Regional Office'}
+                          </h3>
                           <span className="branch-code-pill font-mono">{branch.code || `BR-${branch.id}`}</span>
                         </div>
                         {isPending ? (
-                          <span className="branch-status-badge" style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#a855f7', border: '1px solid rgba(168, 85, 247, 0.4)' }}>
-                            <span className="status-glow-dot" style={{ background: '#a855f7' }}></span>
+                          <span className="branch-status-badge is-pending">
+                            <span className="status-glow-dot"></span>
                             <span>Pending Review</span>
                           </span>
                         ) : (
@@ -589,46 +596,75 @@ const Branches = () => {
                         )}
                       </div>
 
-                      <div className="branch-details-stack">
-                        <div className="detail-item">
-                          <BranchIcons.Location />
-                          <span className="detail-text">{branch.address || 'Address not listed'}</span>
+                      {/* Info & Address Containment Box */}
+                      <div className="branch-card-info-box" onClick={(e) => e.stopPropagation()}>
+                        
+                        {/* City & State Location Tag */}
+                        <div className="branch-card-row is-location-header">
+                          <span className="branch-row-icon is-pin"><BranchIcons.Location /></span>
+                          <span className="branch-city-pill">{branch.city || 'Regional Hub'}{branch.state ? `, ${branch.state}` : ''}</span>
                         </div>
-                        <div className="detail-item">
-                          <span className="city-pin-badge">{branch.city || 'Regional Center'}, {branch.state || 'India'}</span>
+
+                        {/* Full Street Address (Clamped to 2 lines max with tooltip) */}
+                        <div className="branch-card-row is-address-row">
+                          <p className="branch-address-clamped" title={branch.address || 'No street address registered'}>
+                            {branch.address || 'Street address not registered for this branch office.'}
+                          </p>
                         </div>
-                        <div className="detail-item">
-                          <BranchIcons.Phone />
-                          <span className="detail-text font-mono text-muted">{branch.phone || '+91 1800 000 000'}</span>
+
+                        {/* Contact Strip: Phone & Email */}
+                        <div className="branch-card-contact-strip">
+                          <div className="branch-contact-item" title="Branch Helpline / Phone">
+                            <span className="branch-contact-icon"><BranchIcons.Phone /></span>
+                            <a 
+                              href={branch.phone ? `tel:${branch.phone}` : undefined} 
+                              className="branch-contact-link font-mono"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {branch.phone || '+91 1800 000 000'}
+                            </a>
+                          </div>
+                          <div className="branch-contact-item" title="Branch Contact Email">
+                            <span className="branch-contact-icon"><BranchIcons.Email /></span>
+                            <a 
+                              href={branch.email ? `mailto:${branch.email}` : undefined} 
+                              className="branch-contact-link"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {branch.email || 'branch@ecollect.in'}
+                            </a>
+                          </div>
                         </div>
-                        <div className="detail-item">
-                          <BranchIcons.Email />
-                          <span className="detail-text text-muted">{branch.email || 'branch@ecollect.in'}</span>
-                        </div>
-                        <div className="detail-item">
-                          <span style={{ fontSize: '11.5px', color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                            <span>🔑 Pass:</span>
-                            <span className="font-mono" style={{ color: revealedBranchPasswords[branch.id] ? '#10b981' : '#cbd5e1', letterSpacing: revealedBranchPasswords[branch.id] ? '0.5px' : '2px', background: 'rgba(255,255,255,0.05)', padding: '1px 6px', borderRadius: '4px' }}>
-                              {revealedBranchPasswords[branch.id] ? (branch.branchPassword || branch.password || branch.name || 'Branch@123') : '••••••••'}
-                            </span>
+
+                        {/* Password / Access Code Bar */}
+                        <div className="branch-card-credentials-bar">
+                          <span className="credentials-label">
+                            <span className="key-icon">🔑</span>
+                            <span>Pass:</span>
+                          </span>
+                          <span className={`credentials-value font-mono ${isRevealed ? 'is-revealed' : ''}`}>
+                            {isRevealed ? branchPass : '••••••••'}
+                          </span>
+                          <div className="credentials-actions">
                             <button
                               type="button"
-                              onClick={() => toggleRevealBranchPassword(branch.id)}
-                              style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px', fontSize: '12px' }}
-                              title={revealedBranchPasswords[branch.id] ? "Hide Password" : "Show Password"}
+                              onClick={(e) => { e.stopPropagation(); toggleRevealBranchPassword(branch.id); }}
+                              className="credentials-btn"
+                              title={isRevealed ? "Hide Password" : "Show Password"}
                             >
-                              {revealedBranchPasswords[branch.id] ? '👁️' : '🔒'}
+                              {isRevealed ? '👁️' : '🔒'}
                             </button>
                             <button
                               type="button"
-                              onClick={() => copyBranchPassword(branch.id, branch.branchPassword || branch.password || branch.name || 'Branch@123')}
-                              style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px', fontSize: '11px', color: copiedBranchId === branch.id ? '#10b981' : '#94a3b8' }}
+                              onClick={(e) => { e.stopPropagation(); copyBranchPassword(branch.id, branchPass); }}
+                              className={`credentials-btn ${isCopied ? 'is-copied' : ''}`}
                               title="Copy Password"
                             >
-                              {copiedBranchId === branch.id ? '✓' : '📋'}
+                              {isCopied ? '✓' : '📋'}
                             </button>
-                          </span>
+                          </div>
                         </div>
+
                       </div>
 
                       {/* Sub Metrics (Agents & Revenue) */}
@@ -645,73 +681,60 @@ const Branches = () => {
                       </div>
 
                       {/* Action Hub */}
-                      <div className="branch-card-actions" style={{ flexWrap: 'wrap', gap: '8px' }}>
+                      <div className="branch-card-actions" onClick={(e) => e.stopPropagation()}>
                         {isSoftwareAdmin && isPending ? (
-                          <div style={{ display: 'flex', gap: '6px', width: '100%', marginBottom: '4px' }}>
+                          <div className="branch-admin-action-strip">
                             <button 
-                              onClick={() => handleApproveBranch(branch.id, branch.name)}
-                              style={{ flex: 1, background: '#059669', color: '#fff', border: 'none', borderRadius: '8px', padding: '7px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                              onClick={(e) => { e.stopPropagation(); handleApproveBranch(branch.id, branch.name); }}
+                              className="branch-admin-approve-btn"
                             >
                               ✓ Approve Branch
                             </button>
                             <button 
-                              onClick={() => handleRejectBranch(branch.id, branch.name)}
-                              style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: '8px', padding: '7px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}
+                              onClick={(e) => { e.stopPropagation(); handleRejectBranch(branch.id, branch.name); }}
+                              className="branch-admin-reject-btn"
                             >
                               ✕ Reject
                             </button>
                           </div>
                         ) : isSoftwareAdmin && !branch.isActive ? (
-                          <div style={{ width: '100%', marginBottom: '4px' }}>
+                          <div className="branch-admin-action-strip">
                             <button
-                              onClick={() => handleToggleStatus(branch.id, branch.name, false)}
-                              style={{
-                                width: '100%',
-                                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                                color: '#ffffff',
-                                border: 'none',
-                                borderRadius: '8px',
-                                padding: '7px 12px',
-                                fontSize: '12px',
-                                fontWeight: '700',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '4px',
-                                boxShadow: '0 2px 8px rgba(16, 185, 129, 0.35)'
-                              }}
+                              onClick={(e) => { e.stopPropagation(); handleToggleStatus(branch.id, branch.name, false); }}
+                              className="branch-admin-activate-btn"
                             >
                               ✓ Make Active (Activate)
                             </button>
                           </div>
                         ) : null}
 
-                        <button 
-                          className="action-link-btn is-view" 
-                          onClick={() => navigate(`/branches/${branch.id}`, { state: { branch } })}
-                        >
-                          <BranchIcons.Eye />
-                          <span>View Profile</span>
-                        </button>
-                        {isSoftwareAdmin && (
-                          <>
-                            <button 
-                              className="action-icon-btn is-edit" 
-                              onClick={() => navigate(`/branches/edit/${branch.id}`)}
-                              title="Edit Branch"
-                            >
-                              <BranchIcons.Edit />
-                            </button>
-                            <button 
-                              className="action-icon-btn is-delete" 
-                              onClick={() => handleDelete(branch.id)}
-                              title="Delete Branch"
-                            >
-                              <BranchIcons.Trash />
-                            </button>
-                          </>
-                        )}
+                        <div className="branch-main-actions-bar">
+                          <button 
+                            className="action-link-btn is-view" 
+                            onClick={(e) => { e.stopPropagation(); navigate(`/branches/${branch.id}`, { state: { branch } }); }}
+                          >
+                            <BranchIcons.Eye />
+                            <span>View Dossier</span>
+                          </button>
+                          {isSoftwareAdmin && (
+                            <>
+                              <button 
+                                className="action-icon-btn is-edit" 
+                                onClick={(e) => { e.stopPropagation(); navigate(`/branches/edit/${branch.id}`); }}
+                                title="Edit Branch"
+                              >
+                                <BranchIcons.Edit />
+                              </button>
+                              <button 
+                                className="action-icon-btn is-delete" 
+                                onClick={(e) => { e.stopPropagation(); handleDelete(branch.id); }}
+                                title="Delete Branch"
+                              >
+                                <BranchIcons.Trash />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
 
                     </div>

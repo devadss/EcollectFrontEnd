@@ -508,12 +508,22 @@ const SoftwareAdminDashboard = () => {
     return pendingAgents.filter(a => String(a.merchantId ?? a.MerchantId) === String(selectedMerchantId));
   }, [isGlobalView, pendingAgents, selectedMerchantId]);
 
+  // Helper to strictly identify completed/successful transactions (excluding pending QRs and failed attempts)
+  const isTxSuccess = (t) => {
+    if (!t) return false;
+    const st = (t.statusNorm || t.status || t.Status || t.transactionStatus || t.TransactionStatus || '').toString().toUpperCase().trim();
+    if (st === 'SUCCESS' || st === 'COMPLETED' || st === 'SETTLED' || st === 'CAPTURED' || st === 'PAID' || st === 'SUCCESSFUL') return true;
+    if (st.includes('SUCCESS') || st.includes('COMPLETED') || st.includes('SETTLE') || st.includes('CAPTURED') || st.includes('PAID')) {
+      if (!st.includes('PENDING') && !st.includes('FAIL') && !st.includes('CANCEL') && !st.includes('REJECT') && !st.includes('INITIAT') && !st.includes('QR')) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   // Total Revenue / Gross Volume from Scoped Transactions
   const scopedMetrics = useMemo(() => {
-    const successfulTx = scopedTransactions.filter(t => {
-      const st = (t.statusNorm || t.status || '').toUpperCase();
-      return !st.includes('FAIL') && !st.includes('CANCEL') && !st.includes('DECLINE') && !st.includes('REJECT');
-    });
+    const successfulTx = scopedTransactions.filter(isTxSuccess);
     
     const computedVolume = successfulTx.reduce((sum, t) => sum + (t.amountNum || t.amount || 0), 0);
     const totalTxCount = scopedTransactions.length;
@@ -540,6 +550,7 @@ const SoftwareAdminDashboard = () => {
       settledVolume: settledVolume || Number(backendStats?.pendingSettlement || 0),
       todayVolume: scopedTransactions
         .filter(t => {
+          if (!isTxSuccess(t)) return false;
           const d = t.dateObj || new Date();
           const now = new Date();
           return d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
@@ -558,13 +569,14 @@ const SoftwareAdminDashboard = () => {
     let dataPoints = [];
 
     const now = new Date();
-    const hasTx = scopedTransactions.length > 0;
+    const successfulScopedTx = scopedTransactions.filter(isTxSuccess);
+    const hasTx = successfulScopedTx.length > 0;
 
     if (activeRange === 'Today') {
       labels = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '23:59'];
       const buckets = [0, 0, 0, 0, 0, 0, 0];
       
-      scopedTransactions.forEach(t => {
+      successfulScopedTx.forEach(t => {
         const hour = t.dateObj.getHours();
         const amt = t.amountNum || 0;
         if (hour < 4) buckets[0] += amt;
@@ -588,7 +600,7 @@ const SoftwareAdminDashboard = () => {
       }
 
       let matchedCount = 0;
-      scopedTransactions.forEach(t => {
+      successfulScopedTx.forEach(t => {
         const diffDays = Math.floor((now - t.dateObj) / (1000 * 60 * 60 * 24));
         if (diffDays >= 0 && diffDays < 7) {
           const idx = 6 - diffDays;
@@ -601,7 +613,7 @@ const SoftwareAdminDashboard = () => {
 
       // Fallback: If transactions exist but dates are older or seed data, map by day-of-week
       if (hasTx && matchedCount === 0) {
-        scopedTransactions.forEach(t => {
+        successfulScopedTx.forEach(t => {
           const dayIdx = t.dateObj.getDay();
           // Find matching label index in labels array
           const targetDay = days[dayIdx];
@@ -621,7 +633,7 @@ const SoftwareAdminDashboard = () => {
       const buckets = [0, 0, 0, 0];
       let matchedCount = 0;
 
-      scopedTransactions.forEach(t => {
+      successfulScopedTx.forEach(t => {
         const diffDays = Math.floor((now - t.dateObj) / (1000 * 60 * 60 * 24));
         if (diffDays >= 0 && diffDays < 30) {
           if (diffDays < 7) buckets[3] += t.amountNum || 0;
@@ -633,7 +645,7 @@ const SoftwareAdminDashboard = () => {
       });
 
       if (hasTx && matchedCount === 0) {
-        scopedTransactions.forEach(t => {
+        successfulScopedTx.forEach(t => {
           const wIdx = Math.floor((t.dateObj.getDate() - 1) / 7);
           buckets[Math.min(3, Math.max(0, wIdx))] += t.amountNum || 0;
         });
@@ -645,7 +657,7 @@ const SoftwareAdminDashboard = () => {
       labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const buckets = new Array(12).fill(0);
 
-      scopedTransactions.forEach(t => {
+      successfulScopedTx.forEach(t => {
         const mIdx = t.dateObj.getMonth();
         buckets[mIdx] += t.amountNum || 0;
       });
