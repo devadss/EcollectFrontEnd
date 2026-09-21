@@ -153,12 +153,12 @@ const AddAgent = () => {
       }
 
       if (isBranchUser) {
-        showWarning('Field Agent registration is managed by Merchant and Software Admin portals. Branch users do not have permission to register agents.', 'Permission Denied');
+        showWarning('Field Agent registration and management is handled by Merchant and Software Admin portals.', 'Permission Denied');
         navigate('/agents');
         return;
       }
-      if (isEdit && !isSoftwareAdmin) {
-        showWarning('Modification of Field Agent credentials is restricted to the Software Admin portal.', 'Access Restricted');
+      if (isEdit && !isSoftwareAdmin && !isMerchantUser) {
+        showWarning('Modification of Field Agent credentials is restricted to authorized Merchant and Software Admin users.', 'Access Restricted');
         navigate('/agents');
         return;
       }
@@ -204,26 +204,43 @@ const AddAgent = () => {
         // 2. If editing, load agent
         if (isEdit) {
           const aRes = await agentApi.getById(id);
-          const aData = aRes?.data || {};
+          const rawA = aRes?.data?.data || aRes?.data || {};
+          const aData = typeof rawA === 'object' && rawA !== null ? rawA : {};
           if (isMounted) {
+            const resolvedMid = aData.merchantId ?? aData.MerchantId ?? (isMerchantUser ? currentMerchantId : targetMid);
+            const resolvedBid = aData.branchId ?? aData.BranchId ?? '';
+
             setFormData({
-              agentName: aData.name || aData.agentName || '',
-              email: aData.email || '',
-              phone: aData.phone || '',
-              agentCode: aData.agentCode || '',
-              merchantId: aData.merchantId ? String(aData.merchantId) : '',
-              branchId: aData.branchId ? String(aData.branchId) : '',
-              commissionRate: aData.commissionRate || '',
-              isActive: aData.isActive !== undefined ? aData.isActive : true,
-              address: aData.address || '',
-              city: aData.city || '',
-              state: aData.state || '',
-              zipCode: aData.zipCode || '',
-              description: aData.description || '',
+              agentName: aData.name || aData.agentName || aData.AgentName || aData.Name || '',
+              email: aData.email || aData.Email || '',
+              phone: aData.phone || aData.Phone || aData.mobile || aData.MobileNo || aData.mobileNo || '',
+              agentCode: aData.agentCode || aData.AgentCode || aData.code || aData.Code || aData.external_agent_id || aData.ExternalAgentId || '',
+              merchantId: resolvedMid ? String(resolvedMid) : '',
+              branchId: resolvedBid ? String(resolvedBid) : '',
+              commissionRate: String(aData.commissionRate ?? aData.CommissionRate ?? '0'),
+              isActive: aData.isActive !== undefined ? Boolean(aData.isActive) : (aData.IsActive !== undefined ? Boolean(aData.IsActive) : true),
+              isVerified: aData.isVerified !== undefined ? Boolean(aData.isVerified) : (aData.IsVerified !== undefined ? Boolean(aData.IsVerified) : true),
+              address: aData.address || aData.Address || '',
+              city: aData.city || aData.City || '',
+              state: aData.state || aData.State || '',
+              zipCode: aData.zipCode || aData.ZipCode || aData.pincode || aData.Pincode || '',
+              description: aData.description || aData.Description || '',
             });
 
-            const finalMid = aData.merchantId ? String(aData.merchantId) : targetMid;
-            const selectedMerchant = safeMerchants.find(m => String(m.id) === String(finalMid));
+            // Ensure branches are loaded for this merchant if not loaded yet
+            if (resolvedMid && (!safeBranches || safeBranches.length === 0 || !isSoftwareAdmin)) {
+              try {
+                const bRes = await branchApi.getAll({ merchantId: resolvedMid });
+                const bList = bRes?.data?.data || bRes?.data || [];
+                if (Array.isArray(bList) && isMounted) {
+                  setBranches(bList);
+                }
+              } catch (e) {
+                console.warn('Error loading branches for merchant:', e);
+              }
+            }
+
+            const selectedMerchant = safeMerchants.find(m => String(m.id) === String(resolvedMid));
             if (selectedMerchant) {
               setIntegrationStatus(selectedMerchant.integrationStatus || selectedMerchant.IntegrationStatus || 'No');
             }
@@ -435,18 +452,55 @@ const AddAgent = () => {
 
     const resolvedMid = formData.merchantId ? Number(formData.merchantId) : (currentMerchantId ? Number(currentMerchantId) : null);
     const resolvedBid = formData.branchId ? Number(formData.branchId) : null;
+    const numId = isEdit && id ? (!isNaN(Number(id)) ? Number(id) : id) : undefined;
+    const resolvedCommission = formData.commissionRate !== '' && !isNaN(Number(formData.commissionRate)) ? Number(formData.commissionRate) : 0;
 
     const submitData = {
+      ...(numId !== undefined ? { id: numId, Id: numId, agentId: numId, AgentId: numId } : {}),
       ...formData,
-      name: formData.agentName,
+      name: (formData.agentName || '').trim(),
+      Name: (formData.agentName || '').trim(),
+      agentName: (formData.agentName || '').trim(),
+      AgentName: (formData.agentName || '').trim(),
+      agentCode: (formData.agentCode || '').trim(),
+      AgentCode: (formData.agentCode || '').trim(),
+      code: (formData.agentCode || '').trim(),
+      Code: (formData.agentCode || '').trim(),
+      email: (formData.email || '').trim(),
+      Email: (formData.email || '').trim(),
+      phone: (formData.phone || '').trim(),
+      Phone: (formData.phone || '').trim(),
+      mobile: (formData.phone || '').trim(),
+      MobileNo: (formData.phone || '').trim(),
       merchantId: resolvedMid,
+      MerchantId: resolvedMid,
       branchId: resolvedBid,
+      BranchId: resolvedBid,
+      commissionRate: resolvedCommission,
+      CommissionRate: resolvedCommission,
+      address: formData.address || '',
+      Address: formData.address || '',
+      city: formData.city || '',
+      City: formData.city || '',
+      state: formData.state || '',
+      State: formData.state || '',
+      zipCode: formData.zipCode || '',
+      ZipCode: formData.zipCode || '',
+      pincode: formData.zipCode || '',
+      Pincode: formData.zipCode || '',
+      description: formData.description || '',
+      Description: formData.description || '',
       external_agent_id: (formData.agentCode || '').trim(),
+      ExternalAgentId: (formData.agentCode || '').trim(),
       source_system: 'EXTERNAL',
-      isVerified: isSoftwareAdmin ? true : false,
-      isApproved: isSoftwareAdmin ? true : false,
+      SourceSystem: 'EXTERNAL',
+      isActive: formData.isActive !== undefined ? Boolean(formData.isActive) : true,
+      IsActive: formData.isActive !== undefined ? Boolean(formData.isActive) : true,
+      isVerified: isSoftwareAdmin ? true : (formData.isVerified !== undefined ? Boolean(formData.isVerified) : false),
+      IsVerified: isSoftwareAdmin ? true : (formData.isVerified !== undefined ? Boolean(formData.isVerified) : false),
+      isApproved: isSoftwareAdmin ? true : (formData.isApproved !== undefined ? Boolean(formData.isApproved) : false),
+      IsApproved: isSoftwareAdmin ? true : (formData.isApproved !== undefined ? Boolean(formData.isApproved) : false),
     };
-    delete submitData.agentName;
 
     try {
       if (isEdit) {
@@ -462,7 +516,8 @@ const AddAgent = () => {
       }
       navigate('/agents');
     } catch (error) {
-      showError(error.response?.data?.message || 'Failed to save agent. Please verify all required entries.', 'Agent Save Failed');
+      console.error('Save agent error:', error);
+      showError(error.response?.data?.message || error.message || 'Failed to save agent. Please verify all required entries.', 'Agent Save Failed');
     } finally {
       setLoading(false);
     }
@@ -596,7 +651,7 @@ const AddAgent = () => {
                   value={formData.branchId || ''}
                   onChange={handleBranchChange}
                   className={`branch-select-dropdown ${errors.branchId ? 'input-error' : ''}`}
-                  disabled={isEdit || (isSoftwareAdmin && !formData.merchantId)}
+                  disabled={isSoftwareAdmin && !formData.merchantId}
                 >
                   <option value="">
                     {isSoftwareAdmin && !formData.merchantId 
@@ -692,7 +747,6 @@ const AddAgent = () => {
                     value={formData.agentName || ''}
                     onChange={handleChange}
                     placeholder="e.g. Rahul Sharma"
-                    disabled={isEdit}
                     className={errors.agentName ? 'input-error' : ''}
                   />
                 )}
@@ -719,7 +773,6 @@ const AddAgent = () => {
                     value={formData.agentCode || ''}
                     onChange={handleChange}
                     placeholder="e.g. AG-2041"
-                    disabled={isEdit}
                     className={errors.agentCode ? 'input-error font-mono' : 'font-mono'}
                   />
                 )}
@@ -804,7 +857,7 @@ const AddAgent = () => {
                 districtLabel="District / City *"
                 stateError={errors.state}
                 districtError={errors.city}
-                disabled={isEdit && !isSoftwareAdmin}
+                disabled={false}
               />
 
               <div className="form-group">

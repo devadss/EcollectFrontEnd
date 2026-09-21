@@ -592,23 +592,23 @@ const Agents = () => {
                           <AgentIcons.Eye />
                           <span>View Profile</span>
                         </button>
+                        {(isSoftwareAdmin || isMerchantUser) && (
+                          <button 
+                            className="action-icon-btn is-edit" 
+                            onClick={() => navigate(`/agents/edit/${agent.id}`)}
+                            title="Edit Agent"
+                          >
+                            <AgentIcons.Edit />
+                          </button>
+                        )}
                         {isSoftwareAdmin && (
-                          <>
-                            <button 
-                              className="action-icon-btn is-edit" 
-                              onClick={() => navigate(`/agents/edit/${agent.id}`)}
-                              title="Edit Agent"
-                            >
-                              <AgentIcons.Edit />
-                            </button>
-                            <button 
-                              className="action-icon-btn is-delete" 
-                              onClick={() => handleDelete(agent.id)}
-                              title="Delete Agent"
-                            >
-                              <AgentIcons.Trash />
-                            </button>
-                          </>
+                          <button 
+                            className="action-icon-btn is-delete" 
+                            onClick={() => handleDelete(agent.id)}
+                            title="Delete Agent"
+                          >
+                            <AgentIcons.Trash />
+                          </button>
                         )}
                       </div>
 
@@ -699,15 +699,15 @@ const Agents = () => {
                             <button className="table-action-btn is-view" onClick={() => navigate(`/agents/${agent.id}`)} title="View Agent">
                               <AgentIcons.Eye />
                             </button>
+                            {(isSoftwareAdmin || isMerchantUser) && (
+                              <button className="table-action-btn is-edit" onClick={() => navigate(`/agents/edit/${agent.id}`)} title="Edit Agent">
+                                <AgentIcons.Edit />
+                              </button>
+                            )}
                             {isSoftwareAdmin && (
-                              <>
-                                <button className="table-action-btn is-edit" onClick={() => navigate(`/agents/edit/${agent.id}`)} title="Edit Agent">
-                                  <AgentIcons.Edit />
-                                </button>
-                                <button className="table-action-btn is-delete" onClick={() => handleDelete(agent.id)} title="Delete Agent">
-                                  <AgentIcons.Trash />
-                                </button>
-                              </>
+                              <button className="table-action-btn is-delete" onClick={() => handleDelete(agent.id)} title="Delete Agent">
+                                <AgentIcons.Trash />
+                              </button>
                             )}
                           </div>
                         </td>

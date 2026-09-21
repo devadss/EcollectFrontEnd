@@ -21,8 +21,8 @@ const AgentDetails = () => {
       setLoading(true);
       setError(null);
       const res = await agentApi.getById(id);
-      //console.log(res.data);
-      setAgent(res.data);
+      const raw = res?.data?.data || res?.data;
+      setAgent(raw);
     } catch (error) {
       console.error('Error loading agent:', error);
       setError(error.message || 'Failed to load agent details');
@@ -78,7 +78,9 @@ const AgentDetails = () => {
 
   const rawRole = (localStorage.getItem('user_role') || localStorage.getItem('role') || authUser?.role || '').toLowerCase().trim();
   const normRole = rawRole.replace(/[^a-z0-9]/g, '');
+  const isMerchantUser = normRole.includes('merchant');
   const isSoftwareAdmin = (normRole.includes('software') || normRole.includes('superadmin') || normRole === 'admin') && !normRole.includes('merchant') && !normRole.includes('branch') && !normRole.includes('agent');
+  const canEdit = isSoftwareAdmin || isMerchantUser;
 
   return (
     <DashboardLayout role={rawRole}>
@@ -90,7 +92,7 @@ const AgentDetails = () => {
           </div>
           <div className="header-actions">
             <button className="btn-outline" onClick={() => navigate('/agents')}>← Back</button>
-            {isSoftwareAdmin && (
+            {canEdit && (
               <button className="btn-primary" onClick={() => navigate(`/agents/edit/${id}`)}>✏️ Edit Agent</button>
             )}
           </div>
