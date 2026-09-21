@@ -495,11 +495,22 @@ const Reports = () => {
     return filteredTransactions.slice(start, start + ledgerPageSize);
   }, [filteredTransactions, ledgerPage, ledgerPageSize]);
 
+  // Helper to strictly identify completed/successful transactions (excluding pending QRs and failed attempts)
+  const isTxSuccess = (t) => {
+    if (!t) return false;
+    const st = (t.statusNorm || t.status || t.Status || t.transactionStatus || t.TransactionStatus || '').toString().toUpperCase().trim();
+    if (st === 'SUCCESS' || st === 'COMPLETED' || st === 'SETTLED' || st === 'CAPTURED' || st === 'PAID' || st === 'SUCCESSFUL') return true;
+    if (st.includes('SUCCESS') || st.includes('COMPLETED') || st.includes('SETTLE') || st.includes('CAPTURED') || st.includes('PAID')) {
+      if (!st.includes('PENDING') && !st.includes('FAIL') && !st.includes('CANCEL') && !st.includes('REJECT') && !st.includes('INITIAT') && !st.includes('QR')) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   // Dynamic KPI Metrics
   const metrics = useMemo(() => {
-    const successfulTx = filteredTransactions.filter(
-      t => t.statusNorm === 'SUCCESS' || t.statusNorm === 'COMPLETED' || t.statusNorm === 'SETTLED'
-    );
+    const successfulTx = filteredTransactions.filter(isTxSuccess);
     const grossVolume = successfulTx.reduce((sum, t) => sum + (t.amountNum || 0), 0);
     const totalCount = filteredTransactions.length;
     const successRate = totalCount > 0 ? ((successfulTx.length / totalCount) * 100).toFixed(1) : '100.0';
@@ -523,16 +534,17 @@ const Reports = () => {
   // DYNAMIC CHART DATASETS FROM LIVE FILTERED TRANSACTIONS
   // ============================================================
 
-  // 1. Settlement Trajectory Bar Chart
+  // 1. Settlement Trajectory Bar Chart (Derived strictly from SUCCESSFUL transactions)
   const trajectoryChartData = useMemo(() => {
     const now = new Date();
     let labels = [];
     let dataPoints = [];
+    const successfulFilteredTx = filteredTransactions.filter(isTxSuccess);
 
     if (activePeriod === 'TODAY' || (startDate && startDate === endDate)) {
       labels = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '23:59'];
       const buckets = [0, 0, 0, 0, 0, 0, 0];
-      filteredTransactions.forEach(t => {
+      successfulFilteredTx.forEach(t => {
         const hour = t.dateObj.getHours();
         const amt = t.amountNum || 0;
         if (hour < 4) buckets[0] += amt;
@@ -552,7 +564,7 @@ const Reports = () => {
         d.setDate(d.getDate() - i);
         labels.push(days[d.getDay()]);
       }
-      filteredTransactions.forEach(t => {
+      successfulFilteredTx.forEach(t => {
         const diffDays = Math.floor((now - t.dateObj) / (1000 * 60 * 60 * 24));
         if (diffDays >= 0 && diffDays < 7) {
           const idx = 6 - diffDays;
@@ -563,7 +575,7 @@ const Reports = () => {
     } else if (activePeriod === 'MONTH') {
       labels = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
       const buckets = [0, 0, 0, 0];
-      filteredTransactions.forEach(t => {
+      successfulFilteredTx.forEach(t => {
         const diffDays = Math.floor((now - t.dateObj) / (1000 * 60 * 60 * 24));
         if (diffDays < 7) buckets[3] += t.amountNum || 0;
         else if (diffDays < 14) buckets[2] += t.amountNum || 0;
@@ -574,7 +586,7 @@ const Reports = () => {
     } else if (activePeriod === 'QUARTER') {
       labels = ['Q1 (Jan-Mar)', 'Q2 (Apr-Jun)', 'Q3 (Jul-Sep)', 'Q4 (Oct-Dec)'];
       const buckets = [0, 0, 0, 0];
-      filteredTransactions.forEach(t => {
+      successfulFilteredTx.forEach(t => {
         const qIdx = Math.floor(t.dateObj.getMonth() / 3);
         if (qIdx >= 0 && qIdx < 4) buckets[qIdx] += t.amountNum || 0;
       });
@@ -582,7 +594,7 @@ const Reports = () => {
     } else {
       labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const buckets = new Array(12).fill(0);
-      filteredTransactions.forEach(t => {
+      successfulFilteredTx.forEach(t => {
         const mIdx = t.dateObj.getMonth();
         if (mIdx >= 0 && mIdx < 12) buckets[mIdx] += t.amountNum || 0;
       });
@@ -602,11 +614,12 @@ const Reports = () => {
     };
   }, [filteredTransactions, activePeriod, startDate, endDate]);
 
-  // 2. Channel Share Doughnut Chart (UPI vs CASH)
+  // 2. Channel Share Doughnut Chart (UPI vs CASH from SUCCESSFUL transactions)
   const channelShareData = useMemo(() => {
     const counts = { 'UPI': 0, 'CASH': 0 };
+    const successfulFilteredTx = filteredTransactions.filter(isTxSuccess);
 
-    filteredTransactions.forEach(t => {
+    successfulFilteredTx.forEach(t => {
       const mode = (t.paymentMode || 'UPI').toUpperCase();
       if (mode.includes('CASH')) counts['CASH'] += (t.amountNum || 1);
       else counts['UPI'] += (t.amountNum || 1);
@@ -661,9 +674,9 @@ const Reports = () => {
     const counts = { Success: 0, Pending: 0, Failed: 0 };
 
     filteredTransactions.forEach(t => {
-      const st = t.statusNorm;
-      if (st.includes('SUCCESS') || st.includes('COMPLETED') || st.includes('SETTLED')) counts.Success++;
-      else if (st.includes('PEND') || st.includes('PROCESS')) counts.Pending++;
+      const st = (t.statusNorm || t.status || '').toUpperCase();
+      if (isTxSuccess(t)) counts.Success++;
+      else if (st.includes('PEND') || st.includes('PROCESS') || st.includes('INIT') || st.includes('QR')) counts.Pending++;
       else counts.Failed++;
     });
 
@@ -696,7 +709,7 @@ const Reports = () => {
 
     return filteredM.map(m => {
       const mTx = transactions.filter(t => String(t.merchantId) === String(m.id));
-      const mSuccessTx = mTx.filter(t => t.statusNorm === 'SUCCESS' || t.statusNorm === 'COMPLETED' || t.statusNorm === 'SETTLED');
+      const mSuccessTx = mTx.filter(isTxSuccess);
       const mVolume = mSuccessTx.reduce((sum, t) => sum + (t.amountNum || 0), 0);
       const mBranches = branches.filter(b => String(b.merchantId) === String(m.id)).length;
       const mAgents = agents.filter(a => String(a.merchantId) === String(m.id)).length;

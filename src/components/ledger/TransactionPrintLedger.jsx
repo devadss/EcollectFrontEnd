@@ -22,10 +22,18 @@ const TransactionPrintLedger = ({
     hour12: true
   });
 
-  const totalVol = transactions.reduce((acc, t) => acc + (Number(t.amount || t.Amount) || 0), 0);
-  const clearedCount = transactions.filter(t => (t.status || '').toLowerCase() === 'success' || (t.status || '').toLowerCase() === 'completed').length;
+  const isTxSuccess = (t) => {
+    const st = (t.status || t.Status || t.transactionStatus || '').toString().toLowerCase().trim();
+    return st === 'success' || st === 'completed' || st === 'settled' || st === 'captured';
+  };
+  const successfulTxns = transactions.filter(isTxSuccess);
+  const totalVol = successfulTxns.reduce((acc, t) => acc + (Number(t.amount || t.Amount) || 0), 0);
+  const clearedCount = successfulTxns.length;
   const failedCount = transactions.filter(t => (t.status || '').toLowerCase() === 'failed').length;
-  const pendingCount = transactions.filter(t => (t.status || '').toLowerCase() === 'pending').length;
+  const pendingCount = transactions.filter(t => {
+    const st = (t.status || '').toLowerCase();
+    return st.includes('pend') || st.includes('init') || st.includes('qr');
+  }).length;
 
   return (
     <div className="printable-ledger-sheet">

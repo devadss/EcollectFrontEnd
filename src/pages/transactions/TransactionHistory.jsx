@@ -577,26 +577,42 @@ const TransactionHistory = () => {
     });
   }, [transactions, filter, activeMerchantId, selectedMerchant, branches, agents, branchSelfId, isBranchUser, isMerchantUser]);
 
-  // Statistics
+  // Statistics (Excluding pending QR creations & failed attempts from Gross Volume)
+  const isTxSuccess = useCallback((t) => {
+    const st = String(t.status || t.Status || t.transactionStatus || '').toLowerCase().trim();
+    return st === 'success' || st === 'completed' || st === 'settled' || st === 'successful' || st === 'captured';
+  }, []);
+
   const stats = useMemo(() => {
     const total = filteredTransactions.length;
-    const successful = filteredTransactions.filter(t => (t.status || '').toLowerCase() === 'success' || (t.status || '').toLowerCase() === 'completed').length;
-    const failed = filteredTransactions.filter(t => (t.status || '').toLowerCase() === 'failed').length;
-    const pending = filteredTransactions.filter(t => (t.status || '').toLowerCase() === 'pending' || (t.status || '').toLowerCase() === 'processing').length;
-    const totalAmount = filteredTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    const successfulTxns = filteredTransactions.filter(isTxSuccess);
+    const successful = successfulTxns.length;
+    const failed = filteredTransactions.filter(t => {
+      const st = String(t.status || '').toLowerCase().trim();
+      return st === 'failed' || st === 'declined' || st === 'rejected' || st === 'cancelled' || st === 'error';
+    }).length;
+    const pending = filteredTransactions.filter(t => {
+      const st = String(t.status || '').toLowerCase().trim();
+      return st === 'pending' || st === 'processing' || st === 'initiated' || st === 'qr_generated' || st === 'created';
+    }).length;
+
+    // Gross Processed Volume strictly sums ONLY completed/cleared payments
+    const totalAmount = successfulTxns.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
     const successRate = total > 0 ? ((successful / total) * 100).toFixed(1) : '100';
 
     return { total, successful, failed, pending, totalAmount, successRate };
-  }, [filteredTransactions]);
+  }, [filteredTransactions, isTxSuccess]);
 
-  // Dynamic Weekly / Daily Volume Trajectory derived strictly from filtered backend transactions
+  // Dynamic Weekly / Daily Volume Trajectory derived strictly from SUCCESSFUL filtered backend transactions
   const dynamicVolumeChart = useMemo(() => {
+    const successfulTxns = filteredTransactions.filter(isTxSuccess);
+
     // If a single day is filtered (e.g. TODAY or same from/to date), group by time intervals
     if (filter.datePeriod === 'TODAY' || (filter.dateFrom && filter.dateFrom === filter.dateTo)) {
       const intervals = ['00-04h', '04-08h', '08-12h', '12-16h', '16-20h', '20-24h'];
       const counts = [0, 0, 0, 0, 0, 0];
 
-      filteredTransactions.forEach(t => {
+      successfulTxns.forEach(t => {
         const tDate = t.dateObj || getTxDate(t);
         if (tDate) {
           const h = tDate.getHours();
@@ -624,7 +640,7 @@ const TransactionHistory = () => {
       days.push(dayLabel);
 
       const dStr = formatLocalDate(d);
-      const dayTxns = filteredTransactions.filter(t => {
+      const dayTxns = successfulTxns.filter(t => {
         const tDate = t.dateObj || getTxDate(t);
         return tDate ? formatLocalDate(tDate) === dStr : false;
       });
@@ -634,21 +650,23 @@ const TransactionHistory = () => {
     }
 
     return { labels: days, data: counts };
-  }, [filteredTransactions, filter.datePeriod, filter.dateFrom, filter.dateTo]);
+  }, [filteredTransactions, filter.datePeriod, filter.dateFrom, filter.dateTo, isTxSuccess]);
 
   const peakTxns = useMemo(() => {
     if (!dynamicVolumeChart.data || dynamicVolumeChart.data.length === 0) return 0;
     return Math.max(...dynamicVolumeChart.data);
   }, [dynamicVolumeChart]);
 
-  // Dynamic Payment Methods Split derived strictly from filtered backend transactions
+  // Dynamic Payment Methods Split derived strictly from SUCCESSFUL filtered backend transactions
   const dynamicPaymentMethods = useMemo(() => {
     const modeCounts = {
       'UPI': 0,
       'CASH': 0
     };
 
-    filteredTransactions.forEach(t => {
+    const successfulTxns = filteredTransactions.filter(isTxSuccess);
+
+    successfulTxns.forEach(t => {
       const mode = (t.paymentMode || 'UPI').toUpperCase();
       if (mode.includes('CASH')) {
         modeCounts['CASH'] += (Number(t.amount) || 1);
@@ -670,7 +688,7 @@ const TransactionHistory = () => {
       topMethod: totalVal > 0 ? labels[maxIndex] : 'No Txns',
       topPercent: totalVal > 0 ? topPercent : 0
     };
-  }, [filteredTransactions]);
+  }, [filteredTransactions, isTxSuccess]);
 
   // Pagination Computations
   const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / pageSize));

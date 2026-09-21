@@ -457,7 +457,12 @@ const MerchantDashboard = () => {
           data: data.volumeChart.data
         });
       } else if (txList.length > 0) {
-        // Dynamically compute volume chart from real transactions
+        // Dynamically compute volume chart from real SUCCESSFUL transactions (excluding pending QRs)
+        const successfulTxs = txList.filter(t => {
+          const st = String(t.status || '').toUpperCase().trim();
+          return st === 'SUCCESS' || st === 'COMPLETED' || st === 'SETTLED' || st === 'SUCCESSFUL' || st === 'CAPTURED';
+        });
+
         const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         const now = new Date();
         const chartLabels = [];
@@ -470,7 +475,7 @@ const MerchantDashboard = () => {
         }
 
         let matched = 0;
-        txList.forEach(t => {
+        successfulTxs.forEach(t => {
           const diffDays = Math.floor((now - t.dateObj) / 86400000);
           if (diffDays >= 0 && diffDays < 7) {
             const idx = 6 - diffDays;
@@ -480,7 +485,7 @@ const MerchantDashboard = () => {
         });
 
         if (matched === 0) {
-          txList.forEach(t => {
+          successfulTxs.forEach(t => {
             const dIdx = t.dateObj.getDay();
             const targetDay = days[dIdx];
             const lIdx = chartLabels.lastIndexOf(targetDay);
@@ -501,8 +506,13 @@ const MerchantDashboard = () => {
           value: Number(m.volume) || Number(m.count) || Number(m.value) || 0
         })));
       } else if (txList.length > 0) {
+        const successfulTxs = txList.filter(t => {
+          const st = String(t.status || '').toUpperCase().trim();
+          return st === 'SUCCESS' || st === 'COMPLETED' || st === 'SETTLED' || st === 'SUCCESSFUL' || st === 'CAPTURED';
+        });
+
         const methodCounts = {};
-        txList.forEach(t => {
+        successfulTxs.forEach(t => {
           const m = t.mode || 'UPI';
           methodCounts[m] = (methodCounts[m] || 0) + t.amount;
         });
