@@ -103,6 +103,62 @@ const MerchIcons = {
   )
 };
 
+// Robust Merchant Rate Extractor supporting all backend DTO/DB property variations
+export const extractMerchantRates = (m) => {
+  if (!m) {
+    return {
+      pgVendorPercentage: 0.15,
+      platformPercentage: 0.50,
+      settlementPercentage: 0.65
+    };
+  }
+
+  // PG Vendor Rate candidates
+  const rawPg = m.pgVendorPercentage ?? m.PgVendorPercentage ?? m.pg_vendor_percentage ?? 
+                m.vendorPercentage ?? m.VendorPercentage ?? m.vendor_percentage ??
+                m.pgVendorRate ?? m.PgVendorRate ?? m.pgPercentage ?? m.PgPercentage ?? 
+                m.pgRate ?? m.PgRate ?? m.gatewayPercentage ?? m.GatewayPercentage ?? 
+                m.pgFeePercentage ?? m.vendorRate ?? m.VendorRate ?? m.pgCut ?? m.pg_fee_rate;
+
+  // Platform Margin Rate candidates
+  const rawPlat = m.platformPercentage ?? m.PlatformPercentage ?? m.platform_percentage ?? 
+                  m.platformCommission ?? m.PlatformCommission ?? m.platform_commission ??
+                  m.platformRate ?? m.PlatformRate ?? m.ourPercentage ?? m.OurPercentage ?? 
+                  m.commissionPercentage ?? m.CommissionPercentage ?? m.commission_percentage ?? 
+                  m.marginPercentage ?? m.MarginPercentage ?? m.platformMargin ?? m.PlatformMargin ??
+                  m.ourMargin ?? m.OurMargin ?? m.ourCommission;
+
+  // Settlement / Total TDR Rate candidates
+  const rawSet = m.settlementPercentage ?? m.SettlementPercentage ?? m.settlement_percentage ?? 
+                 m.tdrPercentage ?? m.TdrPercentage ?? m.tdr_percentage ?? 
+                 m.tdrRate ?? m.TdrRate ?? m.totalTdr ?? m.TotalTdr ?? 
+                 m.settlementRate ?? m.SettlementRate ?? m.mdrPercentage ?? m.mdrRate;
+
+  let pgVendorPercentage = 0.15;
+  if (rawPg !== undefined && rawPg !== null && rawPg !== '') {
+    const parsed = Number(rawPg);
+    if (!isNaN(parsed) && parsed >= 0) pgVendorPercentage = parsed;
+  }
+
+  let platformPercentage = 0.50;
+  if (rawPlat !== undefined && rawPlat !== null && rawPlat !== '') {
+    const parsed = Number(rawPlat);
+    if (!isNaN(parsed) && parsed >= 0) platformPercentage = parsed;
+  }
+
+  let settlementPercentage = Number((pgVendorPercentage + platformPercentage).toFixed(2));
+  if (rawSet !== undefined && rawSet !== null && rawSet !== '') {
+    const parsed = Number(rawSet);
+    if (!isNaN(parsed) && parsed > 0) settlementPercentage = parsed;
+  }
+
+  return {
+    pgVendorPercentage,
+    platformPercentage,
+    settlementPercentage
+  };
+};
+
 const Merchants = () => {
   const navigate = useNavigate();
   const [merchants, setMerchants] = useState([]);
@@ -173,11 +229,37 @@ const Merchants = () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await merchantApi.getAll();
-      const listData = res?.data?.data || res?.data || [];
+      const [merchRes, configRes] = await Promise.allSettled([
+        merchantApi.getAll(),
+        merchantApi.getAllMerchantConfig ? merchantApi.getAllMerchantConfig() : Promise.resolve(null)
+      ]);
+
+      const listData = merchRes.status === 'fulfilled' ? (merchRes.value?.data?.data || merchRes.value?.data || []) : [];
       const safeData = Array.isArray(listData) ? listData : [];
 
-      setMerchants(safeData);
+      let rawConfigs = [];
+      if (configRes?.status === 'fulfilled' && configRes.value) {
+        const c = configRes.value?.data?.data || configRes.value?.data?.items || configRes.value?.data;
+        if (Array.isArray(c)) rawConfigs = c;
+      }
+
+      const configMap = {};
+      rawConfigs.forEach(cfg => {
+        const mKey = String(cfg.merchantId || cfg.merchant_id || cfg.id || '');
+        if (mKey) configMap[mKey] = cfg;
+      });
+
+      const enriched = safeData.map(m => {
+        const cfg = configMap[String(m.id || m.merchantId || '')] || {};
+        const rates = extractMerchantRates({ ...cfg, ...m });
+        return {
+          ...m,
+          ...rates,
+          merchantName: m.merchantName || m.companyLegalName || m.merchantTradeName || m.name || cfg.merchantName || `Merchant #${m.id}`
+        };
+      });
+
+      setMerchants(enriched);
     } catch (err) {
       console.error('Error loading merchants:', err);
       setError(err?.response?.data?.message || err.message || 'Failed to load merchants directory');
@@ -561,6 +643,17 @@ const Merchants = () => {
                             <span className="detail-val font-mono text-amber">{m.panNumber}</span>
                           </div>
                         )}
+                        <div className="detail-row" style={{ alignItems: 'center' }}>
+                          <span className="detail-label">TDR Rates:</span>
+                          <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                            <span className="font-mono font-bold" style={{ color: '#10b981', fontSize: '12px' }}>
+                              {m.settlementPercentage ?? '0.65'}% TDR
+                            </span>
+                            <div style={{ fontSize: '10.5px', color: '#94a3b8' }}>
+                              PG: {m.pgVendorPercentage ?? '0.15'}% | Margin: {m.platformPercentage ?? '0.50'}%
+                            </div>
+                          </div>
+                        </div>
                         <div className="detail-row">
                           <span className="detail-label">KYC Status:</span>
                           <span className={`kyc-status-chip ${isKycApproved ? 'approved' : 'pending'}`}>
@@ -604,6 +697,7 @@ const Merchants = () => {
                     <th>Merchant Partner</th>
                     <th>Contact Credentials</th>
                     <th>Portal Password</th>
+                    <th>TDR Rates (%)</th>
                     <th>Business Category</th>
                     <th>Integration Gateway</th>
                     <th>Compliance Status</th>
@@ -613,7 +707,7 @@ const Merchants = () => {
                 <tbody>
                   {filteredMerchants.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="empty-merch-cell">
+                      <td colSpan="9" className="empty-merch-cell">
                         <div className="empty-merch-box">
                           <span className="empty-glyph">🏪</span>
                           <h4>No Merchant Partners Found</h4>
@@ -721,6 +815,18 @@ const Merchants = () => {
                                 </div>
                               );
                             })()}
+                          </td>
+
+                          {/* TDR Commission Column */}
+                          <td>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                              <span style={{ color: '#10b981', fontWeight: '800', fontSize: '12.5px' }}>
+                                {m.settlementPercentage ?? '0.65'}% TDR
+                              </span>
+                              <span style={{ fontSize: '10.5px', color: '#94a3b8' }}>
+                                PG: {m.pgVendorPercentage ?? '0.15'}% | Margin: {m.platformPercentage ?? '0.50'}%
+                              </span>
+                            </div>
                           </td>
 
                           {/* Business Category */}
