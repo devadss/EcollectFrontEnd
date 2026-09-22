@@ -260,7 +260,7 @@ export const extractMerchantRates = (m) => {
   let settlementPercentage = Number((pgVendorPercentage + platformPercentage).toFixed(2));
   if (rawSet !== undefined && rawSet !== null && rawSet !== '') {
     const parsed = Number(rawSet);
-    if (!isNaN(parsed) && parsed > 0) settlementPercentage = parsed;
+    if (!isNaN(parsed) && parsed >= 0) settlementPercentage = parsed;
   }
 
   return {

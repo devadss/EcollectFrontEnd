@@ -264,14 +264,68 @@ export const transactionApi = {
 // MERCHANT API
 // ============================================================
 export const merchantApi = {
-  getAll: (params) => {
-    console.log('📡 merchantApi.getAll called');
-    return api.get('/Merchant/get-all', { params: typeof params === 'object' ? params : undefined })
-      .catch(() => api.get('/Merchant', { params: typeof params === 'object' ? params : undefined }));
+  getAll: async (params) => {
+    console.log('📡 merchantApi.getAll called with params:', params);
+    try {
+      const res = await api.get('/Merchant/get-all', { params: typeof params === 'object' ? params : undefined })
+        .catch(() => api.get('/Merchant', { params: typeof params === 'object' ? params : undefined }))
+        .catch(() => api.get('/merchant/get-all', { params: typeof params === 'object' ? params : undefined }))
+        .catch(() => api.get('/merchant', { params: typeof params === 'object' ? params : undefined }));
+
+      let listData = res?.data?.data || res?.data?.items || res?.data || [];
+      if (!Array.isArray(listData) || listData.length === 0) return res;
+
+      // Check if merchant list items lack rate percentage properties
+      const needsHydration = listData.some(m => {
+        const idVal = m?.id ?? m?.merchantId ?? m?.MerchantId;
+        return idVal && (
+          m.pgVendorPercentage == null && 
+          m.PgVendorPercentage == null && 
+          m.vendorPercentage == null &&
+          m.platformPercentage == null && 
+          m.PlatformPercentage == null &&
+          m.settlementPercentage == null &&
+          m.SettlementPercentage == null
+        );
+      });
+
+      if (needsHydration) {
+        console.log('🔄 Hydrating merchant percentage details from /Merchant/{id}...');
+        const hydratedList = await Promise.all(
+          listData.map(async (m) => {
+            const mid = m?.id ?? m?.merchantId ?? m?.MerchantId;
+            if (!mid) return m;
+            try {
+              const dRes = await api.get(`/Merchant/${mid}`).catch(() => api.get(`/merchant/${mid}`));
+              const detailed = dRes?.data?.data || dRes?.data;
+              if (detailed && typeof detailed === 'object') {
+                return { ...m, ...detailed };
+              }
+            } catch (e) {
+              // Silently fallback to base merchant
+            }
+            return m;
+          })
+        );
+
+        if (res?.data?.data && Array.isArray(res.data.data)) {
+          res.data.data = hydratedList;
+        } else if (Array.isArray(res?.data)) {
+          res.data = hydratedList;
+        }
+      }
+
+      return res;
+    } catch (err) {
+      console.warn('⚠️ Error in merchantApi.getAll, attempting fallback:', err);
+      return api.get('/Merchant', { params: typeof params === 'object' ? params : undefined });
+    }
   },
   getById: (id) => {
     console.log('📡 merchantApi.getById called for id:', id);
-    return api.get(`/Merchant/${id}`);
+    return api.get(`/Merchant/${id}`)
+      .catch(() => api.get(`/Merchant/get-by-id/${id}`))
+      .catch(() => api.get(`/merchant/${id}`));
   },
   create: (data) => {
     console.log('📡 merchantApi.create called with data:', data);
