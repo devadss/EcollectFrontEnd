@@ -17,6 +17,7 @@ import {
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
 import { dashboardApi, transactionApi } from '../../services/api';
+import { resolveTransactionStatus, isTransactionSuccess } from '../../utils/transactionUtils';
 import { getDayShiftState, saveDayShiftState, calculateDayEndSummary, runGoLivePreFlightCheck } from '../../services/dayOperationsService';
 import './BranchDashboard.css';
 
@@ -299,7 +300,7 @@ const BranchDashboard = () => {
               customer: t.customer || t.Customer || t.customerName || t.CustomerName || 'Customer',
               amount: amt,
               mode: (t.paymentMode || t.PaymentMode || t.method || t.Method || t.mode || 'UPI').toUpperCase(),
-              status: (t.status || t.Status || t.transactionStatus || 'SUCCESS').toUpperCase(),
+              status: resolveTransactionStatus(t),
               dateObj: isNaN(parsedD.getTime()) ? new Date() : parsedD,
               time: rawD ? new Date(rawD).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) : 'Recently'
             };
@@ -325,17 +326,8 @@ const BranchDashboard = () => {
         setRecentTxns([]);
       }
 
-      // Helper to strictly identify completed/successful transactions (excluding pending QRs and failed attempts)
       const isTxSuccess = (t) => {
-        if (!t) return false;
-        const st = String(t.status || t.Status || t.transactionStatus || '').toUpperCase().trim();
-        if (st === 'SUCCESS' || st === 'COMPLETED' || st === 'SETTLED' || st === 'CAPTURED' || st === 'PAID' || st === 'SUCCESSFUL') return true;
-        if (st.includes('SUCCESS') || st.includes('COMPLETED') || st.includes('SETTLE') || st.includes('CAPTURED') || st.includes('PAID')) {
-          if (!st.includes('PENDING') && !st.includes('FAIL') && !st.includes('CANCEL') && !st.includes('REJECT') && !st.includes('INITIAT') && !st.includes('QR')) {
-            return true;
-          }
-        }
-        return false;
+        return isTransactionSuccess(t);
       };
 
       const successfulTxs = txList.filter(isTxSuccess);

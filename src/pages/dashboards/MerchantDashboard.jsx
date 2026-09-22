@@ -17,6 +17,7 @@ import {
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
 import { dashboardApi, transactionApi, walletApi, branchApi, merchantApi } from '../../services/api';
+import { resolveTransactionStatus, isTransactionSuccess } from '../../utils/transactionUtils';
 import './MerchantDashboard.css';
 
 ChartJS.register(
@@ -425,7 +426,7 @@ const MerchantDashboard = () => {
               customer: t.customer || t.Customer || t.customerName || t.CustomerName || 'Customer',
               amount: amt,
               mode: (t.paymentMode || t.PaymentMode || t.method || t.Method || t.mode || 'UPI').toUpperCase(),
-              status: (t.status || t.Status || t.transactionStatus || 'SUCCESS').toUpperCase(),
+              status: resolveTransactionStatus(t),
               dateObj: isNaN(parsedD.getTime()) ? new Date() : parsedD,
               time: rawD ? new Date(rawD).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) : 'Recently'
             };
@@ -458,10 +459,7 @@ const MerchantDashboard = () => {
         });
       } else if (txList.length > 0) {
         // Dynamically compute volume chart from real SUCCESSFUL transactions (excluding pending QRs)
-        const successfulTxs = txList.filter(t => {
-          const st = String(t.status || '').toUpperCase().trim();
-          return st === 'SUCCESS' || st === 'COMPLETED' || st === 'SETTLED' || st === 'SUCCESSFUL' || st === 'CAPTURED';
-        });
+        const successfulTxs = txList.filter(isTransactionSuccess);
 
         const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         const now = new Date();

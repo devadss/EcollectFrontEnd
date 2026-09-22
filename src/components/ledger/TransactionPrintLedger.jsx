@@ -1,4 +1,5 @@
 import React from 'react';
+import { resolveTransactionStatus, isTransactionSuccess, getTransactionStatusClass } from '../../utils/transactionUtils';
 import './PrintLedger.css';
 
 /**
@@ -22,18 +23,12 @@ const TransactionPrintLedger = ({
     hour12: true
   });
 
-  const isTxSuccess = (t) => {
-    const st = (t.status || t.Status || t.transactionStatus || '').toString().toLowerCase().trim();
-    return st === 'success' || st === 'completed' || st === 'settled' || st === 'captured';
-  };
-  const successfulTxns = transactions.filter(isTxSuccess);
+  const successfulTxns = transactions.filter(isTransactionSuccess);
   const totalVol = successfulTxns.reduce((acc, t) => acc + (Number(t.amount || t.Amount) || 0), 0);
   const clearedCount = successfulTxns.length;
-  const failedCount = transactions.filter(t => (t.status || '').toLowerCase() === 'failed').length;
-  const pendingCount = transactions.filter(t => {
-    const st = (t.status || '').toLowerCase();
-    return st.includes('pend') || st.includes('init') || st.includes('qr');
-  }).length;
+  const failedCount = transactions.filter(t => resolveTransactionStatus(t) === 'FAILED').length;
+  const cancelledCount = transactions.filter(t => resolveTransactionStatus(t) === 'CANCELLED').length;
+  const pendingCount = transactions.filter(t => resolveTransactionStatus(t) === 'PENDING').length;
 
   return (
     <div className="printable-ledger-sheet">
@@ -76,9 +71,9 @@ const TransactionPrintLedger = ({
           </span>
         </div>
         <div className="summary-strip-card">
-          <span className="summary-strip-label">Failed Clearances</span>
+          <span className="summary-strip-label">Failed / Cancelled</span>
           <span className="summary-strip-val" style={{ color: '#b91c1c' }}>
-            {failedCount}
+            {failedCount + cancelledCount} ({failedCount} Fail / {cancelledCount} Cancel)
           </span>
         </div>
       </div>
@@ -108,14 +103,10 @@ const TransactionPrintLedger = ({
             </tr>
           ) : (
             transactions.map((t, idx) => {
-              const statusKey = (t.status || 'pending').toLowerCase();
               const dateStr = t.dateObj 
                 ? t.dateObj.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
                 : (t.date ? new Date(t.date).toLocaleDateString('en-IN') : '—');
 
-              const isSuccess = statusKey === 'success' || statusKey === 'completed';
-              const isFailed = statusKey === 'failed';
-              const tagClass = isSuccess ? 'is-success' : isFailed ? 'is-failed' : 'is-pending';
               const receiptVal = t.receiptNumber || t.vendorPostTransId || (t.id ? `LOC_REC_${t.id}` : '—');
               const txnVal = t.transactionId || t.id || '—';
 
@@ -147,8 +138,8 @@ const TransactionPrintLedger = ({
                     ₹{Number(t.amount || t.Amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                   <td className="text-center">
-                    <span className={`print-status-tag ${tagClass}`}>
-                      {t.status || 'Pending'}
+                    <span className={`print-status-tag ${getTransactionStatusClass(t)}`}>
+                      {resolveTransactionStatus(t)}
                     </span>
                   </td>
                   <td className="font-mono" style={{ fontSize: '7pt' }}>

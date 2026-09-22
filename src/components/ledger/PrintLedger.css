@@ -271,6 +271,12 @@
     border-color: #fecaca !important;
   }
 
+  .print-status-tag.is-cancelled {
+    background: #fff1f2 !important;
+    color: #e11d48 !important;
+    border-color: #fecdd3 !important;
+  }
+
   .print-status-tag.is-pending {
     background: #fffbeb !important;
     color: #b45309 !important;

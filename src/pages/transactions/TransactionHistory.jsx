@@ -18,6 +18,7 @@ import { transactionApi, branchApi, agentApi } from '../../services/api';
 import { useMerchantContext } from '../../context/MerchantContext';
 import { exportToCsv } from '../../utils/exportLedger';
 import TransactionPrintLedger from '../../components/ledger/TransactionPrintLedger';
+import { resolveTransactionStatus, isTransactionSuccess, getTransactionStatusClass } from '../../utils/transactionUtils';
 import './TransactionHistory.css';
 
 ChartJS.register(
@@ -108,6 +109,7 @@ export const normalizeTransaction = (t) => {
     t.amount ?? t.Amount ?? t.netAmount ?? t.NetAmount ?? t.totalAmount ?? t.TotalAmount ??
     t.transactionAmount ?? t.TransactionAmount ?? t.sale_amount ?? t.paidAmount ?? t.PaidAmount ?? 0
   );
+  const resolvedStatus = resolveTransactionStatus(t);
   return {
     ...t,
     id: t.id ?? t.Id ?? t.transactionId ?? t.TransactionId,
@@ -118,7 +120,7 @@ export const normalizeTransaction = (t) => {
     vendorPostStatus: t.vendorPostStatus || t.VendorPostStatus || t.vendor_post_status || '',
     receiptNumber: t.vendorPostTransId || t.VendorPostTransId || t.vendor_post_trans_id || t.vendorPostTransID || t.vendor_post_transid || t.receiptNumber || t.ReceiptNumber || '',
     amount: txAmount,
-    status: (t.status || t.Status || t.transactionStatus || t.TransactionStatus || 'SUCCESS').toString().toUpperCase(),
+    status: resolvedStatus,
     paymentMode: (t.paymentMode || t.PaymentMode || t.paymentMethod || t.PaymentMethod || t.method || t.Method || t.paymentChannel || t.PaymentChannel || t.mode || 'UPI').toString().toUpperCase(),
     collectionType: (t.collectionType || t.CollectionType || t.udf5 || t.Udf5 || t.product || t.Product || 'RD').toString().toUpperCase(),
     merchantId: t.merchantId ?? t.MerchantId ?? t.merchant_id ?? t.mid,
@@ -547,8 +549,9 @@ const TransactionHistory = () => {
       let matchesStatusTab = true;
       const statusLower = (t.status || '').toLowerCase();
       if (filter.statusTab === 'SUCCESS') matchesStatusTab = statusLower === 'success' || statusLower === 'completed';
-      if (filter.statusTab === 'PENDING') matchesStatusTab = statusLower === 'pending';
-      if (filter.statusTab === 'FAILED') matchesStatusTab = statusLower === 'failed';
+      if (filter.statusTab === 'PENDING') matchesStatusTab = statusLower === 'pending' || statusLower === 'processing';
+      if (filter.statusTab === 'FAILED') matchesStatusTab = statusLower === 'failed' || statusLower === 'declined' || statusLower === 'rejected';
+      if (filter.statusTab === 'CANCELLED') matchesStatusTab = statusLower === 'cancelled' || statusLower === 'cancel' || statusLower === 'aborted';
 
       let matchesDate = true;
       if (filter.dateFrom || filter.dateTo) {
@@ -578,34 +581,33 @@ const TransactionHistory = () => {
   }, [transactions, filter, activeMerchantId, selectedMerchant, branches, agents, branchSelfId, isBranchUser, isMerchantUser]);
 
   // Statistics (Excluding pending QR creations & failed attempts from Gross Volume)
-  const isTxSuccess = useCallback((t) => {
-    const st = String(t.status || t.Status || t.transactionStatus || '').toLowerCase().trim();
-    return st === 'success' || st === 'completed' || st === 'settled' || st === 'successful' || st === 'captured';
-  }, []);
-
   const stats = useMemo(() => {
     const total = filteredTransactions.length;
-    const successfulTxns = filteredTransactions.filter(isTxSuccess);
+    const successfulTxns = filteredTransactions.filter(isTransactionSuccess);
     const successful = successfulTxns.length;
     const failed = filteredTransactions.filter(t => {
       const st = String(t.status || '').toLowerCase().trim();
-      return st === 'failed' || st === 'declined' || st === 'rejected' || st === 'cancelled' || st === 'error';
+      return st === 'failed' || st === 'declined' || st === 'rejected' || st === 'error';
+    }).length;
+    const cancelled = filteredTransactions.filter(t => {
+      const st = String(t.status || '').toLowerCase().trim();
+      return st === 'cancelled' || st === 'cancel' || st === 'aborted' || st === 'timeout';
     }).length;
     const pending = filteredTransactions.filter(t => {
       const st = String(t.status || '').toLowerCase().trim();
-      return st === 'pending' || st === 'processing' || st === 'initiated' || st === 'qr_generated' || st === 'created';
+      return st === 'pending' || st === 'processing';
     }).length;
 
     // Gross Processed Volume strictly sums ONLY completed/cleared payments
     const totalAmount = successfulTxns.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
     const successRate = total > 0 ? ((successful / total) * 100).toFixed(1) : '100';
 
-    return { total, successful, failed, pending, totalAmount, successRate };
-  }, [filteredTransactions, isTxSuccess]);
+    return { total, successful, failed, cancelled, pending, totalAmount, successRate };
+  }, [filteredTransactions]);
 
   // Dynamic Weekly / Daily Volume Trajectory derived strictly from SUCCESSFUL filtered backend transactions
   const dynamicVolumeChart = useMemo(() => {
-    const successfulTxns = filteredTransactions.filter(isTxSuccess);
+    const successfulTxns = filteredTransactions.filter(isTransactionSuccess);
 
     // If a single day is filtered (e.g. TODAY or same from/to date), group by time intervals
     if (filter.datePeriod === 'TODAY' || (filter.dateFrom && filter.dateFrom === filter.dateTo)) {
@@ -650,7 +652,7 @@ const TransactionHistory = () => {
     }
 
     return { labels: days, data: counts };
-  }, [filteredTransactions, filter.datePeriod, filter.dateFrom, filter.dateTo, isTxSuccess]);
+  }, [filteredTransactions, filter.datePeriod, filter.dateFrom, filter.dateTo]);
 
   const peakTxns = useMemo(() => {
     if (!dynamicVolumeChart.data || dynamicVolumeChart.data.length === 0) return 0;
@@ -664,7 +666,7 @@ const TransactionHistory = () => {
       'CASH': 0
     };
 
-    const successfulTxns = filteredTransactions.filter(isTxSuccess);
+    const successfulTxns = filteredTransactions.filter(isTransactionSuccess);
 
     successfulTxns.forEach(t => {
       const mode = (t.paymentMode || 'UPI').toUpperCase();
@@ -688,7 +690,7 @@ const TransactionHistory = () => {
       topMethod: totalVal > 0 ? labels[maxIndex] : 'No Txns',
       topPercent: totalVal > 0 ? topPercent : 0
     };
-  }, [filteredTransactions, isTxSuccess]);
+  }, [filteredTransactions]);
 
   // Pagination Computations
   const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / pageSize));
@@ -727,11 +729,7 @@ const TransactionHistory = () => {
   };
 
   const getStatusClass = (status) => {
-    const s = (status || '').toLowerCase();
-    if (s === 'success' || s === 'completed') return 'is-success';
-    if (s === 'pending' || s === 'processing') return 'is-pending';
-    if (s === 'failed' || s === 'declined') return 'is-failed';
-    return 'is-pending';
+    return getTransactionStatusClass(status);
   };
 
   return (
@@ -802,12 +800,12 @@ const TransactionHistory = () => {
           <div className="tx-kpi-card">
             <div className="tx-kpi-glow" style={{ background: 'radial-gradient(circle, rgba(239, 68, 68, 0.25) 0%, transparent 70%)' }}></div>
             <div className="tx-kpi-header">
-              <span className="tx-kpi-label">Failed / Pending</span>
+              <span className="tx-kpi-label">Failed / Cancelled</span>
               <div className="tx-kpi-icon is-red"><TxIcons.XCircle /></div>
             </div>
-            <div className="tx-kpi-value font-mono text-red">{stats.failed + stats.pending}</div>
+            <div className="tx-kpi-value font-mono text-red">{stats.failed + stats.cancelled + stats.pending}</div>
             <div className="tx-kpi-footer">
-              <span className="tx-trend-tag is-down"><TxIcons.ArrowUp /> {stats.failed} Failed / {stats.pending} Pending</span>
+              <span className="tx-trend-tag is-down"><TxIcons.ArrowUp /> {stats.failed} Failed / {stats.cancelled} Cancelled</span>
             </div>
           </div>
 
@@ -973,6 +971,12 @@ const TransactionHistory = () => {
                   onClick={() => setFilter(prev => ({ ...prev, statusTab: 'FAILED' }))}
                 >
                   Failed
+                </button>
+                <button 
+                  className={`tab-btn ${filter.statusTab === 'CANCELLED' ? 'is-active' : ''}`}
+                  onClick={() => setFilter(prev => ({ ...prev, statusTab: 'CANCELLED' }))}
+                >
+                  Cancelled
                 </button>
               </div>
 
