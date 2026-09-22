@@ -313,6 +313,15 @@ table td {
   background: #a855f7 !important;
 }
 
+.status-pill.is-cancelled, .status-badge.is-cancelled, .badge-cancelled, .badge-status-pill.is-cancelled {
+  background: rgba(244, 63, 94, 0.12) !important;
+  color: #fda4af !important;
+  border: 1px solid rgba(244, 63, 94, 0.28) !important;
+}
+.status-pill.is-cancelled .status-dot, .badge-cancelled .status-dot, .badge-status-pill.is-cancelled .badge-status-dot {
+  background: #f43f5e !important;
+}
+
 .glass-panel {
   background: var(--bgCard);
   backdrop-filter: var(--glassBackdrop);
@@ -482,6 +491,15 @@ table td {
   background: rgba(239, 68, 68, 0.1) !important;
   color: #b91c1c !important;
   border: 1px solid rgba(239, 68, 68, 0.28) !important;
+}
+
+[data-theme-mode="light"] .status-pill.is-cancelled, 
+[data-theme-mode="light"] .status-badge.is-cancelled, 
+[data-theme-mode="light"] .badge-cancelled,
+[data-theme-mode="light"] .badge-status-pill.is-cancelled {
+  background: rgba(244, 63, 94, 0.1) !important;
+  color: #e11d48 !important;
+  border: 1px solid rgba(244, 63, 94, 0.28) !important;
 }
 
 /* Light Mode Global Typography & High Contrast Guard */

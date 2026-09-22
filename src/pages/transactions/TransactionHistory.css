@@ -815,6 +815,13 @@
 }
 .tx-status-pill.is-failed .status-dot { background: #ef4444; }
 
+.tx-status-pill.is-cancelled {
+  background: rgba(244, 63, 94, 0.12);
+  color: #f43f5e;
+  border: 1px solid rgba(244, 63, 94, 0.28);
+}
+.tx-status-pill.is-cancelled .status-dot { background: #f43f5e; }
+
 .tx-status-pill.is-refunded {
   background: rgba(99, 102, 241, 0.12);
   color: #6366f1;
@@ -1163,6 +1170,9 @@
 
 .modal-status-badge.is-failed { background: rgba(239, 68, 68, 0.12); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.25); }
 .modal-status-badge.is-failed .status-dot { background: #ef4444; }
+
+.modal-status-badge.is-cancelled { background: rgba(244, 63, 94, 0.12); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.28); }
+.modal-status-badge.is-cancelled .status-dot { background: #f43f5e; }
 
 .modal-telemetry-grid {
   display: grid;

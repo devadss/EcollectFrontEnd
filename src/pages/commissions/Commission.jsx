@@ -16,6 +16,7 @@ import LoadingAnimation from '../../components/common/LoadingAnimation';
 import { transactionApi, merchantApi, commissionApi } from '../../services/api';  
 import { useMerchantContext } from '../../context/MerchantContext';
 import { useDialog } from '../../context/DialogContext';
+import { resolveTransactionStatus } from '../../utils/transactionUtils';
 import './Commission.css';
 
 ChartJS.register(
@@ -353,10 +354,11 @@ const Commission = () => {
           ? Number(Number(rawNetSettlement).toFixed(2))
           : Number((grossAmount - totalTdrDeducted).toFixed(2));
 
-        const statusRaw = String(t.status || t.transactionStatus || t.completed === 'y' ? 'Completed' : 'Completed').toLowerCase();
+        const resolvedSt = resolveTransactionStatus(t);
         let statusNorm = 'Paid';
-        if (statusRaw.includes('pending') || statusRaw.includes('initiated')) statusNorm = 'Pending';
-        else if (statusRaw.includes('fail') || statusRaw.includes('reject')) statusNorm = 'Failed';
+        if (resolvedSt === 'CANCELLED') statusNorm = 'Cancelled';
+        else if (resolvedSt === 'PENDING') statusNorm = 'Pending';
+        else if (resolvedSt === 'FAILED') statusNorm = 'Failed';
 
         const rawDate = t.transactionDate || t.createdAt || t.date || t.transDate || new Date().toISOString();
         const dateObj = new Date(rawDate);

@@ -26,6 +26,7 @@ import {
   transactionApi, 
   settlementApi 
 } from '../../services/api';
+import { resolveTransactionStatus, isTransactionSuccess } from '../../utils/transactionUtils';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
 import './SoftwareAdminDashboard.css';
 
@@ -517,7 +518,7 @@ const SoftwareAdminDashboard = () => {
                         t.createdOn || t.CreatedOn || t.date || t.Date || t.txnDate || t.TxnDate ||
                         t.timestamp || t.Timestamp || t.trans_date || t.trans_time || t.trn_date || t.time;
         const dateObj = parseAnyDate(rawDate) || new Date();
-        const rawStatus = (t.status || t.Status || t.transactionStatus || t.TransactionStatus || 'SUCCESS').toString().toUpperCase();
+        const resolvedStatus = resolveTransactionStatus(t);
 
         return {
           ...t,
@@ -531,8 +532,8 @@ const SoftwareAdminDashboard = () => {
           amount: txAmount,
           amountNum: txAmount,
           paymentMode: (t.paymentMode || t.PaymentMode || t.paymentMethod || t.PaymentMethod || t.mode || t.paymentChannel || 'UPI').toString().toUpperCase(),
-          status: rawStatus,
-          statusNorm: rawStatus,
+          status: resolvedStatus,
+          statusNorm: resolvedStatus,
           dateObj: dateObj,
           rawDate: rawDate
         };
@@ -670,15 +671,7 @@ const SoftwareAdminDashboard = () => {
 
   // Helper to strictly identify completed/successful transactions (excluding pending QRs and failed attempts)
   const isTxSuccess = (t) => {
-    if (!t) return false;
-    const st = (t.statusNorm || t.status || t.Status || t.transactionStatus || t.TransactionStatus || '').toString().toUpperCase().trim();
-    if (st === 'SUCCESS' || st === 'COMPLETED' || st === 'SETTLED' || st === 'CAPTURED' || st === 'PAID' || st === 'SUCCESSFUL') return true;
-    if (st.includes('SUCCESS') || st.includes('COMPLETED') || st.includes('SETTLE') || st.includes('CAPTURED') || st.includes('PAID')) {
-      if (!st.includes('PENDING') && !st.includes('FAIL') && !st.includes('CANCEL') && !st.includes('REJECT') && !st.includes('INITIAT') && !st.includes('QR')) {
-        return true;
-      }
-    }
-    return false;
+    return isTransactionSuccess(t);
   };
 
   // Total Revenue / Gross Volume from Scoped Transactions
@@ -951,24 +944,25 @@ const SoftwareAdminDashboard = () => {
 
   // 4. Dynamic Status Distribution (Doughnut Chart)
   const statusDistributionData = useMemo(() => {
-    const counts = { Success: 0, Pending: 0, Failed: 0, Refunded: 0 };
+    const counts = { Success: 0, Cancelled: 0, Failed: 0, Pending: 0, Refunded: 0 };
 
     scopedTransactions.forEach(t => {
       const st = (t.statusNorm || t.status || '').toUpperCase();
-      if (st.includes('SUCCESS') || st.includes('COMPLETED') || st.includes('SETTLED')) counts.Success++;
+      if (isTxSuccess(t)) counts.Success++;
+      else if (st.includes('CANCEL') || st.includes('ABORT') || st.includes('INIT')) counts.Cancelled++;
       else if (st.includes('PEND') || st.includes('PROCESS')) counts.Pending++;
-      else if (st.includes('FAIL') || st.includes('DECLINE')) counts.Failed++;
+      else if (st.includes('FAIL') || st.includes('DECLINE') || st.includes('REJECT')) counts.Failed++;
       else if (st.includes('REFUND')) counts.Refunded++;
-      else counts.Success++;
+      else counts.Cancelled++;
     });
 
-    const total = counts.Success + counts.Pending + counts.Failed + counts.Refunded;
+    const total = counts.Success + counts.Cancelled + counts.Pending + counts.Failed + counts.Refunded;
 
     return {
-      labels: ['Success', 'Pending', 'Failed', 'Refunded'],
+      labels: ['Success', 'Cancelled', 'Failed', 'Pending', 'Refunded'],
       datasets: [{
-        data: total > 0 ? [counts.Success, counts.Pending, counts.Failed, counts.Refunded] : [1, 0, 0, 0],
-        backgroundColor: ['#10b981', '#a855f7', '#ef4444', '#8b5cf6'],
+        data: total > 0 ? [counts.Success, counts.Cancelled, counts.Failed, counts.Pending, counts.Refunded] : [1, 0, 0, 0, 0],
+        backgroundColor: ['#10b981', '#f43f5e', '#ef4444', '#a855f7', '#8b5cf6'],
         borderColor: 'rgba(17, 24, 39, 0.9)',
         borderWidth: 4,
         hoverOffset: 6,

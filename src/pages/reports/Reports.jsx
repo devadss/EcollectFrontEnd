@@ -25,6 +25,7 @@ import {
   branchApi, 
   agentApi 
 } from '../../services/api';
+import { resolveTransactionStatus, isTransactionSuccess } from '../../utils/transactionUtils';
 import './Reports.css';
 
 ChartJS.register(
@@ -321,7 +322,7 @@ const Reports = () => {
           amountNum: Number(t.amount ?? t.Amount ?? t.netAmount ?? 0),
           paymentMode: (t.paymentMode || t.PaymentMode || t.paymentMethod || t.PaymentMethod || t.mode || 'UPI').toUpperCase(),
           collectionType: (t.collectionType || t.CollectionType || t.udf5 || t.Udf5 || 'RD').toUpperCase(),
-          statusNorm: (t.status || t.Status || t.transactionStatus || 'SUCCESS').toUpperCase(),
+          statusNorm: resolveTransactionStatus(t),
           utr: t.utr || t.Utr || t.rrn || t.Rrn || t.paymentGatewayTransactionId || '',
           dateObj: dObj
         };
@@ -416,9 +417,10 @@ const Reports = () => {
       // 6. Status Filter
       if (statusFilter && statusFilter !== 'ALL') {
         const st = (t.statusNorm || 'SUCCESS').toUpperCase();
-        if (statusFilter === 'SUCCESS' && !(st.includes('SUCCESS') || st.includes('COMPLETED') || st.includes('SETTLED'))) return false;
-        if (statusFilter === 'PENDING' && !st.includes('PEND')) return false;
-        if (statusFilter === 'FAILED' && !st.includes('FAIL')) return false;
+        if (statusFilter === 'SUCCESS' && !(st.includes('SUCCESS') || st.includes('COMPLETED') || st.includes('SETTLED') || st.includes('PAID'))) return false;
+        if (statusFilter === 'PENDING' && !(st === 'PENDING' || st === 'PROCESSING')) return false;
+        if (statusFilter === 'FAILED' && !(st === 'FAILED' || st.includes('FAIL') || st.includes('DECLIN'))) return false;
+        if (statusFilter === 'CANCELLED' && !(st === 'CANCELLED' || st.includes('CANCEL') || st.includes('ABORT'))) return false;
       }
 
       // 7. Search Query
@@ -497,15 +499,7 @@ const Reports = () => {
 
   // Helper to strictly identify completed/successful transactions (excluding pending QRs and failed attempts)
   const isTxSuccess = (t) => {
-    if (!t) return false;
-    const st = (t.statusNorm || t.status || t.Status || t.transactionStatus || t.TransactionStatus || '').toString().toUpperCase().trim();
-    if (st === 'SUCCESS' || st === 'COMPLETED' || st === 'SETTLED' || st === 'CAPTURED' || st === 'PAID' || st === 'SUCCESSFUL') return true;
-    if (st.includes('SUCCESS') || st.includes('COMPLETED') || st.includes('SETTLE') || st.includes('CAPTURED') || st.includes('PAID')) {
-      if (!st.includes('PENDING') && !st.includes('FAIL') && !st.includes('CANCEL') && !st.includes('REJECT') && !st.includes('INITIAT') && !st.includes('QR')) {
-        return true;
-      }
-    }
-    return false;
+    return isTransactionSuccess(t);
   };
 
   // Dynamic KPI Metrics
@@ -671,20 +665,21 @@ const Reports = () => {
 
   // 4. Fulfillment Health Breakdown Doughnut Chart
   const fulfillmentHealthData = useMemo(() => {
-    const counts = { Success: 0, Pending: 0, Failed: 0 };
+    const counts = { Success: 0, Cancelled: 0, Failed: 0, Pending: 0 };
 
     filteredTransactions.forEach(t => {
       const st = (t.statusNorm || t.status || '').toUpperCase();
       if (isTxSuccess(t)) counts.Success++;
-      else if (st.includes('PEND') || st.includes('PROCESS') || st.includes('INIT') || st.includes('QR')) counts.Pending++;
+      else if (st.includes('CANCEL') || st.includes('ABORT') || st.includes('INIT')) counts.Cancelled++;
+      else if (st.includes('PEND') || st.includes('PROCESS')) counts.Pending++;
       else counts.Failed++;
     });
 
     return {
-      labels: ['Success', 'Pending', 'Failed'],
+      labels: ['Success', 'Cancelled', 'Failed', 'Pending'],
       datasets: [{
-        data: [counts.Success, counts.Pending, counts.Failed],
-        backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+        data: [counts.Success, counts.Cancelled, counts.Failed, counts.Pending],
+        backgroundColor: ['#10b981', '#f43f5e', '#ef4444', '#f59e0b'],
         borderColor: '#111827',
         borderWidth: 3,
         hoverOffset: 8,
@@ -1089,6 +1084,7 @@ const Reports = () => {
               <option value="SUCCESS">✓ Successful</option>
               <option value="PENDING">⏳ Pending</option>
               <option value="FAILED">✕ Failed</option>
+              <option value="CANCELLED">⊘ Cancelled</option>
             </select>
 
             {/* Reset Filters */}
