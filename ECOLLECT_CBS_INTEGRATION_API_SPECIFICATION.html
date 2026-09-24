@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ECollect - Core Banking System (CBS) Integration API Specification</title>
+  <style>
+    :root {
+      --primary: #1e3a8a;
+      --primary-light: #3b82f6;
+      --primary-dark: #1e293b;
+      --secondary: #059669;
+      --accent: #f59e0b;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --code-bg: #0f172a;
+      --code-text: #38bdf8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      padding: 50px 60px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+      border: 1px solid var(--border);
+    }
+
+    .header {
+      border-bottom: 3px solid var(--primary);
+      padding-bottom: 25px;
+      margin-bottom: 35px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      background: #eff6ff;
+      color: var(--primary);
+      margin-bottom: 12px;
+      border: 1px solid #bfdbfe;
+    }
+
+    .badge.post {
+      background: #ecfdf5;
+      color: #047857;
+      border-color: #a7f3d0;
+    }
+
+    .badge.get {
+      background: #eff6ff;
+      color: #1d4ed8;
+      border-color: #bfdbfe;
+    }
+
+    h1 {
+      font-size: 28px;
+      color: var(--primary-dark);
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: var(--text-muted);
+    }
+
+    h2 {
+      font-size: 20px;
+      color: var(--primary);
+      margin-top: 40px;
+      margin-bottom: 16px;
+      border-left: 4px solid var(--primary-light);
+      padding-left: 12px;
+      letter-spacing: -0.3px;
+    }
+
+    h3 {
+      font-size: 16px;
+      color: var(--primary-dark);
+      margin-top: 25px;
+      margin-bottom: 12px;
+    }
+
+    p, li {
+      font-size: 14px;
+      color: #334155;
+      margin-bottom: 12px;
+    }
+
+    ul, ol {
+      padding-left: 24px;
+      margin-bottom: 18px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      font-size: 13px;
+    }
+
+    th, td {
+      padding: 12px 14px;
+      text-align: left;
+      border: 1px solid var(--border);
+    }
+
+    th {
+      background-color: #f1f5f9;
+      color: var(--primary-dark);
+      font-weight: 600;
+    }
+
+    tr:nth-child(even) {
+      background-color: #f8fafc;
+    }
+
+    .endpoint-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 24px 0;
+      border-top: 3px solid var(--primary-light);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+    }
+
+    .endpoint-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .endpoint-url {
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--primary-dark);
+    }
+
+    pre {
+      background: var(--code-bg);
+      color: #f8fafc;
+      padding: 16px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 12.5px;
+      line-height: 1.5;
+      margin: 12px 0 16px 0;
+    }
+
+    .diagram-box {
+      background: #f8fafc;
+      border: 1px dashed #cbd5e1;
+      border-radius: 8px;
+      padding: 20px;
+      font-family: monospace;
+      font-size: 12px;
+      line-height: 1.4;
+      white-space: pre;
+      overflow-x: auto;
+      margin: 20px 0;
+      color: #334155;
+    }
+
+    .callout {
+      background: #f0fdf4;
+      border-left: 4px solid var(--secondary);
+      padding: 14px 18px;
+      border-radius: 4px;
+      margin: 18px 0;
+      font-size: 13.5px;
+      color: #166534;
+    }
+
+    .checklist {
+      list-style: none;
+      padding-left: 0;
+    }
+
+    .checklist li {
+      padding: 8px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .checklist li input {
+      accent-color: var(--primary);
+    }
+
+    @media print {
+      body {
+        padding: 0;
+        background: white;
+      }
+      .container {
+        box-shadow: none;
+        border: none;
+        padding: 0;
+        max-width: 100%;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+
+    .btn-print {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--primary);
+      color: #ffffff;
+      padding: 8px 18px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.2s ease;
+      float: right;
+    }
+
+    .btn-print:hover {
+      background: #1d4ed8;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <button class="btn-print no-print" onclick="window.print()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+      Print / Save as PDF
+    </button>
+    <span class="badge">Technical Specification</span>
+    <h1>ECollect - Core Banking System (CBS) Integration API</h1>
+    <div class="subtitle">Standard Interface Specification Document for Core Banking Software Vendors</div>
+  </div>
+
+  <h2>1. Overview & Architecture</h2>
+  <p>This document details the standard REST API interface for connecting the <strong>ECollect Field Collection & Digital Payment Platform</strong> with client <strong>Core Banking Software (CBS) / Cooperative Banking Systems</strong>.</p>
+
+  <div class="callout">
+    <strong>Integrated Model Advantage:</strong> Provides live verification of customer installment dues, instant ledger credit for cash/UPI collections, elimination of manual end-of-day Excel entries, and automated bank reconciliation.
+  </div>
+
+  <div class="diagram-box">
++-------------------------+                 +------------------------+                 +-------------------------+
+|   ECollect Mobile App   |  1. Acc Lookup  |    ECollect Central    |  2. Live Query  |   Core Banking System   |
+|      (Agent App)        | --------------->|     Cloud Gateway      | --------------->|          (CBS)          |
+|                         |                 |                        |                 |                         |
+|  - Real-Time Due Lookup |                 |  - Request Account     |                 |  - Validates Account    |
+|  - Cash Collection      | <---------------|    & Live Due Details  | <---------------|  - Calculates Due/EMIs  |
+|  - Dynamic UPI QR Pay   |                 |                        |                 |                         |
+|  - Instant Soundbox &   |  3. Post Txn    |  - Real-Time Post API  |  4. Live Credit |  - Credits CBS Ledger   |
+|    Print Receipts       | --------------->|  - Formats Payload     | --------------->|  - Generates Receipt No |
+|                         | <---------------|  - Returns Receipt No  | <---------------|  - Updates Outstanding  |
++-------------------------+                 +------------------------+                 +-------------------------+
+  </div>
+
+  <h2>2. Protocol & Security Standards</h2>
+  <ul>
+    <li><strong>Transport Layer:</strong> HTTPS with TLS 1.2 or TLS 1.3 encryption.</li>
+    <li><strong>Data Interchange:</strong> JSON (<code>Content-Type: application/json; charset=utf-8</code>).</li>
+    <li><strong>Network Security:</strong> Mutual Static IP whitelisting between ECollect and CBS Gateway.</li>
+    <li><strong>Authentication:</strong> API Key & Client Identification Header.</li>
+  </ul>
+
+  <h3>Standard Request Headers</h3>
+  <pre>Content-Type: application/json
+Accept: application/json
+X-API-KEY: {{CBS_MERCHANT_API_KEY}}
+X-CLIENT-CODE: {{SOCIETY_OR_BANK_CODE}}
+X-REQUEST-ID: REQ202609231450001234</pre>
+
+  <h2>3. Product Types Supported</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Code</th>
+        <th>Product Description</th>
+        <th>Collection Frequency</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>LOAN</strong></td>
+        <td>Term Loans, Gold Loans, Personal Loans, Vehicle Loans, Mortgages</td>
+        <td>Daily / Weekly / Monthly</td>
+      </tr>
+      <tr>
+        <td><strong>RD</strong></td>
+        <td>Recurring Deposits</td>
+        <td>Daily / Monthly</td>
+      </tr>
+      <tr>
+        <td><strong>DD / PIGMY</strong></td>
+        <td>Daily Deposits / Pigmy Collections</td>
+        <td>Daily</td>
+      </tr>
+      <tr>
+        <td><strong>SB</strong></td>
+        <td>Savings Bank Account Deposits</td>
+        <td>On Demand / Daily</td>
+      </tr>
+      <tr>
+        <td><strong>CHIT / MFI</strong></td>
+        <td>Chit Fund / Microfinance Group Loan Installments</td>
+        <td>Weekly / Monthly</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>4. Core API Specifications</h2>
+
+  <!-- API 1 -->
+  <div class="endpoint-card">
+    <div class="endpoint-header">
+      <span class="badge post">POST</span>
+      <span class="endpoint-url">/api/cbs/branches</span>
+    </div>
+    <p><strong>Purpose:</strong> Synchronize active branches, branch codes, and IFSC identifiers.</p>
+    
+    <p><strong>Request Body:</strong></p>
+    <pre>{
+  "client_code": "FIN001",
+  "status": "ACTIVE"
+}</pre>
+
+    <p><strong>Response (200 OK):</strong></p>
+    <pre>{
+  "status": "SUCCESS",
+  "response_code": "00",
+  "message": "Branches fetched successfully",
+  "data": [
+    {
+      "branch_code": "BR001",
+      "branch_name": "Main Branch - Calicut",
+      "ifsc_code": "FINW0000001",
+      "contact_number": "04952700001",
+      "address": "1st Floor, Financial Towers, Calicut, Kerala",
+      "is_active": true
+    }
+  ]
+}</pre>
+  </div>
+
+  <!-- API 2 -->
+  <div class="endpoint-card">
+    <div class="endpoint-header">
+      <span class="badge post">POST</span>
+      <span class="endpoint-url">/api/cbs/agents</span>
+    </div>
+    <p><strong>Purpose:</strong> Synchronize collection agents, assigned branches, CBS Origin IDs, and daily collection limits.</p>
+    
+    <p><strong>Request Body:</strong></p>
+    <pre>{
+  "client_code": "FIN001",
+  "branch_code": "ALL",
+  "status": "ACTIVE"
+}</pre>
+
+    <p><strong>Response (200 OK):</strong></p>
+    <pre>{
+  "status": "SUCCESS",
+  "response_code": "00",
+  "message": "Agents list fetched successfully",
+  "data": [
+    {
+      "agent_code": "AGT101",
+      "agent_origin_id": "CBS_AGT_101",
+      "agent_name": "Rahul Das",
+      "mobile_number": "9876543210",
+      "email": "rahul.das@bank.com",
+      "branch_code": "BR001",
+      "branch_name": "Main Branch - Calicut",
+      "daily_cash_limit": 200000.00,
+      "is_active": true
+    }
+  ]
+}</pre>
+  </div>
+
+  <!-- API 3 -->
+  <div class="endpoint-card">
+    <div class="endpoint-header">
+      <span class="badge post">POST</span>
+      <span class="endpoint-url">/api/cbs/account-details</span>
+    </div>
+    <p><strong>Purpose:</strong> Live customer account search by Account Number, Mobile Number, or Customer ID.</p>
+    
+    <p><strong>Request Body:</strong></p>
+    <pre>{
+  "search_type": "ACCOUNT_NO",
+  "account_number": "LN100200300",
+  "mobile_number": "",
+  "product_type": "LOAN",
+  "branch_code": "BR001"
+}</pre>
+
+    <p><strong>Response (200 OK):</strong></p>
+    <pre>{
+  "status": "SUCCESS",
+  "response_code": "00",
+  "message": "Account details found",
+  "data": {
+    "account_number": "LN100200300",
+    "customer_id": "CUST9001",
+    "customer_name": "Suresh Kumar K",
+    "mobile_number": "9847000000",
+    "email": "suresh@example.com",
+    "address": "House 12B, Green Hills, Calicut",
+    "product_type": "LOAN",
+    "scheme_name": "Personal Gold Loan Scheme 2026",
+    "branch_code": "BR001",
+    "assigned_agent_code": "AGT101",
+    "sanctioned_amount": 100000.00,
+    "current_balance": 45000.00,
+    "emi_amount": 5000.00,
+    "emi_frequency": "Monthly",
+    "last_paid_date": "2026-08-15",
+    "account_status": "ACTIVE"
+  }
+}</pre>
+  </div>
+
+  <!-- API 4 -->
+  <div class="endpoint-card">
+    <div class="endpoint-header">
+      <span class="badge post">POST</span>
+      <span class="endpoint-url">/api/cbs/due-details</span>
+    </div>
+    <p><strong>Purpose:</strong> Real-time due & demand calculation (Principal, Interest, Overdue, and Penalty breakdown).</p>
+    
+    <p><strong>Request Body:</strong></p>
+    <pre>{
+  "account_number": "LN100200300",
+  "product_type": "LOAN",
+  "as_on_date": "2026-09-23"
+}</pre>
+
+    <p><strong>Response (200 OK):</strong></p>
+    <pre>{
+  "status": "SUCCESS",
+  "response_code": "00",
+  "message": "Due details calculated successfully",
+  "data": {
+    "account_number": "LN100200300",
+    "customer_name": "Suresh Kumar K",
+    "product_type": "LOAN",
+    "installment_amount": 5000.00,
+    "principal_due": 3800.00,
+    "interest_due": 1200.00,
+    "overdue_principal": 5000.00,
+    "penalty_charges": 150.00,
+    "other_charges": 0.00,
+    "total_due_amount": 10150.00,
+    "min_payable_amount": 500.00,
+    "max_payable_amount": 45000.00,
+    "days_past_due": 38,
+    "next_due_date": "2026-10-05"
+  }
+}</pre>
+  </div>
+
+  <!-- API 5 -->
+  <div class="endpoint-card">
+    <div class="endpoint-header">
+      <span class="badge post">POST</span>
+      <span class="endpoint-url">/api/cbs/transaction-post</span>
+    </div>
+    <p><strong>Purpose:</strong> Post live collection into CBS ledger for Cash or Instant Dynamic UPI QR collections.</p>
+    
+    <p><strong>Request Body:</strong></p>
+    <pre>{
+  "order_id": "ORD202609231450009988",
+  "account_no": "LN100200300",
+  "product_type": "LOAN",
+  "deposit_amount": 5150.00,
+  "tran_type": "C",
+  "payment_channel": "CASH",
+  "agent_id": "AGT101",
+  "agent_origin_id": "CBS_AGT_101",
+  "branch_code": "BR001",
+  "payment_reference": "NA",
+  "upi_rrn": "",
+  "particular": "ECollect Cash Payment - Suresh Kumar",
+  "txn_timestamp": "2026-09-23T14:50:35Z",
+  "geo_location": {
+    "latitude": 11.2588,
+    "longitude": 75.7804
+  }
+}</pre>
+    <p><em>* For UPI QR: <code>tran_type: "T"</code>, <code>payment_channel: "UPI"</code>, <code>upi_rrn: "626612345678"</code>.</em></p>
+
+    <p><strong>Response (200 OK):</strong></p>
+    <pre>{
+  "status": "SUCCESS",
+  "response_code": "00",
+  "message": "Transaction posted successfully in CBS ledger",
+  "data": {
+    "order_id": "ORD202609231450009988",
+    "cbs_transaction_id": "CBS_TXN_8849201",
+    "receipt_no": "REC-2026-09-00124",
+    "account_number": "LN100200300",
+    "posted_amount": 5150.00,
+    "principal_adjusted": 3800.00,
+    "interest_adjusted": 1200.00,
+    "penalty_adjusted": 150.00,
+    "remaining_outstanding": 39850.00,
+    "remaining_due_amount": 5000.00,
+    "posting_timestamp": "2026-09-23T14:50:36Z"
+  }
+}</pre>
+  </div>
+
+  <!-- API 6 -->
+  <div class="endpoint-card">
+    <div class="endpoint-header">
+      <span class="badge post">POST</span>
+      <span class="endpoint-url">/api/cbs/transaction-status</span>
+    </div>
+    <p><strong>Purpose:</strong> Re-query transaction status in CBS during network drops or reconciliation.</p>
+    
+    <p><strong>Request Body:</strong></p>
+    <pre>{
+  "order_id": "ORD202609231450009988",
+  "account_no": "LN100200300",
+  "cbs_transaction_id": "CBS_TXN_8849201"
+}</pre>
+
+    <p><strong>Response (200 OK):</strong></p>
+    <pre>{
+  "status": "SUCCESS",
+  "response_code": "00",
+  "message": "Transaction verified",
+  "data": {
+    "order_id": "ORD202609231450009988",
+    "cbs_transaction_id": "CBS_TXN_8849201",
+    "receipt_no": "REC-2026-09-00124",
+    "account_number": "LN100200300",
+    "amount": 5150.00,
+    "cbs_status": "POSTED",
+    "posting_timestamp": "2026-09-23T14:50:36Z"
+  }
+}</pre>
+  </div>
+
+  <!-- API 7 -->
+  <div class="endpoint-card">
+    <div class="endpoint-header">
+      <span class="badge post">POST</span>
+      <span class="endpoint-url">/api/cbs/reconciliation</span>
+    </div>
+    <p><strong>Purpose:</strong> Day-End summary reconciliation matching ECollect collections against CBS day ledger.</p>
+    
+    <p><strong>Request Body:</strong></p>
+    <pre>{
+  "collection_date": "2026-09-23",
+  "branch_code": "BR001",
+  "agent_code": "AGT101",
+  "total_cash_count": 25,
+  "total_cash_amount": 125000.00,
+  "total_upi_count": 14,
+  "total_upi_amount": 68500.00,
+  "grand_total_amount": 193500.00
+}</pre>
+
+    <p><strong>Response (200 OK):</strong></p>
+    <pre>{
+  "status": "SUCCESS",
+  "response_code": "00",
+  "message": "Reconciliation matched successfully with CBS Day Ledger",
+  "data": {
+    "is_matched": true,
+    "cbs_total_amount": 193500.00,
+    "difference": 0.00,
+    "day_closed_status": "READY_TO_CLOSE"
+  }
+}</pre>
+  </div>
+
+  <!-- API 8 -->
+  <div class="endpoint-card">
+    <div class="endpoint-header">
+      <span class="badge post">POST</span>
+      <span class="endpoint-url">/api/cbs/transaction-reverse</span>
+    </div>
+    <p><strong>Purpose:</strong> Reverse an erroneous collection posting (subject to CBS supervisor approval or within same-day EOD cutoff).</p>
+    
+    <p><strong>Request Body:</strong></p>
+    <pre>{
+  "order_id": "ORD202609231450009988",
+  "cbs_transaction_id": "CBS_TXN_8849201",
+  "account_no": "LN100200300",
+  "reverse_amount": 5150.00,
+  "reason": "Agent entered wrong cash amount; customer corrected",
+  "supervisor_id": "SUP001",
+  "supervisor_auth_code": "AUTH998822"
+}</pre>
+
+    <p><strong>Response (200 OK):</strong></p>
+    <pre>{
+  "status": "SUCCESS",
+  "response_code": "00",
+  "message": "Transaction reversed successfully in CBS ledger",
+  "data": {
+    "original_cbs_txn_id": "CBS_TXN_8849201",
+    "reversal_cbs_txn_id": "CBS_REV_1122334",
+    "reversed_amount": 5150.00,
+    "reversed_timestamp": "2026-09-23T15:10:00Z"
+  }
+}</pre>
+  </div>
+
+  <h2>5. Error Codes Reference</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Code</th>
+        <th>Constant</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>E01</strong></td>
+        <td>INVALID_PAYLOAD</td>
+        <td>Missing mandatory fields or invalid data formatting.</td>
+      </tr>
+      <tr>
+        <td><strong>E02</strong></td>
+        <td>ACCOUNT_NOT_FOUND</td>
+        <td>Account number does not exist in CBS.</td>
+      </tr>
+      <tr>
+        <td><strong>E03</strong></td>
+        <td>ACCOUNT_CLOSED_OR_DORMANT</td>
+        <td>Account is closed, dormant, or blocked from collections.</td>
+      </tr>
+      <tr>
+        <td><strong>E04</strong></td>
+        <td>INVALID_AGENT</td>
+        <td>Agent ID inactive or not mapped to branch in CBS.</td>
+      </tr>
+      <tr>
+        <td><strong>E05</strong></td>
+        <td>LIMIT_EXCEEDED</td>
+        <td>Collection amount exceeds permissible limits.</td>
+      </tr>
+      <tr>
+        <td><strong>E06</strong></td>
+        <td>DUPLICATE_ORDER_ID</td>
+        <td>Transaction order_id already exists in CBS.</td>
+      </tr>
+      <tr>
+        <td><strong>E07</strong></td>
+        <td>CBS_EOD_IN_PROGRESS</td>
+        <td>CBS Day-End / BOD in progress; posting temporarily paused.</td>
+      </tr>
+      <tr>
+        <td><strong>E08</strong></td>
+        <td>REVERSAL_NOT_PERMITTED</td>
+        <td>Transaction already finalized in EOD or supervisor approval missing.</td>
+      </tr>
+      <tr>
+        <td><strong>E99</strong></td>
+        <td>CBS_INTERNAL_ERROR</td>
+        <td>General CBS database or ledger error.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>6. CBS Vendor Deliverables Checklist</h2>
+  <ul class="checklist">
+    <li><input type="checkbox" checked disabled /> Provide Base URLs for UAT and Production Gateways</li>
+    <li><input type="checkbox" checked disabled /> Provide API Key / Client Code / Bearer Token credentials</li>
+    <li><input type="checkbox" checked disabled /> Static IP Whitelisting for mutual server firewall communication</li>
+    <li><input type="checkbox" checked disabled /> 3 Test Accounts for each Product Type (LOAN, RD, DD, SB)</li>
+    <li><input type="checkbox" checked disabled /> End-to-End Test Posting validation (Cash & UPI QR)</li>
+  </ul>
+
+</div>
+
+</body>
+</html>
