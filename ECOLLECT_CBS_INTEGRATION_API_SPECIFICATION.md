@@ -207,7 +207,10 @@ All responses must adhere to the standard envelope structure:
     "scheme_name": "Personal Gold Loan Scheme 2026",
     "branch_code": "BR001",
     "assigned_agent_code": "AGT101",
+    "sanction_amount": 100000.00,
     "sanctioned_amount": 100000.00,
+    "interest_rate": 12.50,
+    "opened_date": "2025-10-15",
     "current_balance": 45000.00,
     "emi_amount": 5000.00,
     "emi_frequency": "Monthly",
@@ -217,6 +220,11 @@ All responses must adhere to the standard envelope structure:
   }
 }
 ```
+
+> **Loan Details Key Fields:**
+> - `sanction_amount` / `sanctioned_amount`: Total loan principal sanctioned by the bank/society (e.g. `100000.00`).
+> - `interest_rate`: Applicable annual interest rate in % per annum (e.g. `12.50`).
+> - `opened_date`: Loan account opening / disbursement date in `YYYY-MM-DD` format (e.g. `"2025-10-15"`).
 
 ---
 
@@ -243,6 +251,9 @@ All responses must adhere to the standard envelope structure:
     "account_number": "LN100200300",
     "customer_name": "Suresh Kumar K",
     "product_type": "LOAN",
+    "sanction_amount": 100000.00,
+    "interest_rate": 12.50,
+    "opened_date": "2025-10-15",
     "installment_amount": 5000.00,
     "principal_due": 3800.00,
     "interest_due": 1200.00,
