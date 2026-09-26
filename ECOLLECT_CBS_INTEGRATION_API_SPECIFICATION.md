@@ -1,12 +1,12 @@
 # ECOLLECT - CORE BANKING SYSTEM (CBS) INTEGRATION API SPECIFICATION
-**Standard Interface Specification Document for Core Banking Software Vendors**
+**ECollect Private Limited** &mdash; Standard Interface Specification Document for Core Banking Software Vendors
 
 ---
 
 ## 1. Document Overview & Executive Summary
 
 ### 1.1 Purpose
-This document provides the standard REST API interface specification for integrating third-party **Core Banking Software (CBS) / Microfinance / Co-operative Banking Systems** with the **ECollect Field Collection & Digital Payment Platform**.
+This document provides the standard REST API interface specification for integrating third-party **Core Banking Software (CBS) / Microfinance / Co-operative Banking Systems** with **ECollect Private Limited**'s **ECollect Field Collection & Digital Payment Platform**.
 
 When migrating a client from the **Non-Integrated (Standalone) Model** to the **Integrated Model**, this standard specification enables real-time synchronization of:
 - **Branches Master Data**
@@ -456,3 +456,7 @@ To complete integration for the client:
   - ECollect Cloud Server Static IPs whitelisted on CBS firewall.
 - [ ] **Provide 3 Test Accounts** for each product type (`LOAN`, `RD`, `DD`, `SB`).
 - [ ] **Execute End-to-End Test Postings** for both Cash and UPI collection modes.
+
+---
+
+*© 2026 **ECollect Private Limited**. All rights reserved. Confidential & Proprietary Document.*
