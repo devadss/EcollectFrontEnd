@@ -31,22 +31,138 @@ When migrating a client from the **Non-Integrated (Standalone) Model** to the **
 
 ---
 
-### 1.3 High-Level Integration Flow
+### 1.3 End-to-End Workflow Architecture Overview
 
 ```
-+-------------------+             +-----------------------+             +--------------------------+
-|  ECollect Mobile  |  1. Login   |   ECollect Central    |  2. Live    |    Core Banking System   |
-|   App (Agent)     | ----------> |    Cloud Gateway      | ----------> |          (CBS)           |
-|                   |             |                       |             |                          |
-|  Customer Search  |             |                       |             |                          |
-|   & Due Lookup    | ----------> |  Fetch Account & Due  | ----------> | Returns Live Due/Balance |
-|                   | <---------- |                       | <---------- |                          |
-|                   |             |                       |             |                          |
-| Cash / UPI Payment|             |                       |             |                          |
-|    Collection     | ----------> | Real-Time Post API    | ----------> | Credits CBS Account      |
-|                   | <---------- | Return CBS Receipt No | <---------- | Returns CBS Transaction  |
-+-------------------+             +-----------------------+             +--------------------------+
++---------------------------------------------------------------------------------------------------+
+|                                 ECOLLECT <---> CBS INTEGRATION ARCHITECTURE                       |
++---------------------------------------------------------------------------------------------------+
+|  [ Field Agent Mobile App ]      [ ECollect Cloud Gateway ]             [ Core Banking System ]   |
+|               |                              |                                      |             |
+|   === 1. MASTER SYNC ===                     |                                      |             |
+|               |  Pull Branches / Agents      |  POST /api/cbs/branches              |             |
+|               |----------------------------->|  POST /api/cbs/agents                |             |
+|               |                              |------------------------------------->| (CBS DB)    |
+|               |                              |<-------------------------------------|             |
+|               |                              |                                      |             |
+|   === 2. DATA FETCHING WORKFLOW ===          |                                      |             |
+|   Search Acc / Mobile                        |  POST /api/cbs/account-details       |             |
+|   ------------------------------------------>|------------------------------------->| (Validate)  |
+|   Display Profile, Balance, Scheme           |<-------------------------------------|             |
+|                                              |                                      |             |
+|   Request Live Due / Demand                  |  POST /api/cbs/installment-due       |             |
+|   ------------------------------------------>|------------------------------------->| (Accrual)   |
+|   Display Live Principal, Interest, Penal    |<-------------------------------------|             |
+|                                              |                                      |             |
+|   === 3. TRANSACTION POSTING WORKFLOW ===    |                                      |             |
+|   Collect Cash / Dynamic UPI QR              |  POST /api/cbs/transaction-post      |             |
+|   ------------------------------------------>|------------------------------------->| (Credit GL) |
+|   Print Receipt / SMS / WhatsApp             |<-------------------------------------|             |
+|                                              |                                      |             |
+|   === 4. EXCEPTION / TIMEOUT FALLBACK ===    |  POST /api/cbs/transaction-status    |             |
+|   Verify Txn Status if Network Drops         |------------------------------------->| (Check GL)  |
+|                                              |<-------------------------------------|             |
+|                                              |                                      |             |
+|   === 5. END-OF-DAY RECONCILIATION ===       |  POST /api/cbs/day-reconciliation    |             |
+|   Automated EOD Closing Verification         |------------------------------------->| (Reconcile) |
+|                                              |<-------------------------------------|             |
++---------------------------------------------------------------------------------------------------+
 ```
+
+---
+
+### 1.4 Workflow Diagram 1: Real-Time Data Fetching & Live Due Calculation
+
+This workflow allows field representatives to query customer records on demand and obtain live calculations of current balance, accrued interest, penalty charges, and allowable payment ranges directly from the core banking engine.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Agent as Field Agent (App)
+    participant GW as ECollect Cloud Gateway
+    participant CBS as Core Banking System (CBS)
+
+    Note over Agent,CBS: PHASE 1: CUSTOMER & ACCOUNT LOOKUP
+    Agent->>GW: 1. Input Account No / Mobile No / Customer ID
+    GW->>CBS: 2. API Call: POST /api/cbs/account-details<br/>Headers: X-API-KEY, X-CLIENT-CODE<br/>Payload: { search_type, account_number, branch_code }
+    Note over CBS: Validates: Account Status (ACTIVE),<br/>Branch Mapping & KYC Flag
+    alt Account Found & Active
+        CBS-->>GW: 3. Return 200 OK + Account & Customer Profile<br/>(Customer Name, Balance, Scheme, Assigned Agent)
+        GW-->>Agent: 4. Display Customer Verification Card
+    else Account Inactive / Blocked
+        CBS-->>GW: Return Error Code E02 / E03 (ACCOUNT_NOT_FOUND / CLOSED)
+        GW-->>Agent: Show Warning: "Account cannot accept collections"
+    end
+
+    Note over Agent,CBS: PHASE 2: REAL-TIME INSTALLMENT DUE CALCULATION
+    Agent->>GW: 5. Tap "Fetch Live Due" (or auto-fetch on selection)
+    GW->>CBS: 6. API Call: POST /api/cbs/installment-due<br/>Payload: { account_number, product_type, as_on_date }
+    Note over CBS: Runs Interest Accrual, Overdue Aging,<br/>and Min/Max Payable limits
+    CBS-->>GW: 7. Return 200 OK + Live Due Breakdown<br/>{ installment_amount, principal_due, interest_due, penalty_charges, total_due_amount, min_payable, max_payable }
+    GW-->>Agent: 8. Render Breakdown on Agent Mobile Screen<br/>(One-tap collection buttons: Full Due, Min Due, Custom Amount)
+```
+
+#### Step-by-Step API Interaction Table (Data Fetching):
+
+| Step | Initiator | API Call Name | Target System | Purpose & Data Transferred |
+| :---: | :--- | :--- | :--- | :--- |
+| **1** | Mobile App | `Search Request` | ECollect Gateway | Agent inputs Account Number (e.g. `LN100200300`) or Mobile Number. |
+| **2** | ECollect Gateway | `POST /api/cbs/account-details` | CBS Host | Gateway sends authenticated lookup query to CBS with `account_number` and `branch_code`. |
+| **3** | CBS | `Account Details Response` | ECollect Gateway | CBS returns customer identity, scheme type, current balance, opened date, and KYC status. |
+| **4** | Mobile App | `Demand Query` | ECollect Gateway | Triggered when agent selects payment or views current collection demand. |
+| **5** | ECollect Gateway | `POST /api/cbs/installment-due` | CBS Host | Requests live calculation as of current date (`as_on_date`), passing `product_type`. |
+| **6** | CBS | `Live Due Response` | ECollect Gateway | CBS returns exact split: `principal_due`, `interest_due`, `penalty_charges`, `total_due_amount`. |
+
+---
+
+### 1.5 Workflow Diagram 2: Real-Time Transaction Posting & CBS Ledger Credit
+
+This workflow executes when an agent collects cash or a customer completes an instant dynamic UPI QR scan. It guarantees **instant ledger credit** in CBS, **idempotent posting** (no duplicate entries), and **automatic fallback status verification** if network timeouts occur.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Customer
+    actor Agent as Field Agent (App)
+    participant GW as ECollect Cloud Gateway
+    participant CBS as Core Banking System (CBS)
+
+    Customer->>Agent: 1. Hands Cash OR Scans Dynamic UPI QR
+    Note over Agent,GW: ECollect validates Agent Cash Limits & Generates unique Order ID
+    Agent->>GW: 2. Submit Collection { amount, channel: CASH / UPI, account_no }
+
+    Note over GW,CBS: PHASE 1: REAL-TIME LEDGER POSTING
+    GW->>CBS: 3. API Call: POST /api/cbs/transaction-post<br/>Headers: X-API-KEY, X-CLIENT-CODE, X-REQUEST-ID<br/>Payload: { order_id, account_no, deposit_amount, tran_type: "C",<br/>payment_channel, agent_id, branch_code, upi_rrn, txn_timestamp }
+    
+    Note over CBS: CBS Ledger Posting Engine:<br/>1. Check duplicate order_id (Idempotency)<br/>2. Credit Customer Account / Loan Ledger<br/>3. Debit Agent Cash-in-Hand GL / UPI Bank Clearing GL<br/>4. Generate CBS Transaction ID & CBS Receipt No
+
+    alt Posting Successful (Normal Flow)
+        CBS-->>GW: 4. Return 200 OK<br/>{ status: "SUCCESS", response_code: "00", cbs_transaction_id, cbs_receipt_no, updated_balance }
+        GW-->>Agent: 5. Confirm Transaction & Generate ECollect Digital Receipt
+        Agent->>Customer: 6. Instant Thermal Print / SMS & WhatsApp Alert to Customer
+    else Network Timeout / Connection Drop
+        Note over GW,CBS: PHASE 2: AUTOMATIC TIMEOUT FALLBACK
+        GW->>CBS: 7. API Call: POST /api/cbs/transaction-status<br/>Payload: { order_id, client_code }
+        alt CBS Confirms Txn Already Posted
+            CBS-->>GW: 8a. Return status: "SUCCESS" + existing cbs_transaction_id
+            GW-->>Agent: Complete receipt generation without double-posting
+        else CBS Confirms Txn Not Found
+            CBS-->>GW: 8b. Return status: "NOT_FOUND" / "FAILED"
+            GW->>CBS: Safe Retry: Re-submit POST /api/cbs/transaction-post
+        end
+    end
+```
+
+#### Step-by-Step API Interaction Table (Transaction Posting):
+
+| Step | Initiator | API Call Name | Target System | Purpose & Data Transferred |
+| :---: | :--- | :--- | :--- | :--- |
+| **1** | Mobile App | `Payment Execution` | ECollect Gateway | Agent collects payment (`CASH` or `UPI`). Gateway assigns unique `order_id` (e.g. `ORD202610011450009988`). |
+| **2** | ECollect Gateway | `POST /api/cbs/transaction-post` | CBS Host | Primary posting payload sent over mutual whitelisted HTTPS connection with full audit parameters. |
+| **3** | CBS | `Ledger Processing` | CBS Internal DB | Credits loan/deposit account, updates interest schedules, debits agent GL, and issues `cbs_receipt_no`. |
+| **4** | CBS | `200 OK Response` | ECollect Gateway | Returns `response_code: "00"`, `cbs_transaction_id`, `cbs_receipt_no`, and `updated_balance`. |
+| **5** | ECollect Gateway | `POST /api/cbs/transaction-status` *(Fallback)* | CBS Host | **Automated Timeout Safeguard:** If network drops before receiving 200 OK, Gateway checks transaction status before retrying to prevent duplicate debit/credit. |
+| **6** | ECollect Gateway | `POST /api/cbs/day-reconciliation` | CBS Host | **EOD Closing:** Compares total daily volume and transaction count between ECollect and CBS ledgers. |
 
 ---
 
@@ -172,6 +288,13 @@ All responses must adhere to the standard envelope structure:
   ]
 }
 ```
+
+> [!IMPORTANT]
+> **Agent Code Uniqueness & Validation Rules:**
+> - `agent_code` **must be unique within the client institution (`client_code`)**. ECollect verifies uniqueness on a per-institution/merchant basis. Two different banks/societies may use identical codes (e.g., `001`), but within a single institution, every agent must have a distinct `agent_code`.
+> - `agent_origin_id`: CBS Primary internal Agent ID or Employee Code.
+> - `branch_code`: Must match an active branch code in the Branch Master API.
+> - `daily_cash_limit`: Permissible daily cash collection ceiling (in INR). Transactions will be restricted if the agent's cash holding exceeds this threshold.
 
 ---
 

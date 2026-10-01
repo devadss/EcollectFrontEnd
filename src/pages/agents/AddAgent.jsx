@@ -28,6 +28,11 @@ const AddAgent = () => {
   // Selected ID for external dropdown
   const [selectedAgentId, setSelectedAgentId] = useState('');
 
+  // Existing merchant agents for scoped code uniqueness validation
+  const [existingMerchantAgents, setExistingMerchantAgents] = useState([]);
+  const existingMerchantAgentsRef = useRef(existingMerchantAgents);
+  existingMerchantAgentsRef.current = existingMerchantAgents;
+
   const authUser = (() => {
     try {
       return JSON.parse(localStorage.getItem('auth_user') || localStorage.getItem('user')) || {};
@@ -72,6 +77,31 @@ const AddAgent = () => {
 
   const externalAgentsRef = useRef(externalAgents);
   externalAgentsRef.current = externalAgents;
+
+  // Fetch registered agents under this merchant to ensure Agent Code uniqueness
+  const loadExistingMerchantAgents = useCallback(async (mid) => {
+    if (!mid) {
+      setExistingMerchantAgents([]);
+      return;
+    }
+    try {
+      const res = await agentApi.getAll({ merchantId: mid });
+      let list = [];
+      if (res && res.data) {
+        if (Array.isArray(res.data.data)) list = res.data.data;
+        else if (Array.isArray(res.data)) list = res.data;
+      } else if (Array.isArray(res)) {
+        list = res;
+      }
+      const filtered = list.filter(a => {
+        const aMid = a.merchantId ?? a.MerchantId;
+        return aMid == null || String(aMid) === String(mid);
+      });
+      setExistingMerchantAgents(filtered);
+    } catch (err) {
+      console.warn('Could not load existing merchant agents for code checking:', err);
+    }
+  }, []);
 
   // Single-flight fetch external agents with deduplication and branch code support
   const loadExternalAgents = useCallback(async (mid = null, force = false, bCode = null) => {
@@ -210,6 +240,10 @@ const AddAgent = () => {
             const resolvedMid = aData.merchantId ?? aData.MerchantId ?? (isMerchantUser ? currentMerchantId : targetMid);
             const resolvedBid = aData.branchId ?? aData.BranchId ?? '';
 
+            if (resolvedMid) {
+              loadExistingMerchantAgents(resolvedMid);
+            }
+
             setFormData({
               agentName: aData.name || aData.agentName || aData.AgentName || aData.Name || '',
               email: aData.email || aData.Email || '',
@@ -263,6 +297,7 @@ const AddAgent = () => {
             if (isLive) {
               loadExternalAgents(targetMid, true);
             }
+            loadExistingMerchantAgents(targetMid);
           }
         }
       } catch (err) {
@@ -305,6 +340,7 @@ const AddAgent = () => {
     }
 
     setIntegrationStatus(mStatus);
+    loadExistingMerchantAgents(selectedMid);
   };
 
   // Handle Branch Selection & Trigger External Agent Fetch for this specific branch
@@ -358,7 +394,28 @@ const AddAgent = () => {
       }));
 
       if (errors.agentName) setErrors(prev => ({ ...prev, agentName: null }));
-      if (errors.agentCode) setErrors(prev => ({ ...prev, agentCode: null }));
+      
+      // Proactive uniqueness verification for external Agent Code under selected merchant
+      if (aCode) {
+        const targetMid = formData.merchantId ? String(formData.merchantId) : (currentMerchantId ? String(currentMerchantId) : '');
+        const duplicate = existingMerchantAgentsRef.current.find(a => {
+          const c = (a.agentCode || a.AgentCode || a.code || a.Code || a.external_agent_id || a.ExternalAgentId || '').trim().toLowerCase();
+          const aMid = a.merchantId ?? a.MerchantId;
+          const aId = a.id ?? a.Id ?? a.agentId ?? a.AgentId;
+          const isSameMerchant = !targetMid || !aMid || String(aMid) === String(targetMid);
+          const isOther = isEdit ? String(aId) !== String(id) : true;
+          return c === String(aCode).trim().toLowerCase() && isSameMerchant && isOther;
+        });
+
+        if (duplicate) {
+          setErrors(prev => ({
+            ...prev,
+            agentCode: `Agent code "${aCode}" is already registered for this merchant (${duplicate.name || duplicate.Name || 'Active Representative'}).`
+          }));
+        } else {
+          setErrors(prev => ({ ...prev, agentCode: null }));
+        }
+      }
     }
   };
 
@@ -382,6 +439,27 @@ const AddAgent = () => {
 
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: null }));
+    }
+
+    // Proactive check on Agent Code input for uniqueness within current merchant
+    if (name === 'agentCode') {
+      const codeTrimmed = value.trim().toLowerCase();
+      const targetMid = formData.merchantId ? String(formData.merchantId) : (currentMerchantId ? String(currentMerchantId) : '');
+      const duplicate = existingMerchantAgentsRef.current.find(a => {
+        const aCode = (a.agentCode || a.AgentCode || a.code || a.Code || a.external_agent_id || a.ExternalAgentId || '').trim().toLowerCase();
+        const aMid = a.merchantId ?? a.MerchantId;
+        const aId = a.id ?? a.Id ?? a.agentId ?? a.AgentId;
+        const isSameMerchant = !targetMid || !aMid || String(aMid) === String(targetMid);
+        const isOther = isEdit ? String(aId) !== String(id) : true;
+        return codeTrimmed && aCode === codeTrimmed && isSameMerchant && isOther;
+      });
+
+      if (duplicate) {
+        setErrors(prev => ({
+          ...prev,
+          agentCode: `Agent code "${value.trim()}" is already assigned to ${duplicate.name || duplicate.Name || 'another agent'} under this merchant.`
+        }));
+      }
     }
 
     // Auto-detect State and District when a 6-digit Pincode is entered
@@ -423,7 +501,26 @@ const AddAgent = () => {
       tempErrors.phone = "Invalid Indian mobile number. Must start with 6, 7, 8, or 9";
     }
 
-    if (!formData.agentCode?.trim()) tempErrors.agentCode = "Agent Identification Code is required";
+    // Agent Code Validation & Merchant-Scoped Uniqueness Check
+    if (!formData.agentCode?.trim()) {
+      tempErrors.agentCode = "Agent Identification Code is required";
+    } else {
+      const targetCode = formData.agentCode.trim().toLowerCase();
+      const targetMid = formData.merchantId ? String(formData.merchantId) : (currentMerchantId ? String(currentMerchantId) : '');
+      const duplicateAgent = existingMerchantAgentsRef.current.find(a => {
+        const aCode = (a.agentCode || a.AgentCode || a.code || a.Code || a.external_agent_id || a.ExternalAgentId || '').trim().toLowerCase();
+        const aMid = a.merchantId ?? a.MerchantId;
+        const aId = a.id ?? a.Id ?? a.agentId ?? a.AgentId;
+        const matchesMerchant = !targetMid || !aMid || String(aMid) === String(targetMid);
+        const matchesCode = aCode === targetCode;
+        const isOtherAgent = isEdit ? String(aId) !== String(id) : true;
+        return matchesMerchant && matchesCode && isOtherAgent;
+      });
+
+      if (duplicateAgent) {
+        tempErrors.agentCode = `Agent code "${formData.agentCode.trim()}" is already assigned to ${duplicateAgent.name || duplicateAgent.Name || duplicateAgent.agentName || 'another representative'} under this merchant partner.`;
+      }
+    }
     if (!formData.address?.trim()) tempErrors.address = "Residential / Operational Address is required";
     if (!formData.city?.trim()) tempErrors.city = "City / District is required";
     if (!formData.state?.trim()) tempErrors.state = "State jurisdiction is required";
