@@ -511,16 +511,37 @@ const DueList = () => {
     }
   };
 
-  // 1-Click WhatsApp Due Reminder Dispatch (Telinfy API)
+  // 1-Click WhatsApp Due Reminder Dispatch
   const handleSendWhatsApp = async (acc) => {
-    const phone = acc.phone || acc.mobile || acc.mobileNumber || '';
+    const rawPhone = acc.phone || acc.mobile || acc.mobileNumber || acc.customerPhone || '';
     const name = acc.accountHolder || acc.customerName || 'Customer';
     const accNo = acc.accountNumber || '';
     const bal = Number(acc.dueAmount || acc.balance || acc.emiAmount || 0).toLocaleString('en-IN');
-    const cleanPhone = phone ? String(phone).replace(/\D/g, '') : '';
+    
+    // Clean and extract 10-digit mobile number
+    let cleanPhone = rawPhone ? String(rawPhone).replace(/\D/g, '') : '';
+    if (cleanPhone.length === 12 && cleanPhone.startsWith('91')) {
+      cleanPhone = cleanPhone.substring(2);
+    } else if (cleanPhone.length > 10) {
+      cleanPhone = cleanPhone.slice(-10);
+    }
+
     const merchantId = localStorage.getItem('merchantId') || authUser?.merchantId || 22;
 
-    if (cleanPhone) {
+    const isLoan = acc.collectionType === 'LOAN';
+    const msg = isLoan
+      ? `Dear ${name},\nThis is a friendly reminder from DIGICOB Bank regarding your Loan Account #${accNo}.\nYour current outstanding / EMI due is ₹${bal}.\nPlease settle your installment at your earliest convenience.\nThank you!`
+      : `Dear ${name},\nThis is a friendly reminder from DIGICOB Bank regarding your RD Account #${accNo}.\nYour scheduled deposit amount is ₹${bal}.\nPlease complete your deposit collection at your earliest convenience.\nThank you!`;
+
+    const waUrl = cleanPhone && cleanPhone.length === 10
+      ? `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(msg)}`
+      : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+
+    // Immediately open WhatsApp window during direct user click gesture to avoid browser popup blocking
+    const waWindow = window.open(waUrl, '_blank', 'noopener,noreferrer');
+
+    // Also attempt Telinfy API dispatch in background if 10-digit phone exists
+    if (cleanPhone && cleanPhone.length === 10) {
       try {
         const payload = {
           merchantId: Number(merchantId),
@@ -528,27 +549,25 @@ const DueList = () => {
           templateName: 'due_reminder',
           parameters: [name, `₹${bal}`, acc.nextDueDate || new Date().toLocaleDateString('en-IN'), 'https://mydop.in/pay/due']
         };
-        showToast(`💬 Dispatched WhatsApp Due Reminder via Telinfy to ${name}...`);
-        const res = await whatsAppApi.sendTemplateMessage(payload);
-        if (res?.data?.isSuccess) {
-          showToast(`✅ WhatsApp Due Reminder sent via Telinfy to ${name} (+91 ${cleanPhone})`);
-          return;
-        }
+        showToast(`💬 Opening WhatsApp for ${name} (+91 ${cleanPhone})...`);
+        whatsAppApi.sendTemplateMessage(payload).then(res => {
+          if (res?.data?.isSuccess) {
+            showToast(`✅ Telinfy template notification also queued for ${name}`);
+          }
+        }).catch(() => {
+          // Silent fallback since WhatsApp Web is already opened
+        });
       } catch (err) {
-        console.warn('Telinfy API send failed, falling back to WhatsApp Web:', err);
+        console.warn('Telinfy dispatch notice:', err);
       }
+    } else {
+      showToast(`💬 Opening WhatsApp Web for ${name}...`);
     }
 
-    const isLoan = acc.collectionType === 'LOAN';
-    const msg = isLoan
-      ? `Dear ${name},\nThis is a friendly reminder from DIGICOB Bank regarding your Loan Account #${accNo}.\nYour current outstanding / EMI due is ₹${bal}.\nPlease settle your installment at your earliest convenience.\nThank you!`
-      : `Dear ${name},\nThis is a friendly reminder from DIGICOB Bank regarding your RD Account #${accNo}.\nYour scheduled deposit amount is ₹${bal}.\nPlease complete your deposit collection at your earliest convenience.\nThank you!`;
-    
-    const waUrl = cleanPhone && cleanPhone.length === 10
-      ? `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(msg)}`
-      : `https://wa.me/?text=${encodeURIComponent(msg)}`;
-    
-    window.open(waUrl, '_blank');
+    if (!waWindow || waWindow.closed || typeof waWindow.closed === 'undefined') {
+      // If popup blocker intervened anyway, fallback to location navigation
+      window.location.href = waUrl;
+    }
   };
 
   // Export Due Sheet (.xlsx)

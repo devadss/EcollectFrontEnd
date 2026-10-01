@@ -3398,28 +3398,15 @@ const Accounts = () => {
   };
 
   const handleShareWhatsApp = async (url, amount, accNo, name, phone) => {
-    const targetPhone = phone || qrAccount?.mobileNumber || qrAccount?.phone || '';
-    const cleanPhone = targetPhone ? String(targetPhone).replace(/\D/g, '') : '';
-    const merchantId = localStorage.getItem('merchantId') || 22;
-
-    if (cleanPhone) {
-      try {
-        const payload = {
-          merchantId: Number(merchantId),
-          phoneNumber: cleanPhone,
-          templateName: 'paymentlink',
-          parameters: [url || 'https://mydop.in/adss/balance/report/filter']
-        };
-        showToast('💬 Sending WhatsApp Payment Link via Telinfy API...');
-        const res = await whatsAppApi.sendTemplateMessage(payload);
-        if (res?.data?.isSuccess) {
-          showToast(`✅ WhatsApp Payment Link sent via Telinfy to +91 ${cleanPhone}`);
-          return;
-        }
-      } catch (err) {
-        console.warn('Telinfy API send failed, falling back to WhatsApp Web:', err);
-      }
+    const targetPhone = phone || qrAccount?.mobileNumber || qrAccount?.phone || qrAccount?.customerPhone || '';
+    let cleanPhone = targetPhone ? String(targetPhone).replace(/\D/g, '') : '';
+    if (cleanPhone.length === 12 && cleanPhone.startsWith('91')) {
+      cleanPhone = cleanPhone.substring(2);
+    } else if (cleanPhone.length > 10) {
+      cleanPhone = cleanPhone.slice(-10);
     }
+
+    const merchantId = localStorage.getItem('merchantId') || 22;
 
     const isLoan = qrAccount?.collectionType === 'LOAN';
     const text = isLoan
@@ -3428,7 +3415,34 @@ const Accounts = () => {
     const waUrl = cleanPhone && cleanPhone.length === 10
       ? `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(text)}`
       : `https://wa.me/?text=${encodeURIComponent(text)}`;
-    window.open(waUrl, '_blank');
+
+    // Open WhatsApp Web immediately synchronously to avoid browser popup blocking
+    const waWin = window.open(waUrl, '_blank', 'noopener,noreferrer');
+    showToast(`💬 Opening WhatsApp for ${name || 'Customer'}...`);
+
+    if (cleanPhone && cleanPhone.length === 10) {
+      try {
+        const payload = {
+          merchantId: Number(merchantId),
+          phoneNumber: cleanPhone,
+          templateName: 'paymentlink',
+          parameters: [url || 'https://mydop.in/adss/balance/report/filter']
+        };
+        whatsAppApi.sendTemplateMessage(payload).then(res => {
+          if (res?.data?.isSuccess) {
+            showToast(`✅ WhatsApp Payment Link also sent via Telinfy to +91 ${cleanPhone}`);
+          }
+        }).catch(() => {
+          // Fallback handled by direct window open
+        });
+      } catch (err) {
+        console.warn('Telinfy API send error:', err);
+      }
+    }
+
+    if (!waWin || waWin.closed || typeof waWin.closed === 'undefined') {
+      window.location.href = waUrl;
+    }
   };
 
   // Interactive WhatsApp Payment Link Modal Opener & Dispatches
@@ -3459,6 +3473,9 @@ const Accounts = () => {
     }
 
     setWaSending(true);
+    // Pre-open blank popup window in direct response to the user's submit click to bypass browser popup blockers
+    const preOpenedWin = window.open('about:blank', '_blank');
+
     try {
       const cleanPhone = waRecipientPhone.replace(/\D/g, '').trim();
       const amountToCharge = Number(waCustomAmount || waTargetAccount?.dueAmount || waTargetAccount?.balance || 500);
@@ -3479,8 +3496,8 @@ const Accounts = () => {
       let generatedLink = '';
       try {
         const linkRes = await paymentApi.processPaymentLink(payload);
-        const resData = linkRes.data;
-        generatedLink = resData.payment_link || resData.paymentLink || resData.url || resData.paymentUrl || resData.short_url || resData.shortUrl || resData.data?.payment_link || resData.data?.paymentLink || resData.data?.url || (typeof resData === 'string' ? resData : null);
+        const resData = linkRes?.data;
+        generatedLink = resData?.payment_link || resData?.paymentLink || resData?.url || resData?.paymentUrl || resData?.short_url || resData?.shortUrl || resData?.data?.payment_link || resData?.data?.paymentLink || resData?.data?.url || (typeof resData === 'string' ? resData : null);
       } catch (err) {
         console.warn('Payment link API fallback to short link:', err);
       }
@@ -3489,8 +3506,18 @@ const Accounts = () => {
         generatedLink = `https://mydop.in/pay/${waTargetAccount?.accountNumber || 'due'}?amt=${amountToCharge}`;
       }
 
-      // 2. Dispatch via Telinfy REST API
-      showToast('💬 Dispatching WhatsApp Payment Link via Telinfy API...');
+      const text = `Dear ${waTargetAccount?.accountHolder || 'Customer'},\nPlease complete your payment of ₹${amountToCharge.toLocaleString('en-IN')} via this Finwin Payment Link:\n${generatedLink}\n\nThank you!`;
+      const waUrl = `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(text)}`;
+
+      // Direct WhatsApp destination in pre-opened window
+      if (preOpenedWin) {
+        preOpenedWin.location.href = waUrl;
+      } else {
+        window.location.href = waUrl;
+      }
+
+      // 2. Dispatch via Telinfy REST API in parallel/background
+      showToast(`💬 Dispatched payment link to WhatsApp for +91 ${cleanPhone}`);
       const waPayload = {
         merchantId: Number(merchantId),
         phoneNumber: cleanPhone,
@@ -3498,19 +3525,19 @@ const Accounts = () => {
         parameters: [generatedLink]
       };
 
-      const waRes = await whatsAppApi.sendTemplateMessage(waPayload);
-      if (waRes?.data?.isSuccess) {
-        showToast(`✅ WhatsApp Payment Link sent via Telinfy to +91 ${cleanPhone}!`);
-        setWaModalOpen(false);
-      } else {
-        // Fallback to WhatsApp Web if API fails
-        const text = `Dear ${waTargetAccount?.accountHolder || 'Customer'},\nPlease complete your payment of ₹${amountToCharge.toLocaleString('en-IN')} via this Finwin Payment Link:\n${generatedLink}\n\nThank you!`;
-        window.open(`https://wa.me/91${cleanPhone}?text=${encodeURIComponent(text)}`, '_blank');
-        showToast(`Opened WhatsApp Web for +91 ${cleanPhone}`);
-        setWaModalOpen(false);
+      try {
+        const waRes = await whatsAppApi.sendTemplateMessage(waPayload);
+        if (waRes?.data?.isSuccess) {
+          showToast(`✅ WhatsApp Payment Link also sent via Telinfy API!`);
+        }
+      } catch (waErr) {
+        // Fallback is already opened in WhatsApp Web
       }
+
+      setWaModalOpen(false);
     } catch (err) {
       console.error('WhatsApp Modal dispatch error:', err);
+      if (preOpenedWin) preOpenedWin.close();
       showToast('Error generating or sending WhatsApp link', 'error');
     } finally {
       setWaSending(false);
