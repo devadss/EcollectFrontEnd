@@ -385,58 +385,70 @@
 +---------------------------------------------------------------------------------------------------+
 |                                 ECOLLECT &lt;---&gt; CBS INTEGRATION ARCHITECTURE                       |
 +---------------------------------------------------------------------------------------------------+
-|  [ Field Agent Mobile App ]      [ ECollect Cloud Gateway ]             [ Core Banking System ]   |
-|               |                              |                                      |             |
-|   === 1. MASTER SYNC ===                     |                                      |             |
-|               |  Pull Branches / Agents      |  POST /api/cbs/branches              |             |
-|               |-----------------------------&gt;|  POST /api/cbs/agents                |             |
-|               |                              |-------------------------------------&gt;| (CBS DB)    |
-|               |                              |&lt;-------------------------------------|             |
-|               |                              |                                      |             |
-|   === 2. DATA FETCHING WORKFLOW ===          |                                      |             |
-|   Search Acc / Mobile                        |  POST /api/cbs/account-details       |             |
-|   ------------------------------------------&gt;|-------------------------------------&gt;| (Validate)  |
-|   Display Profile, Balance, Scheme           |&lt;-------------------------------------|             |
-|                                              |                                      |             |
-|   Request Live Due / Demand                  |  POST /api/cbs/installment-due       |             |
-|   ------------------------------------------&gt;|-------------------------------------&gt;| (Accrual)   |
-|   Display Live Principal, Interest, Penal    |&lt;-------------------------------------|             |
-|                                              |                                      |             |
-|   === 3. TRANSACTION POSTING WORKFLOW ===    |                                      |             |
-|   Collect Cash / Dynamic UPI QR              |  POST /api/cbs/transaction-post      |             |
-|   ------------------------------------------&gt;|-------------------------------------&gt;| (Credit GL) |
-|   Print Receipt / SMS / WhatsApp             |&lt;-------------------------------------|             |
-|                                              |                                      |             |
-|   === 4. EXCEPTION / TIMEOUT FALLBACK ===    |  POST /api/cbs/transaction-status    |             |
-|   Verify Txn Status if Network Drops         |-------------------------------------&gt;| (Check GL)  |
-|                                              |&lt;-------------------------------------|             |
-|                                              |                                      |             |
-|   === 5. END-OF-DAY RECONCILIATION ===       |  POST /api/cbs/day-reconciliation    |             |
-|   Automated EOD Closing Verification         |-------------------------------------&gt;| (Reconcile) |
-|                                              |&lt;-------------------------------------|             |
+|   [ CLIENT CHANNELS ]            [ ECollect Cloud Gateway ]             [ Core Banking System ]   |
+|   1. Field Agent Mobile App                   |                                     |             |
+|   2. Branch Web Portal (Branch Login)         |                                     |             |
+|               |                               |                                     |             |
+|   === 1. MASTER SYNC ===                      |                                     |             |
+|               |  Pull Branches / Agents       |  POST /api/cbs/branches             |             |
+|               |------------------------------&gt;|  POST /api/cbs/agents               |             |
+|               |                               |------------------------------------&gt;| (CBS DB)    |
+|               |                               |&lt;------------------------------------|             |
+|               |                               |                                     |             |
+|   === 2. DATA &amp; DUE LISTING (WEB &amp; MOBILE) ===|                                     |             |
+|   Branch Web Login: List Branch Accounts/Dues |  POST /api/cbs/account-details      |             |
+|   Field Agent App: Search Customer Account    |------------------------------------&gt;| (Validate)  |
+|   Display Live Profile, Balance, Scheme       |&lt;------------------------------------|             |
+|                                               |                                     |             |
+|   Live Due &amp; Demand Calculation               |  POST /api/cbs/installment-due      |             |
+|   -------------------------------------------&gt;|------------------------------------&gt;| (Accrual)   |
+|   Display Live Principal, Interest, Penalties |&lt;------------------------------------|             |
+|                                               |                                     |             |
+|   === 3. TRANSACTION POSTING (FIELD &amp; COUNTER)|                                     |             |
+|   Field Collection OR Branch Counter Payment  |  POST /api/cbs/transaction-post     |             |
+|   (Cash / Dynamic UPI QR)                     |------------------------------------&gt;| (Credit GL) |
+|   Print Receipt / SMS / WhatsApp              |&lt;------------------------------------|             |
+|                                               |                                     |             |
+|   === 4. EXCEPTION / TIMEOUT FALLBACK ===     |  POST /api/cbs/transaction-status   |             |
+|   Verify Txn Status if Network Drops          |------------------------------------&gt;| (Check GL)  |
+|                                               |&lt;------------------------------------|             |
+|                                               |                                     |             |
+|   === 5. END-OF-DAY RECONCILIATION ===        |  POST /api/cbs/day-reconciliation   |             |
+|   Branch Day-End Audit &amp; Verification         |------------------------------------&gt;| (Reconcile) |
+|                                               |&lt;------------------------------------|             |
 +---------------------------------------------------------------------------------------------------+
   </div>
 
+  <div class="callout" style="background: #eff6ff; border-left-color: var(--primary);">
+    <strong>Unified Multi-Channel Access (Web Portal &amp; Mobile App):</strong>
+    <p style="margin-top: 5px; font-size: 13.5px; color: #1e3a8a;">Both the <strong>Field Agent Mobile App</strong> and the <strong>Branch Web Portal (Branch Login)</strong> interact with CBS through the exact same ECollect Gateway endpoints:</p>
+    <ul style="margin: 6px 0 0 18px; font-size: 13px; color: #1e40af;">
+      <li><strong>When Logging into the Branch on the Web:</strong> Branch staff and managers access complete real-time branch listings&mdash;including Customer Accounts, Branch Due Lists, Agent Collections, and Counter Payments.</li>
+      <li><strong>Field Agent Mobile App:</strong> Enables doorstep customer search, live EMI/due calculations, and cash/dynamic UPI collections on the move.</li>
+    </ul>
+  </div>
+
   <h3>1.2 Workflow 1: Real-Time Data Fetching &amp; Live Due Calculation</h3>
-  <p>Enables field representatives to search customer accounts on demand and compute live overdue amounts, accrued interest, penalty charges, and allowable payment ranges directly from the CBS engine.</p>
+  <p>Enables both <strong>Branch Users (logged into the Web Portal)</strong> and <strong>Field Agents (on the Mobile App)</strong> to query customer records on demand and compute live overdue amounts, accrued interest, penalty charges, and allowable payment ranges directly from the CBS engine.</p>
 
   <div class="diagram-box">
-[ Field Agent Mobile App ]                [ ECollect Cloud Gateway ]                 [ Core Banking System (CBS) ]
+[ Field Agent App / Branch Web Login ]     [ ECollect Cloud Gateway ]                 [ Core Banking System (CBS) ]
          |                                           |                                             |
-         | --- 1. Search (Acc No / Mobile / ID) ---&gt; |                                             |
+         | --- 1. Search / View Branch Listing ----&gt; |                                             |
+         |        (Acc No / Mobile / Due List)       |                                             |
          |                                           | --- 2. POST /api/cbs/account-details -----&gt; |
          |                                           |        (search_type, account_no, branch)    |
          |                                           |                                             | -- Validates Status &amp; KYC
          |                                           | &lt;-- 3. Return 200 OK (Profile &amp; Balance) -- |
-         | &lt;-- 4. Display Account Card on Mobile --- |                                             |
+         | &lt;-- 4. Display Account Card (Web/App) --- |                                             |
          |                                           |                                             |
-         | --- 5. Tap "Fetch Live Due" -------------&gt; |                                             |
+         | --- 5. Request Live Due / Demand -------&gt; |                                             |
          |                                           | --- 6. POST /api/cbs/installment-due -----&gt; |
          |                                           |        (account_no, product_type, date)     |
          |                                           |                                             | -- Runs Accrual &amp; Overdue
          |                                           | &lt;-- 7. Return 200 OK (Live Due Breakdown) - |
          | &lt;-- 8. Render Due Breakdown &amp; Pay Tabs --- |                                             |
-         |                                           |                                             |
+         |        (Full Due, Min Due, Custom Amount) |                                             |
   </div>
 
   <div class="table-container">
