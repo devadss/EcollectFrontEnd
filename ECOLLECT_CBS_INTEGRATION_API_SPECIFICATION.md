@@ -27,6 +27,8 @@ When migrating a client from the **Non-Integrated (Standalone) Model** to the **
 | **Installment Due Info** | Static daily demand list | Real-time live due calculation |
 | **Transaction Posting** | Local ledger entry; EOD CSV export | Real-time ledger credit with CBS Receipt No |
 | **Payment Modes** | Cash & UPI | Cash & Instant Dynamic UPI QR |
+| **WhatsApp Reminders & Links** | 1-Click WhatsApp Due Reminders & Payment Links (Telinfy API & Deep Link) | Automated CBS-linked WhatsApp Reminders & Dynamic QR Payment Links |
+| **Customer Receipts** | Digital Receipt via SMS / WhatsApp & Thermal Print | Instant CBS Receipt No via SMS / WhatsApp & Thermal Print |
 | **Reconciliation** | Manual Day-End match | Automated API-to-API Day-End summary |
 
 ---
