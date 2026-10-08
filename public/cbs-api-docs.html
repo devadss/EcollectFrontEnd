@@ -451,10 +451,11 @@
 |               |                               |                                     |             |
 |   === 2. DATA &amp; DUE LISTING (WEB &amp; MOBILE) ===|                                     |             |
 |   Branch Web Login: List Branch Accounts/Dues |  POST /api/cbs/account-details      |             |
+|                                               |  POST /api/cbs/due-list             |             |
 |   Field Agent App: Search Customer Account    |------------------------------------&gt;| (Validate)  |
 |   Display Live Profile, Balance, Scheme       |&lt;------------------------------------|             |
 |                                               |                                     |             |
-|   Live Due &amp; Demand Calculation               |  POST /api/cbs/installment-due      |             |
+|   Live Due &amp; Demand Calculation               |  POST /api/cbs/due-details          |             |
 |   -------------------------------------------&gt;|------------------------------------&gt;| (Accrual)   |
 |   Display Live Principal, Interest, Penalties |&lt;------------------------------------|             |
 |                                               |                                     |             |
@@ -467,7 +468,7 @@
 |   Verify Txn Status if Network Drops          |------------------------------------&gt;| (Check GL)  |
 |                                               |&lt;------------------------------------|             |
 |                                               |                                     |             |
-|   === 5. END-OF-DAY RECONCILIATION ===        |  POST /api/cbs/day-reconciliation   |             |
+|   === 5. END-OF-DAY RECONCILIATION ===        |  POST /api/cbs/reconciliation       |             |
 |   Branch Day-End Audit &amp; Verification         |------------------------------------&gt;| (Reconcile) |
 |                                               |&lt;------------------------------------|             |
 +---------------------------------------------------------------------------------------------------+
@@ -477,7 +478,7 @@
     <strong>Unified Multi-Channel Access (Web Portal &amp; Mobile App):</strong>
     <p style="margin-top: 5px; font-size: 13.5px; color: #1e3a8a;">Both the <strong>Field Agent Mobile App</strong> and the <strong>Branch Web Portal (Branch Login)</strong> interact with CBS through the exact same ECollect Gateway endpoints:</p>
     <ul style="margin: 6px 0 0 18px; font-size: 13px; color: #1e40af;">
-      <li><strong>When Logging into the Branch on the Web:</strong> Branch staff and managers access complete real-time branch listings&mdash;including Customer Accounts, Branch Due Lists, Agent Collections, and Counter Payments.</li>
+      <li><strong>When Logging into the Branch on the Web:</strong> Branch staff and managers access complete real-time branch listings&mdash;including Customer Accounts, Branch Due Lists (<code>/api/cbs/due-list</code>), Agent Collections, and Counter Payments.</li>
       <li><strong>Field Agent Mobile App:</strong> Enables doorstep customer search, live EMI/due calculations, and cash/dynamic UPI collections on the move.</li>
     </ul>
   </div>
@@ -491,14 +492,14 @@
          | --- 1. Search / View Branch Listing ----&gt; |                                             |
          |        (Acc No / Mobile / Due List)       |                                             |
          |                                           | --- 2. POST /api/cbs/account-details -----&gt; |
-         |                                           |        (search_type, account_no, branch)    |
+         |                                           |        (client_code, search_type, account)  |
          |                                           |                                             | -- Validates Status &amp; KYC
          |                                           | &lt;-- 3. Return 200 OK (Profile &amp; Balance) -- |
          | &lt;-- 4. Display Account Card (Web/App) --- |                                             |
          |                                           |                                             |
          | --- 5. Request Live Due / Demand -------&gt; |                                             |
-         |                                           | --- 6. POST /api/cbs/installment-due -----&gt; |
-         |                                           |        (account_no, product_type, date)     |
+         |                                           | --- 6. POST /api/cbs/due-details ---------&gt; |
+         |                                           |        (client_code, account_no, branch)    |
          |                                           |                                             | -- Runs Accrual &amp; Overdue
          |                                           | &lt;-- 7. Return 200 OK (Live Due Breakdown) - |
          | &lt;-- 8. Render Due Breakdown &amp; Pay Tabs --- |                                             |
@@ -529,7 +530,7 @@
         <td>Account Verification</td>
         <td><span class="badge post">POST</span> <code>/api/cbs/account-details</code></td>
         <td>Core Banking System</td>
-        <td>Gateway queries CBS with <code>search_type</code>, <code>account_number</code>, and <code>branch_code</code>. CBS validates account is ACTIVE and belongs to the requested branch.</td>
+        <td>Gateway queries CBS with <code>client_code</code>, <code>search_type</code>, <code>account_number</code>, and <code>branch_code</code>. CBS validates account is ACTIVE and belongs to the requested client institution and branch.</td>
       </tr>
       <tr>
         <td><strong>Step 3</strong></td>
@@ -541,9 +542,9 @@
       <tr>
         <td><strong>Step 4</strong></td>
         <td>Live Demand Computation</td>
-        <td><span class="badge post">POST</span> <code>/api/cbs/installment-due</code></td>
+        <td><span class="badge post">POST</span> <code>/api/cbs/due-details</code></td>
         <td>Core Banking System</td>
-        <td>Triggered when agent views demand or initiates payment. CBS computes live accruals: <code>installment_amount</code>, <code>principal_due</code>, <code>interest_due</code>, <code>penalty_charges</code>, and <code>total_due_amount</code>.</td>
+        <td>Triggered when agent views demand or initiates payment (or branch loads due list via <code>/api/cbs/due-list</code>). CBS computes live accruals with <code>client_code</code>: <code>installment_amount</code>, <code>principal_due</code>, <code>interest_due</code>, <code>penalty_charges</code>, and <code>total_due_amount</code>.</td>
       </tr>
       <tr>
         <td><strong>Step 5</strong></td>
@@ -565,8 +566,8 @@
          | --- 1. Collect Cash OR Scan UPI QR -----&gt; |                                             |
          |        (Validates Cash Limits &amp; Order ID) |                                             |
          |                                           | --- 2. POST /api/cbs/transaction-post ----&gt; |
-         |                                           |        (order_id, deposit_amount, agent_id, |
-         |                                           |         branch, tran_type: 'C', upi_rrn)    |
+         |                                           |        (client_code, order_id, amount,      |
+         |                                           |         agent_id, branch, tran_type, rrn)   |
          |                                           |                                             | -- Idempotency Check
          |                                           |                                             | -- Credit Customer Ledger
          |                                           |                                             | -- Debit Agent/Bank GL
@@ -577,7 +578,7 @@
          |                                           |                                             |
          | [IF TIMEOUT / CONNECTION DROP]:           |                                             |
          |                                           | --- 5. POST /api/cbs/transaction-status --&gt; |
-         |                                           |        (order_id, client_code)              |
+         |                                           |        (client_code, order_id, account_no)  |
          |                                           | &lt;-- 6. Confirms Posted / Not Found -------- |
          |                                           |        (Prevents duplicate ledger credit)   |
   </div>
@@ -606,7 +607,7 @@
         <td>Real-Time Ledger Posting</td>
         <td><span class="badge post">POST</span> <code>/api/cbs/transaction-post</code></td>
         <td>Core Banking System</td>
-        <td>Gateway initiates authenticated posting payload: <code>order_id</code>, <code>account_no</code>, <code>deposit_amount</code>, <code>tran_type: "C"</code>, <code>payment_channel: "CASH"|"UPI"</code>, <code>agent_id</code>, <code>branch_code</code>, <code>upi_rrn</code>, and timestamp.</td>
+        <td>Gateway initiates authenticated posting payload: <code>client_code</code>, <code>order_id</code>, <code>account_no</code>, <code>deposit_amount</code>, <code>tran_type: "C"</code>, <code>payment_channel: "CASH"|"UPI"</code>, <code>agent_id</code>, <code>branch_code</code>, <code>upi_rrn</code>, and timestamp.</td>
       </tr>
       <tr>
         <td><strong>Step 3</strong></td>
@@ -627,14 +628,14 @@
         <td>Timeout Fallback Safeguard</td>
         <td><span class="badge post">POST</span> <code>/api/cbs/transaction-status</code></td>
         <td>Core Banking System</td>
-        <td><strong>Network Disconnect Handling:</strong> If the HTTP connection drops before ECollect receives confirmation, Gateway calls this endpoint using <code>order_id</code> to verify whether CBS posted the credit before retrying.</td>
+        <td><strong>Network Disconnect Handling:</strong> If the HTTP connection drops before ECollect receives confirmation, Gateway calls this endpoint using <code>client_code</code> and <code>order_id</code> to verify whether CBS posted the credit before retrying.</td>
       </tr>
       <tr>
         <td><strong>Step 6</strong></td>
         <td>EOD Reconciliation</td>
-        <td><span class="badge post">POST</span> <code>/api/cbs/day-reconciliation</code></td>
+        <td><span class="badge post">POST</span> <code>/api/cbs/reconciliation</code></td>
         <td>Core Banking System</td>
-        <td><strong>Day-End Automated Audit:</strong> Compares total collected volume, transaction counts, and branch totals between ECollect and CBS ledgers to authorize day closing.</td>
+        <td><strong>Day-End Automated Audit:</strong> Compares total collected volume, transaction counts, and branch totals between ECollect and CBS ledgers for the specified <code>client_code</code> to authorize day closing.</td>
       </tr>
     </tbody>
   </table>
@@ -785,6 +786,7 @@ X-REQUEST-ID: REQ202609231450001234</pre>
     
     <p><strong>Request Body:</strong></p>
     <pre>{
+  "client_code": "FIN001",
   "search_type": "ACCOUNT_NO",
   "account_number": "LN100200300",
   "mobile_number": "",
@@ -829,12 +831,14 @@ X-REQUEST-ID: REQ202609231450001234</pre>
       <span class="badge post">POST</span>
       <span class="endpoint-url">/api/cbs/due-details</span>
     </div>
-    <p><strong>Purpose:</strong> Real-time due & demand calculation (Principal, Interest, Overdue, and Penalty breakdown).</p>
+    <p><strong>Purpose:</strong> Real-time due & demand calculation for an account (Principal, Interest, Overdue, and Penalty breakdown).</p>
     
     <p><strong>Request Body:</strong></p>
     <pre>{
+  "client_code": "FIN001",
   "account_number": "LN100200300",
   "product_type": "LOAN",
+  "branch_code": "BR001",
   "as_on_date": "2026-09-23"
 }</pre>
 
@@ -869,12 +873,64 @@ X-REQUEST-ID: REQ202609231450001234</pre>
   <div class="endpoint-card">
     <div class="endpoint-header">
       <span class="badge post">POST</span>
+      <span class="endpoint-url">/api/cbs/due-list</span>
+    </div>
+    <p><strong>Purpose:</strong> Real-time branch or agent installment due listing / demand schedule (for Branch Web Portal and Agent Due Lists).</p>
+    
+    <p><strong>Request Body:</strong></p>
+    <pre>{
+  "client_code": "FIN001",
+  "branch_code": "BR001",
+  "agent_code": "AGT101",
+  "product_type": "ALL",
+  "as_on_date": "2026-09-23",
+  "page": 1,
+  "limit": 50
+}</pre>
+
+    <p><strong>Response (200 OK):</strong></p>
+    <pre>{
+  "status": "SUCCESS",
+  "response_code": "00",
+  "message": "Due list fetched successfully",
+  "data": {
+    "total_records": 128,
+    "page": 1,
+    "limit": 50,
+    "records": [
+      {
+        "account_number": "LN100200300",
+        "customer_id": "CUST9001",
+        "customer_name": "Suresh Kumar K",
+        "mobile_number": "9847000000",
+        "product_type": "LOAN",
+        "branch_code": "BR001",
+        "assigned_agent_code": "AGT101",
+        "installment_amount": 5000.00,
+        "principal_due": 3800.00,
+        "interest_due": 1200.00,
+        "overdue_principal": 5000.00,
+        "penalty_charges": 150.00,
+        "total_due_amount": 10150.00,
+        "days_past_due": 38,
+        "next_due_date": "2026-10-05"
+      }
+    ]
+  }
+}</pre>
+  </div>
+
+  <!-- API 6 -->
+  <div class="endpoint-card">
+    <div class="endpoint-header">
+      <span class="badge post">POST</span>
       <span class="endpoint-url">/api/cbs/transaction-post</span>
     </div>
     <p><strong>Purpose:</strong> Post live collection into CBS ledger for Cash or Instant Dynamic UPI QR collections.</p>
     
     <p><strong>Request Body:</strong></p>
     <pre>{
+  "client_code": "FIN001",
   "order_id": "ORD202609231450009988",
   "account_no": "LN100200300",
   "product_type": "LOAN",
@@ -916,7 +972,7 @@ X-REQUEST-ID: REQ202609231450001234</pre>
 }</pre>
   </div>
 
-  <!-- API 6 -->
+  <!-- API 7 -->
   <div class="endpoint-card">
     <div class="endpoint-header">
       <span class="badge post">POST</span>
@@ -926,6 +982,7 @@ X-REQUEST-ID: REQ202609231450001234</pre>
     
     <p><strong>Request Body:</strong></p>
     <pre>{
+  "client_code": "FIN001",
   "order_id": "ORD202609231450009988",
   "account_no": "LN100200300",
   "cbs_transaction_id": "CBS_TXN_8849201"
@@ -948,7 +1005,7 @@ X-REQUEST-ID: REQ202609231450001234</pre>
 }</pre>
   </div>
 
-  <!-- API 7 -->
+  <!-- API 8 -->
   <div class="endpoint-card">
     <div class="endpoint-header">
       <span class="badge post">POST</span>
@@ -958,6 +1015,7 @@ X-REQUEST-ID: REQ202609231450001234</pre>
     
     <p><strong>Request Body:</strong></p>
     <pre>{
+  "client_code": "FIN001",
   "collection_date": "2026-09-23",
   "branch_code": "BR001",
   "agent_code": "AGT101",
@@ -982,7 +1040,7 @@ X-REQUEST-ID: REQ202609231450001234</pre>
 }</pre>
   </div>
 
-  <!-- API 8 -->
+  <!-- API 9 -->
   <div class="endpoint-card">
     <div class="endpoint-header">
       <span class="badge post">POST</span>
@@ -992,6 +1050,7 @@ X-REQUEST-ID: REQ202609231450001234</pre>
     
     <p><strong>Request Body:</strong></p>
     <pre>{
+  "client_code": "FIN001",
   "order_id": "ORD202609231450009988",
   "cbs_transaction_id": "CBS_TXN_8849201",
   "account_no": "LN100200300",

@@ -94,7 +94,7 @@ sequenceDiagram
 
     Note over User,CBS: PHASE 1: CUSTOMER & ACCOUNT LOOKUP (WEB PORTAL & MOBILE)
     User->>GW: 1. Input Account No / Mobile No / Customer ID (or Branch Due Listing)
-    GW->>CBS: 2. API Call: POST /api/cbs/account-details<br/>Headers: X-API-KEY, X-CLIENT-CODE<br/>Payload: { search_type, account_number, branch_code }
+    GW->>CBS: 2. API Call: POST /api/cbs/account-details<br/>Headers: X-API-KEY, X-CLIENT-CODE<br/>Payload: { client_code, search_type, account_number, branch_code }
     Note over CBS: Validates: Account Status (ACTIVE),<br/>Branch Mapping & KYC Flag
     alt Account Found & Active
         CBS-->>GW: 3. Return 200 OK + Account & Customer Profile<br/>(Customer Name, Balance, Scheme, Assigned Agent)
@@ -104,9 +104,9 @@ sequenceDiagram
         GW-->>User: Show Warning: "Account cannot accept collections"
     end
 
-    Note over User,CBS: PHASE 2: REAL-TIME INSTALLMENT DUE CALCULATION
-    User->>GW: 5. Request Live Due / Demand (or auto-fetch on selection)
-    GW->>CBS: 6. API Call: POST /api/cbs/installment-due<br/>Payload: { account_number, product_type, as_on_date }
+    Note over User,CBS: PHASE 2: REAL-TIME INSTALLMENT DUE CALCULATION & DUE LISTING
+    User->>GW: 5. Request Live Due / Demand (or fetch branch due list via /api/cbs/due-list)
+    GW->>CBS: 6. API Call: POST /api/cbs/due-details<br/>Payload: { client_code, account_number, branch_code, product_type, as_on_date }
     Note over CBS: Runs Interest Accrual, Overdue Aging,<br/>and Min/Max Payable limits
     CBS-->>GW: 7. Return 200 OK + Live Due Breakdown<br/>{ installment_amount, principal_due, interest_due, penalty_charges, total_due_amount, min_payable, max_payable }
     GW-->>User: 8. Render Breakdown on Web Portal / Mobile Screen<br/>(One-tap collection buttons: Full Due, Min Due, Custom Amount)
@@ -116,11 +116,11 @@ sequenceDiagram
 
 | Step | Initiator | API Call Name | Target System | Purpose & Data Transferred |
 | :---: | :--- | :--- | :--- | :--- |
-| **1** | Mobile App / Branch Web Portal | `Search / Due Query` | ECollect Gateway | Agent on Mobile or Branch User on Web Portal inputs Account Number (e.g. `LN100200300`) or views Branch Due Listing. |
-| **2** | ECollect Gateway | `POST /api/cbs/account-details` | CBS Host | Gateway sends authenticated lookup query to CBS with `account_number` and `branch_code`. |
+| **1** | Mobile App / Branch Web Portal | `Search / Due Query` | ECollect Gateway | Agent on Mobile or Branch User on Web Portal inputs Account Number (e.g. `LN100200300`) or views Branch Due Listing (`/api/cbs/due-list`). |
+| **2** | ECollect Gateway | `POST /api/cbs/account-details` | CBS Host | Gateway sends authenticated lookup query to CBS with `client_code`, `search_type`, `account_number`, and `branch_code`. |
 | **3** | CBS | `Account Details Response` | ECollect Gateway | CBS returns customer identity, scheme type, current balance, opened date, and KYC status. |
-| **4** | Mobile App / Branch Web Portal | `Demand Query` | ECollect Gateway | Triggered when agent selects payment or branch user views current collection demand. |
-| **5** | ECollect Gateway | `POST /api/cbs/installment-due` | CBS Host | Requests live calculation as of current date (`as_on_date`), passing `product_type`. |
+| **4** | Mobile App / Branch Web Portal | `Demand Query` | ECollect Gateway | Triggered when agent selects payment or branch user views current collection demand schedule. |
+| **5** | ECollect Gateway | `POST /api/cbs/due-details` | CBS Host | Requests live calculation as of current date (`as_on_date`), passing `client_code`, `branch_code`, and `product_type`. |
 | **6** | CBS | `Live Due Response` | ECollect Gateway | CBS returns exact split: `principal_due`, `interest_due`, `penalty_charges`, `total_due_amount`. |
 
 ---
@@ -142,7 +142,7 @@ sequenceDiagram
     User->>GW: 2. Submit Collection { amount, channel: CASH / UPI, account_no }
 
     Note over GW,CBS: PHASE 1: REAL-TIME LEDGER POSTING
-    GW->>CBS: 3. API Call: POST /api/cbs/transaction-post<br/>Headers: X-API-KEY, X-CLIENT-CODE, X-REQUEST-ID<br/>Payload: { order_id, account_no, deposit_amount, tran_type: "C",<br/>payment_channel, agent_id, branch_code, upi_rrn, txn_timestamp }
+    GW->>CBS: 3. API Call: POST /api/cbs/transaction-post<br/>Headers: X-API-KEY, X-CLIENT-CODE, X-REQUEST-ID<br/>Payload: { client_code, order_id, account_no, deposit_amount, tran_type: "C",<br/>payment_channel, agent_id, branch_code, upi_rrn, txn_timestamp }
     
     Note over CBS: CBS Ledger Posting Engine:<br/>1. Check duplicate order_id (Idempotency)<br/>2. Credit Customer Account / Loan Ledger<br/>3. Debit Agent Cash-in-Hand GL / Branch Counter GL<br/>4. Generate CBS Transaction ID & CBS Receipt No
 
@@ -152,7 +152,7 @@ sequenceDiagram
         User->>Customer: 6. Instant Thermal / Counter Receipt & SMS / WhatsApp Alert
     else Network Timeout / Connection Drop
         Note over GW,CBS: PHASE 2: AUTOMATIC TIMEOUT FALLBACK
-        GW->>CBS: 7. API Call: POST /api/cbs/transaction-status<br/>Payload: { order_id, client_code }
+        GW->>CBS: 7. API Call: POST /api/cbs/transaction-status<br/>Payload: { client_code, order_id, account_no }
         alt CBS Confirms Txn Already Posted
             CBS-->>GW: 8a. Return status: "SUCCESS" + existing cbs_transaction_id
             GW-->>User: Complete receipt generation without double-posting
@@ -168,11 +168,11 @@ sequenceDiagram
 | Step | Initiator | API Call Name | Target System | Purpose & Data Transferred |
 | :---: | :--- | :--- | :--- | :--- |
 | **1** | Mobile App | `Payment Execution` | ECollect Gateway | Agent collects payment (`CASH` or `UPI`). Gateway assigns unique `order_id` (e.g. `ORD202610011450009988`). |
-| **2** | ECollect Gateway | `POST /api/cbs/transaction-post` | CBS Host | Primary posting payload sent over mutual whitelisted HTTPS connection with full audit parameters. |
+| **2** | ECollect Gateway | `POST /api/cbs/transaction-post` | CBS Host | Primary posting payload sent over mutual whitelisted HTTPS connection with `client_code` and full audit parameters. |
 | **3** | CBS | `Ledger Processing` | CBS Internal DB | Credits loan/deposit account, updates interest schedules, debits agent GL, and issues `cbs_receipt_no`. |
 | **4** | CBS | `200 OK Response` | ECollect Gateway | Returns `response_code: "00"`, `cbs_transaction_id`, `cbs_receipt_no`, and `updated_balance`. |
-| **5** | ECollect Gateway | `POST /api/cbs/transaction-status` *(Fallback)* | CBS Host | **Automated Timeout Safeguard:** If network drops before receiving 200 OK, Gateway checks transaction status before retrying to prevent duplicate debit/credit. |
-| **6** | ECollect Gateway | `POST /api/cbs/day-reconciliation` | CBS Host | **EOD Closing:** Compares total daily volume and transaction count between ECollect and CBS ledgers. |
+| **5** | ECollect Gateway | `POST /api/cbs/transaction-status` *(Fallback)* | CBS Host | **Automated Timeout Safeguard:** If network drops before receiving 200 OK, Gateway checks transaction status with `client_code` and `order_id` before retrying to prevent duplicate debit/credit. |
+| **6** | ECollect Gateway | `POST /api/cbs/reconciliation` | CBS Host | **EOD Closing:** Compares total daily volume and transaction count between ECollect and CBS ledgers for `client_code`. |
 
 ---
 
@@ -315,6 +315,7 @@ All responses must adhere to the standard envelope structure:
 #### Request Body:
 ```json
 {
+  "client_code": "FIN001",
   "search_type": "ACCOUNT_NO",
   "account_number": "LN100200300",
   "mobile_number": "",
@@ -363,13 +364,15 @@ All responses must adhere to the standard envelope structure:
 
 ### 4.4 Real-Time Due & Demand Details API
 - **Endpoint**: `POST /api/cbs/due-details`
-- **Purpose**: Calculate live installment dues, overdue principal, interest breakdown, and penalty charges as on date.
+- **Purpose**: Calculate live installment dues, overdue principal, interest breakdown, and penalty charges as on date for a single account.
 
 #### Request Body:
 ```json
 {
+  "client_code": "FIN001",
   "account_number": "LN100200300",
   "product_type": "LOAN",
+  "branch_code": "BR001",
   "as_on_date": "2026-09-23"
 }
 ```
@@ -404,13 +407,66 @@ All responses must adhere to the standard envelope structure:
 
 ---
 
-### 4.5 Real-Time Transaction Posting API
+### 4.5 Branch & Agent Due Listing API
+- **Endpoint**: `POST /api/cbs/due-list`
+- **Purpose**: Real-time branch or agent installment due listing / demand schedule (for Branch Web Portal and Agent Due Lists).
+
+#### Request Body:
+```json
+{
+  "client_code": "FIN001",
+  "branch_code": "BR001",
+  "agent_code": "AGT101",
+  "product_type": "ALL",
+  "as_on_date": "2026-09-23",
+  "page": 1,
+  "limit": 50
+}
+```
+
+#### Success Response (`200 OK`):
+```json
+{
+  "status": "SUCCESS",
+  "response_code": "00",
+  "message": "Due list fetched successfully",
+  "data": {
+    "total_records": 128,
+    "page": 1,
+    "limit": 50,
+    "records": [
+      {
+        "account_number": "LN100200300",
+        "customer_id": "CUST9001",
+        "customer_name": "Suresh Kumar K",
+        "mobile_number": "9847000000",
+        "product_type": "LOAN",
+        "branch_code": "BR001",
+        "assigned_agent_code": "AGT101",
+        "installment_amount": 5000.00,
+        "principal_due": 3800.00,
+        "interest_due": 1200.00,
+        "overdue_principal": 5000.00,
+        "penalty_charges": 150.00,
+        "total_due_amount": 10150.00,
+        "days_past_due": 38,
+        "next_due_date": "2026-10-05"
+      }
+    ]
+  }
+}
+```
+
+---
+
+### 4.6 Real-Time Transaction Posting API
 - **Endpoint**: `POST /api/cbs/transaction-post`
 - **Purpose**: Post live collection transaction into CBS ledger immediately (supports Cash Collection and Instant Dynamic UPI QR Payments).
 
 #### Request Body:
 ```json
 {
+  "client_code": "FIN001",
   "order_id": "ORD202609231450009988",
   "account_no": "LN100200300",
   "product_type": "LOAN",
@@ -459,13 +515,14 @@ All responses must adhere to the standard envelope structure:
 
 ---
 
-### 4.6 Transaction Status Enquiry / Re-Query API
+### 4.7 Transaction Status Enquiry / Re-Query API
 - **Endpoint**: `POST /api/cbs/transaction-status`
 - **Purpose**: Verify status of a transaction during network interruptions, timeouts, or recon checks.
 
 #### Request Body:
 ```json
 {
+  "client_code": "FIN001",
   "order_id": "ORD202609231450009988",
   "account_no": "LN100200300",
   "cbs_transaction_id": "CBS_TXN_8849201"
@@ -492,13 +549,14 @@ All responses must adhere to the standard envelope structure:
 
 ---
 
-### 4.7 Day-End Reconciliation Summary API
+### 4.8 Day-End Reconciliation Summary API
 - **Endpoint**: `POST /api/cbs/reconciliation`
 - **Purpose**: Automate daily collection reconciliation between ECollect and CBS before EOD closing.
 
 #### Request Body:
 ```json
 {
+  "client_code": "FIN001",
   "collection_date": "2026-09-23",
   "branch_code": "BR001",
   "agent_code": "AGT101",
@@ -527,13 +585,14 @@ All responses must adhere to the standard envelope structure:
 
 ---
 
-### 4.8 Transaction Reversal / Cancellation API (Optional)
+### 4.9 Transaction Reversal / Cancellation API (Optional)
 - **Endpoint**: `POST /api/cbs/transaction-reverse`
 - **Purpose**: Cancel or reverse an erroneous collection posting (subject to CBS supervisor approval or within same-day EOD cutoff).
 
 #### Request Body:
 ```json
 {
+  "client_code": "FIN001",
   "order_id": "ORD202609231450009988",
   "cbs_transaction_id": "CBS_TXN_8849201",
   "account_no": "LN100200300",
