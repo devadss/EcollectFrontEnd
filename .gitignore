@@ -21,3 +21,21 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# setup scratch scripts
+*.scratch.js
+create_vi_obd_service.js
+fix_voice_controller_priority.js
+fix_whatsapp_controller_clean.js
+fix_whatsapp_usings.js
+register_telinfy_service.js
+register_vi_obd_program.js
+setup_telinfy_integration.js
+update_appsettings_vi.js
+update_appsettings_voice.js
+update_backend_vi_voice.js
+update_due_reminder_service.js
+update_vi_auth_dtos.js
+update_vi_service_dynamic_token.js
+update_voice_controller.js
+

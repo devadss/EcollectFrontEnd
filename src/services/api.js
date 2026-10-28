@@ -1,8 +1,8 @@
 import axios from 'axios';
 
-//const API_BASE = process.env.REACT_APP_API_URL || 'https://localhost:7256/api';
-const API_BASE = process.env.REACT_APP_API_URL || 'https://dev.collect.org.in/api';
-//const API_BASE = process.env.REACT_APP_API_URL || 'https://api.collect.org.in/api';
+const API_BASE = process.env.REACT_APP_API_URL || 'https://localhost:7256/api';
+//const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5123/api';
+//const API_BASE = process.env.REACT_APP_API_URL || 'https://dev.collect.org.in/api';
 console.log('🔗 API Base URL:', API_BASE);
 
 const api = axios.create({
@@ -650,17 +650,42 @@ export const paymentApi = {
   },
   processPaymentLink: (data) => {
     console.log('📡 paymentApi.processPaymentLink called with data:', data);
-    return api.post('/Payment/PaymentLink', data)
-      .catch(() => api.post('/Payment/payment-link', data))
-      .catch(() => api.post('/payment/paymentlink', data))
-      .catch(() => api.post('/PaymentLink', data));
+    const merchantId = Number(data?.merchantId || data?.MerchantId || localStorage.getItem('merchantId') || 22);
+    const custPhone = String(data?.customer_details?.customer_phone || data?.customerPhone || data?.phone || data?.mobile || '').replace(/\D/g, '').slice(-10);
+    const custName = data?.customer_details?.customer_name || data?.customerName || data?.name || data?.accountHolder || 'Customer';
+    const accNo = String(data?.customer_details?.customer_accno || data?.customer_details?.account_number || data?.accountNumber || data?.accNo || 'ACC-ONLINE');
+    const custId = String(data?.customer_details?.customer_id || data?.customerId || data?.id || '1');
+    const custEmail = data?.customer_details?.customer_email || data?.customerEmail || data?.email || 'customer@example.com';
+    const amountVal = Number(data?.Amount || data?.amount || data?.dueAmount || data?.balance || 500);
+
+    const formattedPayload = {
+      agent_details: data?.agent_details || {
+        agent_name: localStorage.getItem('userName') || 'System Collector',
+        agent_id: String(localStorage.getItem('userId') || '1'),
+        agent_orginId: String(localStorage.getItem('tenantId') || '1'),
+        agent_phone: '9999999999',
+        agent_email: 'collector@finwin.in',
+        agent_branch: Number(localStorage.getItem('branchId') || 1)
+      },
+      customer_details: {
+        customer_name: custName,
+        customer_phone: custPhone || '9999999999',
+        customer_accno: accNo,
+        customer_id: custId,
+        customer_email: custEmail
+      },
+      CollectionType: data?.CollectionType || data?.collectionType || 'LOAN',
+      Amount: amountVal,
+      note: data?.note || data?.description || `Payment for Account #${accNo}`,
+      Source: data?.Source || 'WEB',
+      MerchantId: merchantId
+    };
+
+    return api.post('/Payment/PaymentLink', formattedPayload)
+      .catch(() => api.post('/Payment/payment-link', formattedPayload));
   },
   getPaymentLink: (data) => {
-    console.log('📡 paymentApi.getPaymentLink called with data:', data);
-    return api.post('/Payment/PaymentLink', data)
-      .catch(() => api.post('/Payment/payment-link', data))
-      .catch(() => api.post('/payment/paymentlink', data))
-      .catch(() => api.post('/PaymentLink', data));
+    return paymentApi.processPaymentLink(data);
   },
   getUpiIntent: (data) => {
     console.log('📡 paymentApi.getUpiIntent called with data:', data);
@@ -1379,17 +1404,44 @@ export const walletApi = {
 // WHATSAPP API (Telinfy WhatsApp Messaging Engine)
 // ============================================================
 export const whatsAppApi = {
+  sendPaymentLink: (data) => {
+    console.log('💬 whatsAppApi.sendPaymentLink called with:', data);
+    return api.post('/WhatsApp/send-payment-link', data);
+  },
+  sendTemplateMessage: (data) => {
+    console.log('💬 whatsAppApi.sendTemplateMessage called with:', data);
+    return api.post('/WhatsApp/send-payment-link', data)
+      .catch(() => api.post('/WhatsApp/send-template', data));
+  },
   getTemplates: () => {
     console.log('💬 whatsAppApi.getTemplates called');
     return api.get('/WhatsApp/templates');
   },
-  sendTemplateMessage: (data) => {
-    console.log('💬 whatsAppApi.sendTemplateMessage called with:', data);
-    return api.post('/WhatsApp/send-template', data);
-  },
   sendTestMessage: (data) => {
     console.log('💬 whatsAppApi.sendTestMessage called with:', data);
     return api.post('/WhatsApp/test-message', data);
+  }
+};
+
+// ============================================================
+// VODAFONE IDEA (Vi) OBD VOICE CALL API
+// ============================================================
+export const voiceApi = {
+  triggerCall: (data) => {
+    console.log('📞 voiceApi.triggerCall called with:', data);
+    return api.post('/Voice/trigger-obd', data);
+  },
+  triggerBatch: (data) => {
+    console.log('📞 voiceApi.triggerBatch called with:', data);
+    return api.post('/Voice/trigger-batch-obd', data);
+  },
+  getObdConfig: () => {
+    console.log('📞 voiceApi.getObdConfig called');
+    return api.get('/Voice/obd-config');
+  },
+  getStatus: () => {
+    console.log('📞 voiceApi.getStatus called');
+    return api.get('/Voice/status');
   }
 };
 

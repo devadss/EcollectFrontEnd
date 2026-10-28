@@ -417,29 +417,8 @@ const DelinquencyBuckets = () => {
   };
 
   // 1-Click DLT SMS Legal / Overdue Notice Dispatch
-  const handleSendOverdueNotice = async (acc) => {
-    if (!acc.phone) {
-      showToast('Customer mobile number is missing', 'error');
-      return;
-    }
-    try {
-      const res = await sendDueReminderSms({
-        recipientMobile: acc.phone,
-        customerName: acc.accountHolder,
-        dueAmount: acc.dueAmount || acc.emiAmount || 0,
-        accountNumber: acc.accountNumber,
-        dueDate: acc.nextDueDate || 'Immediate',
-        merchantId: authUser?.merchantId || 4,
-        merchantName: authUser?.company || 'eCollect'
-      });
-      if (res.success) {
-        showToast(`📲 DLT Overdue Recovery Notice SMS sent to ${acc.accountHolder}!`);
-      } else {
-        showToast(res.message, 'error');
-      }
-    } catch {
-      showToast('Failed to dispatch SMS notice', 'error');
-    }
+  const handleSendOverdueNotice = (acc) => {
+    showToast('⚠️ Telecom DLT SMS Gateway is not configured yet. Please use Call or WhatsApp reminder.', 'warning');
   };
 
   // Export Delinquency Report (.xlsx)

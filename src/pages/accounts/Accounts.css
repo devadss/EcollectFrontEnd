@@ -1082,6 +1082,19 @@
   box-shadow: 0 4px 12px rgba(37, 211, 102, 0.5);
 }
 
+/* ⚡ AutoPay Mandate - Emerald Green Lightning */
+.action-btn.is-autopay {
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #10b981;
+}
+.action-btn.is-autopay:hover {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border-color: #10b981;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.5);
+}
+
 /* 📩 SMS Reminder - Warm Amber */
 .action-btn.is-sms {
   background: rgba(245, 158, 11, 0.16);
@@ -1170,6 +1183,7 @@
 [data-theme-mode="light"] .action-btn.is-link { background: #ecfeff; color: #0284c7; border-color: #a5f3fc; }
 [data-theme-mode="light"] .action-btn.is-cash { background: #ecfdf5; color: #059669; border-color: #a7f3d0; }
 [data-theme-mode="light"] .action-btn.is-whatsapp { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
+[data-theme-mode="light"] .action-btn.is-autopay { background: #ecfdf5; color: #059669; border-color: #a7f3d0; }
 [data-theme-mode="light"] .action-btn.is-sms { background: #fffbeb; color: #d97706; border-color: #fde68a; }
 [data-theme-mode="light"] .action-btn.is-call { background: #faf5ff; color: #9333ea; border-color: #e9d5ff; }
 [data-theme-mode="light"] .action-btn.is-view { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }

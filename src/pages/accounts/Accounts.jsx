@@ -3,7 +3,8 @@ import { QRCodeSVG } from 'qrcode.react';
 import * as XLSX from 'xlsx';
 import DashboardLayout from '../../components/layouts/DashboardLayout';
 import LoadingAnimation from '../../components/common/LoadingAnimation';
-import { accountApi, branchApi, agentApi, paymentApi, merchantApi, reminderApi, walletApi, whatsAppApi } from '../../services/api';
+import { accountApi, branchApi, agentApi, paymentApi, merchantApi, reminderApi, walletApi, whatsAppApi, voiceApi } from '../../services/api';
+import Swal from 'sweetalert2';
 import { lookupIFSC, INDIAN_BANKS_LIST, sanitizeAccountNumber } from '../../services/bankService';
 import { playPaymentSuccessNotification } from '../../utils/audioAlert';
 import { buildStandalonePaymentPayload, validateMerchantApiConfiguration } from '../../services/standaloneCollectionService';
@@ -389,6 +390,11 @@ const BaseAccountIcons = {
   MessageSquare: () => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+    </svg>
+  ),
+  Zap: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
     </svg>
   )
 };
@@ -3423,13 +3429,15 @@ const Accounts = () => {
     if (cleanPhone && cleanPhone.length === 10) {
       try {
         const payload = {
-          merchantId: Number(merchantId),
           phoneNumber: cleanPhone,
-          templateName: 'paymentlink',
-          parameters: [url || 'https://mydop.in/adss/balance/report/filter']
+          paymentLink: url || 'https://mydop.in/pay/due',
+          customerName: name || 'Customer',
+          amount: amount || 0,
+          accountNumber: accNo || '',
+          merchantId: Number(merchantId)
         };
-        whatsAppApi.sendTemplateMessage(payload).then(res => {
-          if (res?.data?.isSuccess) {
+        whatsAppApi.sendPaymentLink(payload).then(res => {
+          if (res?.data?.success) {
             showToast(`✅ WhatsApp Payment Link also sent via Telinfy to +91 ${cleanPhone}`);
           }
         }).catch(() => {
@@ -3440,107 +3448,258 @@ const Accounts = () => {
       }
     }
 
-    if (!waWin || waWin.closed || typeof waWin.closed === 'undefined') {
-      window.location.href = waUrl;
+    // Open WhatsApp Web in a separate new tab only, never redirect current window
+    try {
+      window.open(waUrl, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      console.warn('Popup blocked:', e);
     }
   };
 
   // Interactive WhatsApp Payment Link Modal Opener & Dispatches
-  const handleOpenWhatsAppModal = (acc) => {
+  // Interactive WhatsApp Payment Link Modal Opener & Dispatches
+  const handleOpenWhatsAppModal = async (acc) => {
     let rawPhone = acc.phone || acc.mobile || acc.mobileNumber || acc.customerPhone || acc.registeredPhone || acc.contactNumber || acc.customer?.phone || acc.customer?.mobile || '';
     let cleanPhone = rawPhone ? String(rawPhone).replace(/\D/g, '') : '';
     
-    // Strip leading 91 or +91 if length is 12 digits
     if (cleanPhone.length === 12 && cleanPhone.startsWith('91')) {
       cleanPhone = cleanPhone.substring(2);
     } else if (cleanPhone.length > 10) {
       cleanPhone = cleanPhone.slice(-10);
     }
 
-    const amount = acc.dueAmount || acc.emiAmount || acc.balance || 500;
+    const defaultAmount = Number(acc.dueAmount || acc.emiAmount || acc.balance || 500);
+    const formattedDue = defaultAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+    const name = acc.accountHolder || acc.customerName || 'Customer';
+    const accNumber = acc.accountNumber || acc.accountCode || 'N/A';
+    const productType = acc.collectionType || acc.productType || 'Account';
+    const merchantId = localStorage.getItem('merchantId') || 22;
 
-    setWaTargetAccount(acc);
-    setWaRecipientPhone(cleanPhone);
-    setWaCustomAmount(amount);
-    setWaModalOpen(true);
-  };
+    const result = await Swal.fire({
+      title: null,
+      html: `
+        <div style="text-align: left; font-family: 'Plus Jakarta Sans', Inter, -apple-system, sans-serif; color: #0f172a; padding: 4px;">
+          <!-- Header Banner -->
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 18px; border-bottom: 1px solid #e2e8f0; padding-bottom: 14px;">
+            <div style="width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, #10b981, #059669); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35); flex-shrink: 0;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="#ffffff">
+                <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.669-.699c.969.53 1.771.82 2.791.82 3.182 0 5.768-2.587 5.768-5.766 0-3.18-2.586-5.766-5.768-5.766zm9.969 5.766c0 5.518-4.482 10-10 10-1.748 0-3.385-.45-4.819-1.238l-4.181 1.096 1.121-4.093c-.888-1.488-1.401-3.23-1.401-5.095 0-5.518 4.482-10 10-10 5.518 0 10 4.482 10 10z"/>
+              </svg>
+            </div>
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="margin: 0; font-size: 1.15rem; font-weight: 800; color: #0f172a; letter-spacing: -0.02em;">Send WhatsApp Payment Link</h3>
+              </div>
+              <p style="margin: 2px 0 0 0; font-size: 0.82rem; color: #64748b;">Instant live payment link dispatch via WhatsApp</p>
+            </div>
+          </div>
 
-  const handleSendWhatsAppPaymentLink = async (e) => {
-    e.preventDefault();
-    if (!waRecipientPhone || waRecipientPhone.trim().length < 10) {
-      showToast('Please enter a valid 10-digit mobile number', 'error');
-      return;
-    }
+          <!-- Customer Brief Card -->
+          <div style="background: linear-gradient(145deg, #f8fafc, #f1f5f9); border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.05em;">Borrower / Customer</span>
+              <span style="font-size: 0.72rem; font-weight: 700; background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 6px;">${productType}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: baseline;">
+              <div>
+                <div style="font-size: 1rem; font-weight: 800; color: #0f172a;">${name}</div>
+                <div style="font-size: 0.82rem; font-family: monospace; color: #475569; margin-top: 1px;">Acc: ${accNumber}</div>
+              </div>
+              <div style="text-align: right;">
+                <div style="font-size: 0.72rem; color: #64748b; font-weight: 600;">Due Demand</div>
+                <div style="font-size: 1.05rem; font-weight: 800; color: #dc2626;">₹${formattedDue}</div>
+              </div>
+            </div>
+          </div>
 
-    setWaSending(true);
-    // Pre-open blank popup window in direct response to the user's submit click to bypass browser popup blockers
-    const preOpenedWin = window.open('about:blank', '_blank');
+          <!-- Target Mobile Input -->
+          <div style="margin-bottom: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <label for="swal-wa-phone-input" style="font-size: 0.82rem; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.04em;">
+                Recipient Mobile Number
+              </label>
+              <span style="font-size: 0.75rem; color: #059669; font-weight: 700; cursor: pointer; text-decoration: underline;" onclick="document.getElementById('swal-wa-phone-input').value = '${cleanPhone}'">
+                ↺ Reset Default
+              </span>
+            </div>
+            <div style="position: relative; display: flex; align-items: center; border: 2px solid #cbd5e1; border-radius: 10px; background: #ffffff; overflow: hidden;" id="wa-phone-wrap">
+              <span style="background: #f1f5f9; border-right: 1px solid #cbd5e1; padding: 10px 12px; font-size: 0.95rem; font-weight: 700; color: #475569;">
+                🇮🇳 +91
+              </span>
+              <input 
+                id="swal-wa-phone-input" 
+                type="tel" 
+                value="${cleanPhone}" 
+                placeholder="Enter 10-digit mobile" 
+                style="border: none; outline: none; padding: 10px 14px; width: 100%; font-family: 'JetBrains Mono', monospace; font-size: 1.1rem; font-weight: 800; color: #0f172a; letter-spacing: 0.5px; background: transparent;"
+                onfocus="document.getElementById('wa-phone-wrap').style.borderColor = '#10b981'"
+                onblur="document.getElementById('wa-phone-wrap').style.borderColor = '#cbd5e1'"
+              />
+            </div>
+          </div>
 
-    try {
-      const cleanPhone = waRecipientPhone.replace(/\D/g, '').trim();
-      const amountToCharge = Number(waCustomAmount || waTargetAccount?.dueAmount || waTargetAccount?.balance || 500);
-      const merchantId = localStorage.getItem('merchantId') || 22;
-
-      // 1. Generate Live Payment Link from Gateway
-      showToast('🔗 Generating Payment Link from Payment Gateway...');
-      const payload = {
-        amount: amountToCharge,
-        customerName: waTargetAccount?.accountHolder || waTargetAccount?.customerName || 'Customer',
-        customerPhone: cleanPhone,
-        customerEmail: waTargetAccount?.email || 'customer@ecollect.in',
-        accountNumber: waTargetAccount?.accountNumber || 'ACC-99201',
-        description: `Collection for Account #${waTargetAccount?.accountNumber || ''}`,
-        merchantId: Number(merchantId)
-      };
-
-      let generatedLink = '';
-      try {
-        const linkRes = await paymentApi.processPaymentLink(payload);
-        const resData = linkRes?.data;
-        generatedLink = resData?.payment_link || resData?.paymentLink || resData?.url || resData?.paymentUrl || resData?.short_url || resData?.shortUrl || resData?.data?.payment_link || resData?.data?.paymentLink || resData?.data?.url || (typeof resData === 'string' ? resData : null);
-      } catch (err) {
-        console.warn('Payment link API fallback to short link:', err);
-      }
-
-      if (!generatedLink) {
-        generatedLink = `https://mydop.in/pay/${waTargetAccount?.accountNumber || 'due'}?amt=${amountToCharge}`;
-      }
-
-      const text = `Dear ${waTargetAccount?.accountHolder || 'Customer'},\nPlease complete your payment of ₹${amountToCharge.toLocaleString('en-IN')} via this Finwin Payment Link:\n${generatedLink}\n\nThank you!`;
-      const waUrl = `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(text)}`;
-
-      // Direct WhatsApp destination in pre-opened window
-      if (preOpenedWin) {
-        preOpenedWin.location.href = waUrl;
-      } else {
-        window.location.href = waUrl;
-      }
-
-      // 2. Dispatch via Telinfy REST API in parallel/background
-      showToast(`💬 Dispatched payment link to WhatsApp for +91 ${cleanPhone}`);
-      const waPayload = {
-        merchantId: Number(merchantId),
-        phoneNumber: cleanPhone,
-        templateName: 'paymentlink',
-        parameters: [generatedLink]
-      };
-
-      try {
-        const waRes = await whatsAppApi.sendTemplateMessage(waPayload);
-        if (waRes?.data?.isSuccess) {
-          showToast(`✅ WhatsApp Payment Link also sent via Telinfy API!`);
+          <!-- Collection Amount Input -->
+          <div style="margin-bottom: 14px;">
+            <label for="swal-wa-amount-input" style="font-size: 0.82rem; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; display: block;">
+              Collection Amount (₹)
+            </label>
+            <div style="position: relative; display: flex; align-items: center; border: 2px solid #cbd5e1; border-radius: 10px; background: #ffffff; overflow: hidden;" id="wa-amount-wrap">
+              <span style="background: #f1f5f9; border-right: 1px solid #cbd5e1; padding: 10px 14px; font-size: 1rem; font-weight: 800; color: #059669;">
+                ₹
+              </span>
+              <input 
+                id="swal-wa-amount-input" 
+                type="number" 
+                value="${defaultAmount}" 
+                placeholder="Enter amount" 
+                style="border: none; outline: none; padding: 10px 14px; width: 100%; font-family: 'JetBrains Mono', monospace; font-size: 1.1rem; font-weight: 800; color: #0f172a; background: transparent;"
+                onfocus="document.getElementById('wa-amount-wrap').style.borderColor = '#10b981'"
+                onblur="document.getElementById('wa-amount-wrap').style.borderColor = '#cbd5e1'"
+              />
+            </div>
+          </div>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: '🚀 Send WhatsApp Payment Link',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#10b981',
+      cancelButtonColor: '#94a3b8',
+      focusConfirm: false,
+      width: '460px',
+      padding: '1.25rem',
+      preConfirm: () => {
+        const pElem = document.getElementById('swal-wa-phone-input');
+        const aElem = document.getElementById('swal-wa-amount-input');
+        const pVal = pElem ? pElem.value.trim().replace(/\D/g, '').slice(-10) : '';
+        const aVal = aElem ? Number(aElem.value) : 0;
+        if (!pVal || pVal.length < 10) {
+          Swal.showValidationMessage('Please enter a valid 10-digit mobile number');
+          return false;
         }
-      } catch (waErr) {
-        // Fallback is already opened in WhatsApp Web
+        if (!aVal || aVal <= 0) {
+          Swal.showValidationMessage('Please enter a valid collection amount');
+          return false;
+        }
+        return { phone: pVal, amount: aVal };
+      }
+    });
+
+    if (result.isConfirmed) {
+      const { phone, amount } = result.value;
+      showToast('🔗 Generating live payment link from Payment Gateway...');
+
+      let realLink = '';
+      try {
+        const linkRes = await paymentApi.processPaymentLink({
+          amount: amount,
+          customerName: name,
+          customerPhone: phone,
+          customerEmail: acc.email || 'customer@example.com',
+          accountNumber: accNumber,
+          merchantId: Number(merchantId)
+        });
+        const resData = linkRes?.data;
+        console.log('✅ Payment Link Gateway response:', resData);
+        realLink = resData?.payment_url || resData?.data?.payment_url || resData?.payment_link || resData?.data?.payment_link || resData?.url || resData?.paymentLink;
+      } catch (err) {
+        console.warn('Payment link API error:', err);
       }
 
-      setWaModalOpen(false);
-    } catch (err) {
-      console.error('WhatsApp Modal dispatch error:', err);
-      if (preOpenedWin) preOpenedWin.close();
-      showToast('Error generating or sending WhatsApp link', 'error');
-    } finally {
-      setWaSending(false);
+      if (!realLink) {
+        realLink = `https://mydop.in/pay/${accNumber}?amt=${amount}`;
+      }
+
+      showToast(`💬 Sending WhatsApp payment link to +91 ${phone}...`);
+
+      try {
+        const waRes = await whatsAppApi.sendPaymentLink({
+          phoneNumber: phone,
+          paymentLink: realLink,
+          customerName: name,
+          amount: amount,
+          accountNumber: accNumber,
+          merchantId: Number(merchantId)
+        });
+        console.log('✅ Telinfy WhatsApp response:', waRes?.data);
+
+        await Swal.fire({
+          html: `
+            <div style="text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 4px 2px;">
+              <!-- Glowing Status Pill -->
+              <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); padding: 5px 14px; border-radius: 9999px; font-size: 0.74rem; font-weight: 800; color: #059669; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 16px;">
+                <span style="width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981; display: inline-block;"></span>
+                DISPATCH CONFIRMED • LIVE DELIVERY
+              </div>
+
+              <!-- Luminous Icon Circle -->
+              <div style="width: 70px; height: 70px; border-radius: 50%; background: linear-gradient(135deg, #10b981 0%, #059669 100%); margin: 0 auto 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.5), 0 0 0 7px rgba(16, 185, 129, 0.12);">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="#ffffff">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                </svg>
+              </div>
+
+              <h3 style="margin: 0 0 5px 0; font-size: 1.32rem; font-weight: 800; color: #0f172a; letter-spacing: -0.02em;">Payment Link Dispatched!</h3>
+              <p style="margin: 0 0 16px 0; font-size: 0.86rem; color: #64748b; line-height: 1.4;">Official WhatsApp notification delivered with active payment gateway URL.</p>
+
+              <!-- Advanced Metadata Card -->
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; text-align: left;">
+                <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px dashed #e2e8f0;">
+                  <span style="font-size: 0.76rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Borrower Name</span>
+                  <span style="font-size: 0.88rem; font-weight: 700; color: #0f172a;">${name}</span>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px dashed #e2e8f0;">
+                  <span style="font-size: 0.76rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Target Mobile</span>
+                  <span style="font-size: 0.88rem; font-weight: 700; color: #059669; font-family: monospace; display: flex; align-items: center; gap: 4px;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    +91 ${phone}
+                  </span>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px dashed #e2e8f0;">
+                  <span style="font-size: 0.76rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Amount Requested</span>
+                  <span style="background: rgba(16, 185, 129, 0.15); color: #059669; font-weight: 800; font-size: 0.95rem; padding: 3px 10px; border-radius: 6px; font-family: monospace;">
+                    ₹${Number(amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px dashed #e2e8f0;">
+                  <span style="font-size: 0.76rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Account No</span>
+                  <span style="font-size: 0.85rem; font-weight: 700; color: #334155; font-family: monospace;">${accNumber || 'N/A'}</span>
+                </div>
+
+                <div style="margin-top: 10px;">
+                  <div style="font-size: 0.74rem; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 4px; display: flex; justify-content: space-between;">
+                    <span>Generated Payment URL</span>
+                    <span style="color: #059669; cursor: pointer; text-decoration: underline;" onclick="navigator.clipboard.writeText('${realLink}')">Copy Link</span>
+                  </div>
+                  <div style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 7px 10px; font-family: monospace; font-size: 0.75rem; color: #2563eb; word-break: break-all; max-height: 48px; overflow-y: auto;">
+                    ${realLink}
+                  </div>
+                </div>
+              </div>
+
+              <div style="display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.76rem; color: #94a3b8; font-weight: 600;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                Telinfy WhatsApp Business Cloud • Instant Delivery
+              </div>
+            </div>
+          `,
+          confirmButtonText: '✓ Return to Accounts',
+          confirmButtonColor: '#10b981',
+          width: '460px',
+          padding: '1.25rem'
+        });
+      } catch (err) {
+        console.error('Telinfy dispatch error:', err);
+        Swal.fire({
+          title: 'Dispatch Notice',
+          text: err?.response?.data?.message || err.message || 'Error sending WhatsApp link',
+          icon: 'warning',
+          confirmButtonColor: '#3b82f6'
+        });
+      }
     }
   };
 
@@ -3549,30 +3708,258 @@ const Accounts = () => {
   };
 
   const handleSendSmsReminder = (acc) => {
-    const phone = acc.phone || acc.mobile || '';
-    const name = acc.accountHolder || 'Customer';
-    const accNo = acc.accountNumber || '';
-    const bal = Number(acc.balance || 0).toLocaleString('en-IN');
-    const isLoan = acc.collectionType === 'LOAN';
-    
-    if (phone) {
-      const body = isLoan
-        ? `Dear ${name}, Loan Account #${accNo} EMI due reminder of Rs.${bal}. - DIGICOB Bank`
-        : `Dear ${name}, RD Account #${accNo} deposit reminder of Rs.${bal}. - DIGICOB Bank`;
-      window.location.href = `sms:${phone}?body=${encodeURIComponent(body)}`;
-    }
-    showToast(`SMS reminder sent to ${name} (${phone || 'Registered Phone'})`);
+    const rawPhone = acc.phone || acc.mobile || acc.mobileNumber || '';
+    let cleanPhone = rawPhone ? String(rawPhone).replace(/\D/g, '') : '';
+    if (cleanPhone.length > 10) cleanPhone = cleanPhone.slice(-10);
+
+    Swal.fire({
+      title: 'SMS Gateway Not Configured',
+      html: `
+        <div style="text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 4px 2px;">
+          <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); padding: 5px 14px; border-radius: 9999px; font-size: 0.74rem; font-weight: 800; color: #d97706; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px;">
+            ⚠️ Gateway Setup Required
+          </div>
+          <p style="margin: 0 0 12px; font-size: 0.95rem; color: #334155; line-height: 1.5;">
+            Standard Telecom DLT SMS Gateway is not yet configured for this organization.
+          </p>
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; text-align: left; font-size: 0.84rem; color: #64748b; line-height: 1.5; margin-bottom: 8px;">
+            💡 <strong>Available Real-Time Channels:</strong><br/>
+            • <strong>WhatsApp:</strong> Instant interactive payment link dispatch.<br/>
+            • <strong>Voice OBD Call:</strong> Automated interactive call to <strong>+91 ${cleanPhone || 'borrower'}</strong>.
+          </div>
+        </div>
+      `,
+      icon: 'info',
+      showCancelButton: true,
+      confirmButtonText: '🚀 Send via WhatsApp Instead',
+      cancelButtonText: 'Close',
+      confirmButtonColor: '#10b981',
+      cancelButtonColor: '#94a3b8'
+    }).then((res) => {
+      if (res.isConfirmed) {
+        handleOpenWhatsAppModal(acc);
+      }
+    });
   };
 
-  const handleDirectCall = (acc) => {
-    const phone = acc.phone || acc.mobile || '';
-    const name = acc.accountHolder || 'Customer';
-    if (!phone) {
-      showToast(`No registered phone number found for ${name}`, 'error');
-      return;
+  const handleDirectCall = async (acc) => {
+    const defaultPhone = acc.mobileNumber || acc.phone || acc.mobile || '';
+    const name = acc.customerName || acc.accountHolder || 'Customer';
+    const accNumber = acc.accountNumber || 'N/A';
+    const dueAmount = acc.dueAmount || acc.demand || acc.emiAmount || 0;
+    const formattedDue = Number(dueAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 });
+    const productType = acc.productType || acc.collectionType || 'Account';
+
+    const result = await Swal.fire({
+      title: null,
+      html: `
+        <div style="text-align: left; font-family: 'Plus Jakarta Sans', Inter, -apple-system, sans-serif; color: #0f172a; padding: 4px;">
+          <!-- Header Banner -->
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 18px; border-bottom: 1px solid #e2e8f0; padding-bottom: 14px;">
+            <div style="width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, #e11d48, #be123c); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(225, 29, 72, 0.35); flex-shrink: 0;">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+              </svg>
+            </div>
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="margin: 0; font-size: 1.15rem; font-weight: 800; color: #0f172a; letter-spacing: -0.02em;">Customer Voice Outreach</h3>
+                <span style="background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; font-size: 0.68rem; font-weight: 800; padding: 2px 7px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.05em;">Voice OBD</span>
+              </div>
+              <p style="margin: 2px 0 0 0; font-size: 0.82rem; color: #64748b;">Automated Outbound Voice Reminder Service</p>
+            </div>
+          </div>
+
+          <!-- Customer Brief Card -->
+          <div style="background: linear-gradient(145deg, #f8fafc, #f1f5f9); border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.05em;">Borrower / Customer</span>
+              <span style="font-size: 0.72rem; font-weight: 700; background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 6px;">${productType}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: baseline;">
+              <div>
+                <div style="font-size: 1rem; font-weight: 800; color: #0f172a;">${name}</div>
+                <div style="font-size: 0.82rem; font-family: monospace; color: #475569; margin-top: 1px;">Acc: ${accNumber}</div>
+              </div>
+              <div style="text-align: right;">
+                <div style="font-size: 0.72rem; color: #64748b; font-weight: 600;">Due Demand</div>
+                <div style="font-size: 1.05rem; font-weight: 800; color: #dc2626;">₹${formattedDue}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Target Phone Number Input Section -->
+          <div style="margin-bottom: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <label for="swal-custom-phone-input" style="font-size: 0.82rem; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.04em;">
+                Target Mobile Number (MSISDN)
+              </label>
+              <span style="font-size: 0.75rem; color: #0284c7; font-weight: 700; cursor: pointer; text-decoration: underline;" onclick="document.getElementById('swal-custom-phone-input').value = '${defaultPhone}'">
+                ↺ Reset Default
+              </span>
+            </div>
+            <div style="position: relative; display: flex; align-items: center; border: 2px solid #cbd5e1; border-radius: 10px; background: #ffffff; overflow: hidden;" id="phone-input-wrap">
+              <span style="background: #f1f5f9; border-right: 1px solid #cbd5e1; padding: 10px 12px; font-size: 0.95rem; font-weight: 700; color: #475569; display: flex; align-items: center; gap: 4px;">
+                🇮🇳 +91
+              </span>
+              <input 
+                id="swal-custom-phone-input" 
+                type="tel" 
+                value="${defaultPhone}" 
+                placeholder="Enter 10-digit customer mobile" 
+                style="border: none; outline: none; padding: 10px 14px; width: 100%; font-family: 'JetBrains Mono', monospace; font-size: 1.15rem; font-weight: 800; color: #0f172a; letter-spacing: 0.5px; background: transparent;"
+                onfocus="document.getElementById('phone-input-wrap').style.borderColor = '#2563eb'"
+                onblur="document.getElementById('phone-input-wrap').style.borderColor = '#cbd5e1'"
+              />
+            </div>
+            <p style="margin: 6px 0 0 2px; font-size: 0.76rem; color: #64748b;">
+              ✏️ <strong>Editable Field:</strong> Pre-filled with registered number. You can change it to any alternate 10-digit number.
+            </p>
+          </div>
+
+          <!-- Line Information Box -->
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.15rem;">📞</span>
+            <div>
+              <div style="font-size: 0.8rem; font-weight: 700; color: #1e293b;">Automated Voice Reminder</div>
+              <div style="font-size: 0.73rem; color: #64748b;">Caller Line ID (CLI): <strong>7034001350</strong></div>
+            </div>
+          </div>
+        </div>
+      `,
+      showCancelButton: true,
+      showDenyButton: true,
+      confirmButtonText: '🚀 Trigger Automated Voice Call',
+      denyButtonText: '📱 Native Phone Call',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#2563eb',
+      denyButtonColor: '#0284c7',
+      cancelButtonColor: '#94a3b8',
+      focusConfirm: false,
+      width: '460px',
+      padding: '1.25rem',
+      preConfirm: () => {
+        const inputElem = document.getElementById('swal-custom-phone-input');
+        const customPhone = inputElem ? inputElem.value.trim().replace(/\D/g, '') : '';
+        if (!customPhone) {
+          Swal.showValidationMessage('Please enter a valid mobile number');
+          return false;
+        }
+        if (customPhone.length < 10) {
+          Swal.showValidationMessage('Mobile number must be at least 10 digits');
+          return false;
+        }
+        return customPhone.slice(-10);
+      }
+    });
+
+    if (result.isConfirmed) {
+      const inputElem = document.getElementById('swal-custom-phone-input');
+      const rawInput = inputElem ? inputElem.value.trim().replace(/\D/g, '') : '';
+      const targetPhone = (rawInput && rawInput.length >= 10) ? rawInput.slice(-10) : (result.value || defaultPhone);
+
+      try {
+        showToast(`📞 Triggering Automated Voice Call for ${name} (${targetPhone})...`, 'info');
+        
+        // Pass strictly customerMobile (no accountId) so the backend uses the exact number typed
+        const res = await voiceApi.triggerCall({
+          customerMobile: targetPhone
+        });
+
+        if (res?.data?.success || res?.status === 200) {
+          Swal.fire({
+            html: `
+              <div style="text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 4px 2px;">
+                <!-- Glowing Status Pill -->
+                <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.35); padding: 5px 14px; border-radius: 9999px; font-size: 0.74rem; font-weight: 800; color: #2563eb; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 16px;">
+                  <span style="width: 8px; height: 8px; border-radius: 50%; background: #3b82f6; box-shadow: 0 0 8px #3b82f6; display: inline-block;"></span>
+                  OUTBOUND CALL QUEUED • TELECOM ACTIVE
+                </div>
+
+                <!-- Luminous Icon Circle -->
+                <div style="width: 70px; height: 70px; border-radius: 50%; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); margin: 0 auto 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.5), 0 0 0 7px rgba(59, 130, 246, 0.12);">
+                  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+                  </svg>
+                </div>
+
+                <h3 style="margin: 0 0 5px 0; font-size: 1.32rem; font-weight: 800; color: #0f172a; letter-spacing: -0.02em;">Voice Reminder Dispatched!</h3>
+                <p style="margin: 0 0 16px 0; font-size: 0.86rem; color: #64748b; line-height: 1.4;">Automated interactive voice reminder broadcast initiated for borrower.</p>
+
+                <!-- Advanced Metadata Card -->
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; text-align: left;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px dashed #e2e8f0;">
+                    <span style="font-size: 0.76rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Borrower Name</span>
+                    <span style="font-size: 0.88rem; font-weight: 700; color: #0f172a;">${name}</span>
+                  </div>
+
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px dashed #e2e8f0;">
+                    <span style="font-size: 0.76rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Target Mobile</span>
+                    <span style="font-size: 0.88rem; font-weight: 700; color: #2563eb; font-family: monospace; display: flex; align-items: center; gap: 4px;">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      +91 ${targetPhone}
+                    </span>
+                  </div>
+
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px dashed #e2e8f0;">
+                    <span style="font-size: 0.76rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Originating CLI</span>
+                    <span style="background: rgba(59, 130, 246, 0.12); color: #1d4ed8; font-weight: 800; font-size: 0.85rem; padding: 3px 10px; border-radius: 6px; font-family: monospace;">
+                      7034001350
+                    </span>
+                  </div>
+
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px;">
+                    <span style="font-size: 0.76rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Ingestion Status</span>
+                    <span style="font-size: 0.8rem; font-weight: 700; color: #059669; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 2px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
+                      <span style="width: 6px; height: 6px; border-radius: 50%; background: #10b981;"></span>
+                      Queued for Instant Dialing
+                    </span>
+                  </div>
+                </div>
+
+                <div style="display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.76rem; color: #94a3b8; font-weight: 600;">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  Enterprise Telecom OBD Outbound • Live Ingestion
+                </div>
+              </div>
+            `,
+            confirmButtonText: '✓ Return to Dashboard',
+            confirmButtonColor: '#2563eb',
+            width: '460px',
+            padding: '1.25rem'
+          });
+          showToast(`✅ Voice Call queued for ${name} (${targetPhone})!`, 'success');
+        } else {
+          showToast(`⚠️ Call response: ${res?.data?.message || 'Queued'}`, 'warning');
+        }
+      } catch (err) {
+        console.error('Automated Voice Call Error:', err);
+        const errMsg = err?.response?.data?.message || err.message || 'Error communicating with Voice Gateway';
+        Swal.fire({
+          title: 'Voice Call Service Note',
+          text: errMsg,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: 'Open Native Dialer',
+          cancelButtonText: 'Close',
+          confirmButtonColor: '#0284c7'
+        }).then(sub => {
+          if (sub.isConfirmed) {
+            window.location.href = `tel:${targetPhone}`;
+          }
+        });
+      }
+    } else if (result.isDenied) {
+      const inputElem = document.getElementById('swal-custom-phone-input');
+      const rawInput = inputElem ? inputElem.value.trim().replace(/\D/g, '') : '';
+      const targetPhone = (rawInput && rawInput.length >= 10) ? rawInput.slice(-10) : defaultPhone;
+      if (!targetPhone) {
+        showToast(`No registered phone number found for ${name}`, 'error');
+        return;
+      }
+      window.location.href = `tel:${targetPhone}`;
+      showToast(`Opening phone dialer for ${name} (${targetPhone})...`);
     }
-    window.location.href = `tel:${phone}`;
-    showToast(`Calling ${name} at ${phone}...`);
   };
 
   const handleDownloadQr = () => {
@@ -4598,9 +4985,8 @@ const Accounts = () => {
                                 setAutoPayModalOpen(true);
                               }}
                               title="⚡ Configure AutoPay Mandate & Send WhatsApp EMI Selection Link"
-                              style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.35)', fontWeight: 600, padding: '4px 8px', borderRadius: '6px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                             >
-                              ⚡ AutoPay
+                              <AccountIcons.Zap />
                             </button>
                           )}
 
@@ -8044,110 +8430,7 @@ const Accounts = () => {
           }}
         />
 
-        {/* Interactive WhatsApp Payment Link Dispatcher Modal */}
-        {waModalOpen && (
-          <div className="account-modal-overlay fade-in">
-            <div className="account-modal-container glass-card" style={{ maxWidth: '520px', width: '90%' }}>
-              <div className="account-modal-head" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(37, 211, 102, 0.2)', color: '#25d366', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', border: '1px solid rgba(37, 211, 102, 0.4)' }}>
-                    <i className="bi bi-whatsapp"></i>
-                  </div>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#fff' }}>Send WhatsApp Payment Link</h3>
-                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>Generate live payment URL & dispatch via Telinfy REST API</span>
-                  </div>
-                </div>
-                <button type="button" className="btn-modal-close" onClick={() => setWaModalOpen(false)}>×</button>
-              </div>
 
-              <div className="modal-body-custom p-3" style={{ marginTop: '16px' }}>
-                <form onSubmit={handleSendWhatsAppPaymentLink}>
-                  {/* Account Summary Banner */}
-                  <div style={{ padding: '14px 18px', borderRadius: '14px', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', marginBottom: '18px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13.5px' }}>
-                      <span className="text-muted">Customer:</span>
-                      <strong className="text-light">{waTargetAccount?.accountHolder || waTargetAccount?.customerName || 'Customer'}</strong>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
-                      <span className="text-muted">Account Number:</span>
-                      <code className="text-info font-mono">{waTargetAccount?.accountNumber || 'N/A'}</code>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                      <span className="text-muted">Product / Collection:</span>
-                      <span className="badge bg-primary-subtle text-primary font-bold">{waTargetAccount?.collectionType || 'RD'}</span>
-                    </div>
-                  </div>
-
-                  {/* Recipient Phone Field (Editable) */}
-                  <div className="form-group mb-3">
-                    <label className="form-label font-bold" style={{ fontSize: '12px', color: '#38bdf8', marginBottom: '6px', display: 'block' }}>
-                      📱 Recipient Mobile Number (Editable)
-                    </label>
-                    <div className="input-group">
-                      <span className="input-group-text font-mono" style={{ background: 'rgba(255,255,255,0.08)', color: '#fff', border: '1px solid rgba(255,255,255,0.15)' }}>+91</span>
-                      <input
-                        type="tel"
-                        maxLength={10}
-                        className="form-control font-mono"
-                        style={{ background: '#0f172a', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', fontSize: '14px' }}
-                        value={waRecipientPhone}
-                        onChange={(e) => setWaRecipientPhone(e.target.value)}
-                        placeholder="Enter 10-digit mobile number"
-                        required
-                      />
-                    </div>
-                    <small className="form-text text-muted" style={{ fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                      Mobile number is pre-filled. You can edit or type a new mobile number here before sending.
-                    </small>
-                  </div>
-
-                  {/* Payment Amount Field (Editable) */}
-                  <div className="form-group mb-4">
-                    <label className="form-label font-bold" style={{ fontSize: '12px', color: '#10b981', marginBottom: '6px', display: 'block' }}>
-                      💰 Collection Amount (₹)
-                    </label>
-                    <input
-                      type="number"
-                      className="form-control font-mono"
-                      style={{ background: '#0f172a', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', fontSize: '14px' }}
-                      value={waCustomAmount}
-                      onChange={(e) => setWaCustomAmount(e.target.value)}
-                      placeholder="Enter collection amount"
-                      required
-                    />
-                  </div>
-
-                  {/* Send CTA */}
-                  <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
-                    <button
-                      type="button"
-                      className="btn-modal-cancel flex-grow-1"
-                      onClick={() => setWaModalOpen(false)}
-                      style={{ padding: '10px 16px', borderRadius: '10px' }}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={waSending}
-                      className="btn-modal-save flex-grow-2 font-weight-bold"
-                      style={{ background: 'linear-gradient(135deg, #25d366, #128c7e)', border: 'none', padding: '10px 20px', borderRadius: '10px', color: '#fff', cursor: 'pointer' }}
-                    >
-                      {waSending ? (
-                        <span>Generating Link & Dispatching...</span>
-                      ) : (
-                        <>
-                          <i className="bi bi-whatsapp me-2"></i> Generate & Send Payment Link
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </DashboardLayout>
   );
