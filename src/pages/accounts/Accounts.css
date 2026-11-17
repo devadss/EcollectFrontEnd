@@ -420,6 +420,11 @@
   color: #34d399;
 }
 
+.collection-nav-tab.is-sb.is-active {
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #60a5fa;
+}
+
 .collection-nav-tab.is-fd.is-active {
   border-color: rgba(245, 158, 11, 0.4);
   color: #fbbf24;

@@ -84,7 +84,9 @@ export const buildStandalonePaymentPayload = ({
   const rawColType = (account?.collectionType || account?.productType || account?.schemeType || account?.accountType || account?.type || 'RD').toString().toUpperCase();
   const cleanColType = rawColType.includes('LOAN')
     ? 'LOAN'
-    : (rawColType.includes('RDCL') ? 'RDCL' : (rawColType.includes('FD') ? 'FD' : (rawColType.includes('SB') ? 'SB' : 'RD')));
+    : (rawColType.includes('DAILY') || rawColType === 'DD' || rawColType.includes('SB')
+      ? 'SB'
+      : (rawColType.includes('RDCL') ? 'RDCL' : (rawColType.includes('FD') ? 'FD' : 'RD')));
 
   const agentCodeStr = String(agent?.code || agent?.agentCode || agent?.external_agent_id || user?.agentCode || user?.external_agent_id || '1075');
   const agentNameStr = agent?.name || agent?.fullName || user?.name || user?.fullName || 'Branch Agent';

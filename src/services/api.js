@@ -280,10 +280,10 @@ export const merchantApi = {
       const needsHydration = listData.some(m => {
         const idVal = m?.id ?? m?.merchantId ?? m?.MerchantId;
         return idVal && (
-          m.pgVendorPercentage == null && 
-          m.PgVendorPercentage == null && 
+          m.pgVendorPercentage == null &&
+          m.PgVendorPercentage == null &&
           m.vendorPercentage == null &&
-          m.platformPercentage == null && 
+          m.platformPercentage == null &&
           m.PlatformPercentage == null &&
           m.settlementPercentage == null &&
           m.SettlementPercentage == null
@@ -518,6 +518,12 @@ export const branchApi = {
     return api.get('/Branch/fetch-loan-customers', { params })
       .catch(() => api.get('/Branch/fetch-rd-customers', { params: { ...params, productType: 'LOAN', collectionType: 'LOAN' } }));
   },
+  fetchSbCustomers: (params) => {
+    console.log('📡 branchApi.fetchSbCustomers (Daily Deposit) called with params:', params);
+    return api.get('/Branch/fetch-sb-customers', { params })
+      .catch(() => api.post('/Branch/fetch-sb-customers', params))
+      .catch(() => api.get('/Customer/fetch-sb-customers', { params }));
+  },
 };
 
 // ============================================================
@@ -534,7 +540,7 @@ export const getCollectionEndpoint = (operation = 'accounts', productType = 'LOA
     }
   } catch (e) { }
 
-  const API_BASE = process.env.REACT_APP_API_URL || 'https://localhost:7256/api';
+  const API_BASE = process.env.REACT_APP_API_URL || 'https://dev.collect.org.in/api';
   if (operation === 'accounts') {
     return `${API_BASE}/Account/get-all?type=${productType}`;
   }
@@ -569,6 +575,23 @@ export const accountApi = {
         .catch(() => api.get('/Customer/fetch-rd-customers', { params: enrichedParams }))
         .catch(() => api.get('/Account/get-all', { params: enrichedParams }))
         .catch(() => api.get('/Account', { params: enrichedParams }));
+    }
+
+    if (prod === 'SB' || prod === 'DAILY_DEPOSIT' || prod === 'DD') {
+      console.log('🚀 [accountApi] Fetching SB Customers from /Branch/fetch-sb-customers with params:', enrichedParams);
+      return api.get('/Branch/fetch-sb-customers', { params: enrichedParams })
+        .catch(err => {
+          console.warn('⚠️ /Branch/fetch-sb-customers GET failed, trying POST...', err);
+          return api.post('/Branch/fetch-sb-customers', enrichedParams);
+        })
+        .catch(err => {
+          console.warn('⚠️ /Customer/fetch-sb-customers fallback...', err);
+          return api.get('/Customer/fetch-sb-customers', { params: enrichedParams });
+        })
+        .catch(err => {
+          console.warn('⚠️ /Customer/fetch-sb-customers POST fallback...', err);
+          return api.post('/Customer/fetch-sb-customers', enrichedParams);
+        });
     }
 
     return api.get('/Branch/fetch-rd-customers', { params: enrichedParams })

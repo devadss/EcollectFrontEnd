@@ -38,4 +38,7 @@ update_due_reminder_service.js
 update_vi_auth_dtos.js
 update_vi_service_dynamic_token.js
 update_voice_controller.js
+obj/
+bin/
+Config/
 

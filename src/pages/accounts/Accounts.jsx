@@ -720,9 +720,9 @@ const Accounts = () => {
   const [cashError, setCashError] = useState(null);
   const [cashData, setCashData] = useState(null);
 
-  // Multi-Product Collection Types (RD, LOAN, FD, RDCL, etc.)
-  const [collectionProductTab, setCollectionProductTab] = useState('ALL'); // 'ALL' | 'RD' | 'LOAN' | 'FD' | 'RDCL'
-  const [configuredCollectionTypes, setConfiguredCollectionTypes] = useState(['RD', 'LOAN', 'FD', 'RDCL']);
+  // Multi-Product Collection Types (RD, LOAN, SB, FD, RDCL, etc.)
+  const [collectionProductTab, setCollectionProductTab] = useState('ALL'); // 'ALL' | 'RD' | 'LOAN' | 'SB' | 'FD' | 'RDCL'
+  const [configuredCollectionTypes, setConfiguredCollectionTypes] = useState(['RD', 'LOAN', 'SB', 'FD', 'RDCL']);
 
   const user = useMemo(() => {
     try {
@@ -2099,7 +2099,7 @@ const Accounts = () => {
 
     setLoading(true);
     try {
-      if (!isIntegratedMode) {
+      if (!isIntegratedMode && activeProd !== 'SB' && activeProd !== 'DAILY_DEPOSIT' && activeProd !== 'DD') {
         // NON-INTEGRATED STANDALONE MODE (Query local Accounts database)
         console.log(`📡 [Non-Integrated Mode] Fetching accounts for product [${activeProd}], Branch [${bCode}]`);
         let localList = [];
@@ -2253,7 +2253,7 @@ const Accounts = () => {
         }
 
         if (typeof root === 'object') {
-          for (const key of ['CustomerList', 'customerList', 'AccountList', 'accountList', 'LoanList', 'loanList', 'accounts', 'data', 'Data', 'result', 'Result', 'items', 'response']) {
+          for (const key of ['CustomerList', 'customerList', 'AccountList', 'accountList', 'LoanList', 'loanList', 'accounts', 'data', 'Data', 'result', 'Result', 'items', 'response', 'SBCustomerList', 'sbCustomerList', 'sb_customers', 'sbCustomers', 'customers', 'Customers']) {
             if (root[key] !== undefined) {
               const list = extractAccountList(root[key]);
               if (list.length > 0) return list;
@@ -2264,7 +2264,7 @@ const Accounts = () => {
             const val = root[key];
             if (Array.isArray(val) && val.length > 0) {
               if (typeof val[0] === 'object' && val[0] !== null) {
-                if (val[0].Cust_Id || val[0].Cust_Name || val[0].Ln_GlobalAccNo || val[0].ln_GlobalAccNo || val[0].Dep_GlobalAccNo || val[0].Loan_AccNo || val[0].LoanAccNo || val[0].accountNumber || val[0].accountNo || val[0].Acc_No || val[0].name) {
+                if (val[0].Cust_Id || val[0].Cust_Name || val[0].CustName || val[0].cust_name || val[0].Ln_GlobalAccNo || val[0].ln_GlobalAccNo || val[0].Dep_GlobalAccNo || val[0].dep_GlobalAccNo || val[0].Loan_AccNo || val[0].LoanAccNo || val[0].accountNumber || val[0].accountNo || val[0].Acc_No || val[0].AccNo || val[0].name || val[0].GlobalAccNo || val[0].globalAccNo) {
                   return val;
                 }
               }
@@ -2340,10 +2340,14 @@ const Accounts = () => {
             (item.Sch_Code || item.SchCode || '').toString().toUpperCase().includes('LOAN') ||
             !!item.Loan_AccNo || !!item.LoanAccNo || !!item.Loan_No || !!item.loanNo || !!item.LoanAccountNo || !!item.loanAccountNo || !!item.emi_amount || !!item.outstanding_amount;
           
+          const isSb = 
+            (item.productType || item.ProductType || item.collectionType || item.CollectionType || item.accountType || item.AccountType || item.Sch_Name || item.sch_name || '').toString().toUpperCase().includes('SB') ||
+            (item.productType || item.ProductType || item.collectionType || item.CollectionType || item.accountType || item.AccountType || item.Sch_Name || item.sch_name || '').toString().toUpperCase().includes('DAILY') ||
+            (item.productType || item.ProductType || item.collectionType || item.CollectionType || '').toString().toUpperCase() === 'DD';
           const isFd = (item.productType || item.collectionType || item.accountType || '').toString().toUpperCase().includes('FD');
           const isRdcl = (item.productType || item.collectionType || item.accountType || '').toString().toUpperCase().includes('RDCL');
 
-          const detectedType = isLoan ? 'LOAN' : isFd ? 'FD' : isRdcl ? 'RDCL' : 'RD';
+          const detectedType = isLoan ? 'LOAN' : isSb ? 'SB' : isFd ? 'FD' : isRdcl ? 'RDCL' : 'RD';
 
           // Extract exact Account / Loan Number directly from API without adding artificial 'LN' or 'RD' prefixes
           const rawAccCandidate = 
@@ -2476,9 +2480,9 @@ const Accounts = () => {
             '';
 
           const schName = String(rawSchemeCandidate).trim() || 
-            (isLoan ? 'Loan' : isFd ? 'Fixed Deposit 12M' : isRdcl ? 'RD Closed Loan Recovery' : 'RD-12-NRL Deposit');
+            (isLoan ? 'Loan' : isSb ? 'Savings / Daily Deposit' : isFd ? 'Fixed Deposit 12M' : isRdcl ? 'RD Closed Loan Recovery' : 'RD-12-NRL Deposit');
           
-          const schCode = item.Sch_Code || item.SchCode || item.schemeCode || item.SchemeCode || (isLoan ? '08' : '04');
+          const schCode = item.Sch_Code || item.SchCode || item.schemeCode || item.SchemeCode || (isLoan ? '08' : isSb ? '09' : '04');
           const ifsc = item.ifscCode || item.ifsc || item.IFSC || `DIGI000${schCode || '04'}`;
           const balanceVal = Number(item.balance ?? item.Balance ?? item.outstanding_amount ?? item.total_due ?? item.Principal_Balance ?? item.totalDeposited ?? item.monthlyAmount ?? item.Amount ?? 0);
           const currentBranchName = item.branchName || item.Branch_Name || item.branch_name || user?.branchName || user?.branch || localStorage.getItem('branchName') || `Branch ${bCode}`;
@@ -2492,7 +2496,7 @@ const Accounts = () => {
             accountNumber: accNo,
             maskedNumber: accNo,
             ifscCode: ifsc,
-            accountType: item.accountType || schName || (isLoan ? 'Loan Collection' : isFd ? 'Fixed Deposit' : isRdcl ? 'RDCL Recovery' : 'RD Deposit'),
+            accountType: item.accountType || schName || (isLoan ? 'Loan Collection' : isSb ? 'Savings / Daily Deposit' : isFd ? 'Fixed Deposit' : isRdcl ? 'RDCL Recovery' : 'RD Deposit'),
             collectionType: detectedType,
             branchName: currentBranchName,
             balance: balanceVal,
@@ -2557,7 +2561,7 @@ const Accounts = () => {
         if (cfgRes.status === 'fulfilled') {
           const cfgs = cfgRes.value?.data?.data || cfgRes.value?.data || [];
           if (Array.isArray(cfgs) && cfgs.length > 0) {
-            const types = new Set(['RD', 'LOAN']);
+            const types = new Set(['RD', 'LOAN', 'SB', 'FD', 'RDCL']);
             cfgs.forEach(c => {
               const p = (c.productType || c.ProductType || '').toString().toUpperCase();
               if (p) types.add(p);
@@ -4067,7 +4071,7 @@ const Accounts = () => {
   };
 
   const collectionCounts = useMemo(() => {
-    const counts = { ALL: accounts.length, RD: 0, LOAN: 0, FD: 0, RDCL: 0 };
+    const counts = { ALL: accounts.length, RD: 0, LOAN: 0, SB: 0, FD: 0, RDCL: 0 };
     (accounts || []).forEach(a => {
       const t = (a.collectionType || 'RD').toUpperCase();
       if (counts[t] !== undefined) counts[t] += 1;
@@ -4422,6 +4426,19 @@ const Accounts = () => {
 
           <button 
             type="button"
+            className={`collection-nav-tab is-sb ${collectionProductTab === 'SB' ? 'is-active' : ''}`}
+            onClick={() => {
+              setCollectionProductTab('SB');
+              loadAccounts(null, null, 'SB');
+            }}
+          >
+            <span className="tab-dot">💰</span>
+            <span className="tab-label">SB Accounts (Savings / Daily Deposit)</span>
+            <span className="tab-badge-count font-mono">{collectionCounts.SB || 0}</span>
+          </button>
+
+          <button 
+            type="button"
             className={`collection-nav-tab is-fd ${collectionProductTab === 'FD' ? 'is-active' : ''}`}
             onClick={() => {
               setCollectionProductTab('FD');
@@ -4471,7 +4488,7 @@ const Accounts = () => {
 
           {/* Additional Dynamic Merchant Configured Collection Types */}
           {configuredCollectionTypes
-            .filter(t => !['RD', 'LOAN', 'FD', 'RDCL'].includes(t.toUpperCase()))
+            .filter(t => !['RD', 'LOAN', 'SB', 'FD', 'RDCL'].includes(t.toUpperCase()))
             .map(customType => {
               const upper = customType.toUpperCase();
               return (

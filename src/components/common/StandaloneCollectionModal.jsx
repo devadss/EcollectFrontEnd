@@ -164,11 +164,12 @@ const StandaloneCollectionModal = ({
     setError(null);
 
     try {
+      const targetColType = account.collectionType || account.productType || 'RD';
       const res = await processStandaloneCashCollection({
         accountNumber: account.accountNumber,
         customerName: account.accountHolder,
         amount: amt,
-        collectionType: account.collectionType || 'LOAN',
+        collectionType: targetColType,
         merchantId: authUser?.merchantId || 4,
         branchId: 1,
         agentCode: account.assignedAgentCode || authUser?.agentCode || '1075',
@@ -184,7 +185,9 @@ const StandaloneCollectionModal = ({
           amount: amt,
           accountNumber: account.accountNumber,
           receiptNumber: res.receiptNumber,
-          remainingBalance: Math.max(0, Number(account.balance || 0) - amt),
+          remainingBalance: targetColType.toUpperCase().includes('LOAN')
+            ? Math.max(0, Number(account.balance || 0) - amt)
+            : Number(account.balance || 0) + amt,
           merchantId: authUser?.merchantId || 4,
           merchantName: authUser?.company || 'eCollect'
         });
@@ -194,7 +197,7 @@ const StandaloneCollectionModal = ({
           amount: amt,
           customerName: account.accountHolder,
           accountNumber: account.accountNumber,
-          collectionType: account.collectionType || 'LOAN',
+          collectionType: targetColType,
           agentName: authUser?.fullName || authUser?.name || 'Assigned Field Agent',
           timestamp: new Date().toISOString()
         };
@@ -341,7 +344,9 @@ const StandaloneCollectionModal = ({
           <div className="col-customer-banner">
             <div>
               <div className="col-customer-name">{account.accountHolder}</div>
-              <div className="col-customer-acc">Acc #{account.accountNumber} ({account.collectionType || 'LOAN'})</div>
+              <div className="col-customer-acc">
+                Acc #{account.accountNumber} <span style={{ background: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, marginLeft: '6px' }}>{account.collectionType || account.productType || 'RD'}</span>
+              </div>
             </div>
             <div style={{ textAlign: 'right' }}>
               <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block' }}>Outstanding Due</span>
