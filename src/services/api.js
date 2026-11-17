@@ -674,7 +674,7 @@ export const paymentApi = {
   },
   processPaymentLink: (data) => {
     console.log('📡 paymentApi.processPaymentLink called with data:', data);
-    const merchantId = Number(data?.merchantId || data?.MerchantId || localStorage.getItem('merchantId') || 22);
+    const merchantId = Number(data?.merchantId || data?.MerchantId || localStorage.getItem('merchantId'));
     const custPhone = String(data?.customer_details?.customer_phone || data?.customerPhone || data?.phone || data?.mobile || '').replace(/\D/g, '').slice(-10);
     const custName = data?.customer_details?.customer_name || data?.customerName || data?.name || data?.accountHolder || 'Customer';
     const accNo = String(data?.customer_details?.customer_accno || data?.customer_details?.account_number || data?.accountNumber || data?.accNo || 'ACC-ONLINE');

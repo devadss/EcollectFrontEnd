@@ -306,6 +306,7 @@ const Sidebar = ({
         { section: 'Overview', items: [{ label: 'Dashboard', path: '/dashboard' }] },
         {
           section: 'Collections', items: [
+            { label: 'Accounts & Collections', path: '/accounts' },
             { label: 'Daily Due List', path: '/due-list' },
             { label: 'Delinquency Buckets', path: '/buckets' },
             { label: 'Transaction History', path: '/transactions' },
@@ -342,6 +343,11 @@ const Sidebar = ({
     // Default: Software Admin
     return [
       { section: 'Overview', items: [{ label: 'Dashboard', path: '/dashboard' }] },
+      {
+        section: 'Collections', items: [
+          { label: 'Accounts & Collections', path: '/accounts' },
+        ]
+      },
       {
         section: 'Management', items: [
           { label: 'Merchants', path: '/merchants' },

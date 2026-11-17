@@ -2090,7 +2090,7 @@ const Accounts = () => {
   const loadAccounts = useCallback(async (overrideBranchCode = null, overrideAgentCode = null, targetProduct = null) => {
     const bCode = overrideBranchCode || selectedBranchCode || user?.branchCode || user?.external_branch_id || localStorage.getItem('branchCode') || '01';
     const aCode = overrideAgentCode || selectedAgentCode || user?.agentCode || user?.external_agent_id || localStorage.getItem('agentCode') || '1075';
-    const mId = user?.merchantId || user?.merchant_id || localStorage.getItem('merchantId') || 4;
+    const mId = user?.merchantId || user?.merchant_id || localStorage.getItem('merchantId');
     const activeProd = targetProduct !== null ? targetProduct : collectionProductTab;
 
     // Check Integration Status (Y vs N)
@@ -2795,7 +2795,7 @@ const Accounts = () => {
     })();
 
     const currentMerchantId = Number(
-      user?.merchantId || user?.merchant_id || localStorage.getItem('merchantId') || 4
+      user?.merchantId || user?.merchant_id || localStorage.getItem('merchantId')
     );
 
     // Pre-validate Merchant API Keys / Configuration in database
@@ -2943,7 +2943,7 @@ const Accounts = () => {
     if (!qrAccount) return;
 
     const currentMerchantId = Number(
-      user?.merchantId || user?.merchant_id || localStorage.getItem('merchantId') || 4
+      user?.merchantId || user?.merchant_id || localStorage.getItem('merchantId')
     );
 
     // Pre-validate Merchant API Keys / Configuration in database
@@ -3079,7 +3079,7 @@ const Accounts = () => {
         return {};
       }
     })();
-    const currentMid = Number(currentUser?.merchantId || currentUser?.merchant_id || localStorage.getItem('merchantId') || 4);
+    const currentMid = Number(currentUser?.merchantId || currentUser?.merchant_id || localStorage.getItem('merchantId'));
 
     const txnId = resData.transactionId || resData.transaction_id || resData.data?.transaction_id || `UPI-${Date.now().toString().slice(-6)}`;
     const cbsTxnId = resData.cbsTransactionId || resData.data?.cbsTransactionId || resData.data?.vendorPostTransId || resData.receipt?.TRAN_ID || 'CBS-POSTED';
@@ -3244,7 +3244,7 @@ const Accounts = () => {
     if (!qrAccount) return;
 
     const currentMerchantId = Number(
-      user?.merchantId || user?.merchant_id || localStorage.getItem('merchantId') || 4
+      user?.merchantId || user?.merchant_id || localStorage.getItem('merchantId')
     );
 
     // Find agent info
@@ -3416,7 +3416,7 @@ const Accounts = () => {
       cleanPhone = cleanPhone.slice(-10);
     }
 
-    const merchantId = localStorage.getItem('merchantId') || 22;
+    const merchantId = user?.merchantId || user?.merchant_id || localStorage.getItem('merchantId');
 
     const isLoan = qrAccount?.collectionType === 'LOAN';
     const text = isLoan
@@ -3477,7 +3477,7 @@ const Accounts = () => {
     const name = acc.accountHolder || acc.customerName || 'Customer';
     const accNumber = acc.accountNumber || acc.accountCode || 'N/A';
     const productType = acc.collectionType || acc.productType || 'Account';
-    const merchantId = localStorage.getItem('merchantId') || 22;
+    const merchantId = user?.merchantId || user?.merchant_id || localStorage.getItem('merchantId');
 
     const result = await Swal.fire({
       title: null,
