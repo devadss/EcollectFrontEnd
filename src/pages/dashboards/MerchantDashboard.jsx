@@ -674,6 +674,9 @@ const MerchantDashboard = () => {
               <MerchantIcons.Download />
               <span>Export Dossier</span>
             </button>
+            <button className="merchant-export-btn" onClick={() => navigate('/accounts')} title="View Customer Accounts & Collections" style={{ borderColor: 'rgba(59, 130, 246, 0.4)', color: '#60a5fa' }}>
+              <span>🏦 Collections & Deposits</span>
+            </button>
             <button className="merchant-add-btn" onClick={() => navigate('/branches/add')}>
               <MerchantIcons.Plus />
               <span>Add Branch Outlet</span>

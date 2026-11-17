@@ -166,8 +166,8 @@ const Icons = {
   )
 };
 
-const Sidebar = ({ 
-  collapsed = false, 
+const Sidebar = ({
+  collapsed = false,
   mobileOpen = false,
   onToggle,
   onMobileClose,
@@ -238,105 +238,144 @@ const Sidebar = ({
     if (normRole.includes('branch') || normRole.includes('bank')) {
       return [
         { section: 'Overview', items: [{ label: 'Dashboard', path: '/dashboard' }] },
-        { section: 'Collections', items: [
-          { label: 'Daily Due List', path: '/due-list' },
-          { label: 'Delinquency Buckets', path: '/buckets' },
-        ]},
-        { section: 'Management', items: [
-          { label: 'Agents', path: '/agents' },
-          { label: 'Accounts', path: '/accounts' },
-        ]},
-        { section: 'Transactions', items: [
-          { label: 'Transaction History', path: '/transactions' },
-        ]},
-        { section: 'Analytics', items: [
-          { label: 'Reports', path: '/reports' },
-        ]},
-        { section: 'System', items: [
-          { label: 'Notifications', path: '/notifications' },
-          { label: 'Settings', path: '/settings' },
-        ]}
+        {
+          section: 'Collections', items: [
+            { label: 'Daily Due List', path: '/due-list' },
+            { label: 'Delinquency Buckets', path: '/buckets' },
+          ]
+        },
+        {
+          section: 'Management', items: [
+            { label: 'Agents', path: '/agents' },
+            { label: 'Accounts', path: '/accounts' },
+          ]
+        },
+        {
+          section: 'Transactions', items: [
+            { label: 'Transaction History', path: '/transactions' },
+          ]
+        },
+        {
+          section: 'Analytics', items: [
+            { label: 'Reports', path: '/reports' },
+          ]
+        },
+        {
+          section: 'System', items: [
+            { label: 'Notifications', path: '/notifications' },
+            { label: 'Settings', path: '/settings' },
+          ]
+        }
       ];
     }
 
     if (normRole.includes('merchant')) {
       return [
         { section: 'Overview', items: [{ label: 'Dashboard', path: '/dashboard' }] },
-        { section: 'Management', items: [
-          { label: 'Branches', path: '/branches' },
-          { label: 'Agents', path: '/agents' },
-        ]},
-        { section: 'Transactions', items: [
-          { label: 'Transaction History', path: '/transactions' },
-          { label: 'Settlements', path: '/settlements' },
-          { label: 'Refunds', path: '/refunds' },
-        ]},
-        { section: 'System', items: [
-          { label: 'Notifications', path: '/notifications' },
-          { label: 'Settings', path: '/settings' },
-        ]}
+        {
+          section: 'Collections', items: [
+            { label: 'Accounts & Collections', path: '/accounts' },
+            { label: 'Daily Due List', path: '/due-list' },
+            { label: 'Delinquency Buckets', path: '/buckets' },
+          ]
+        },
+        {
+          section: 'Management', items: [
+            { label: 'Branches', path: '/branches' },
+            { label: 'Agents', path: '/agents' },
+          ]
+        },
+        {
+          section: 'Transactions', items: [
+            { label: 'Transaction History', path: '/transactions' },
+            { label: 'Settlements', path: '/settlements' },
+            { label: 'Refunds', path: '/refunds' },
+          ]
+        },
+        {
+          section: 'System', items: [
+            { label: 'Notifications', path: '/notifications' },
+            { label: 'Settings', path: '/settings' },
+          ]
+        }
       ];
     }
 
     if (normRole.includes('agent')) {
       return [
         { section: 'Overview', items: [{ label: 'Dashboard', path: '/dashboard' }] },
-        { section: 'Collections', items: [
-          { label: 'Daily Due List', path: '/due-list' },
-          { label: 'Delinquency Buckets', path: '/buckets' },
-          { label: 'Transaction History', path: '/transactions' },
-          { label: 'My Customers', path: '/customers' },
-          { label: 'Commission', path: '/commission' },
-        ]},
-        { section: 'Account', items: [
-          { label: 'Notifications', path: '/notifications' },
-          { label: 'Settings', path: '/settings' },
-        ]}
+        {
+          section: 'Collections', items: [
+            { label: 'Daily Due List', path: '/due-list' },
+            { label: 'Delinquency Buckets', path: '/buckets' },
+            { label: 'Transaction History', path: '/transactions' },
+            { label: 'My Customers', path: '/customers' },
+            { label: 'Commission', path: '/commission' },
+          ]
+        },
+        {
+          section: 'Account', items: [
+            { label: 'Notifications', path: '/notifications' },
+            { label: 'Settings', path: '/settings' },
+          ]
+        }
       ];
     }
 
     if (normRole.includes('customer')) {
       return [
         { section: 'Overview', items: [{ label: 'Dashboard', path: '/dashboard' }] },
-        { section: 'Payments', items: [
-          { label: 'Payment History', path: '/transactions' },
-        ]},
-        { section: 'Account', items: [
-          { label: 'Notifications', path: '/notifications' },
-          { label: 'Settings', path: '/settings' },
-        ]}
+        {
+          section: 'Payments', items: [
+            { label: 'Payment History', path: '/transactions' },
+          ]
+        },
+        {
+          section: 'Account', items: [
+            { label: 'Notifications', path: '/notifications' },
+            { label: 'Settings', path: '/settings' },
+          ]
+        }
       ];
     }
 
     // Default: Software Admin
     return [
       { section: 'Overview', items: [{ label: 'Dashboard', path: '/dashboard' }] },
-      { section: 'Management', items: [
-        { label: 'Merchants', path: '/merchants' },
-        { label: 'Agents', path: '/agents' },
-        { label: 'Branches', path: '/branches' },
-        { label: 'Merchant Config', path: '/merchants/merchantconfig' }
-      ]},
-      { section: 'Transactions', items: [
-        { label: 'Transaction History', path: '/transactions' },
-        { label: 'Settlements', path: '/settlements' },
-        { label: 'Refunds', path: '/refunds' },
-      ]},
-      { section: 'Analytics', items: [
-        { label: 'Reports', path: '/reports' },
-        { label: 'Commission', path: '/commission' },
-      ]},
-      { section: 'System', items: [
-        { label: 'Notifications', path: '/notifications' },
-        { label: 'Settings', path: '/settings' },
-      ]}
+      {
+        section: 'Management', items: [
+          { label: 'Merchants', path: '/merchants' },
+          { label: 'Agents', path: '/agents' },
+          { label: 'Branches', path: '/branches' },
+          { label: 'Merchant Config', path: '/merchants/merchantconfig' }
+        ]
+      },
+      {
+        section: 'Transactions', items: [
+          { label: 'Transaction History', path: '/transactions' },
+          { label: 'Settlements', path: '/settlements' },
+          { label: 'Refunds', path: '/refunds' },
+        ]
+      },
+      {
+        section: 'Analytics', items: [
+          { label: 'Reports', path: '/reports' },
+          { label: 'Commission', path: '/commission' },
+        ]
+      },
+      {
+        section: 'System', items: [
+          { label: 'Notifications', path: '/notifications' },
+          { label: 'Settings', path: '/settings' },
+        ]
+      }
     ];
   };
 
   // Helper to format table-driven database menu records
   const formatDynamicMenus = (rawMenus) => {
     if (!Array.isArray(rawMenus) || rawMenus.length === 0) return null;
-    
+
     // Check if already structured sections
     if (rawMenus[0]?.section && Array.isArray(rawMenus[0]?.items)) {
       return rawMenus;
@@ -352,7 +391,7 @@ const Sidebar = ({
       const label = item.name || item.title || item.label || item.menuName || 'Item';
       let path = item.url || item.path || item.route || `/${label.toLowerCase().replace(/\s+/g, '')}`;
       if (!path.startsWith('/')) path = `/${path}`;
-      
+
       grouped[sectionName].push({
         label,
         path
@@ -375,14 +414,14 @@ const Sidebar = ({
           setUserRole(u.role.toLowerCase());
         }
         const menusStr = localStorage.getItem('menus') || localStorage.getItem('auth_menus');
-        
+
         if (menusStr) {
           try {
             const menus = JSON.parse(menusStr);
             if (Array.isArray(menus) && menus.length > 0) {
               setUserMenus(menus);
             }
-          } catch (e) {}
+          } catch (e) { }
         }
 
         // Proactively fetch latest table menus from backend if token present
@@ -428,9 +467,9 @@ const Sidebar = ({
   // Compute menu items & strictly enforce: Settlements and Refunds menus ONLY for Merchant and Software Admin
   const isMerchant = normUserRole.includes('merchant');
   const isSoftwareAdmin = normUserRole.includes('admin') || normUserRole.includes('software');
-  const isMerchantOrAdmin = 
-    normUserRole.includes('merchant') || 
-    normUserRole.includes('admin') || 
+  const isMerchantOrAdmin =
+    normUserRole.includes('merchant') ||
+    normUserRole.includes('admin') ||
     normUserRole === 'softwareadmin';
 
   // Integration Status check (Model Y = Integrated CBS, Model N = Standalone Ledger)
@@ -444,7 +483,7 @@ const Sidebar = ({
     items: sec.items.filter(item => {
       const p = (item.path || '').toLowerCase();
       const l = (item.label || '').toLowerCase();
-      const isRestrictedFinance = 
+      const isRestrictedFinance =
         p.includes('settlement') || l.includes('settlement') ||
         p.includes('refund') || l.includes('refund');
       if (isRestrictedFinance && !isMerchantOrAdmin) {
@@ -453,7 +492,7 @@ const Sidebar = ({
 
       // Collections (Due List, Delinquency Buckets) are required ONLY for Branch / Agent operational roles in Standalone Model (Status: N).
       // They are strictly hidden for Software Admin, Merchant, and Integrated CBS Mode (Status: Y).
-      const isCollectionMenu = 
+      const isCollectionMenu =
         p.includes('due-list') || l.includes('due list') ||
         p.includes('bucket') || l.includes('bucket');
       if (isCollectionMenu && (isSoftwareAdmin || isMerchant || isIntegrated)) {
@@ -477,7 +516,7 @@ const Sidebar = ({
     e.preventDefault();
     if (isLoggingOut) return;
     setIsLoggingOut(true);
-    
+
     try {
       localStorage.clear();
       sessionStorage.clear();
@@ -509,22 +548,22 @@ const Sidebar = ({
   return (
     <aside className={sidebarClass} aria-label="Sidebar navigation">
       <div className="sidebar-container">
-        
+
         {/* Brand Header */}
         <div className="sidebar-brand-header">
           <div className="brand-logo-pill" onClick={() => navigate('/dashboard')} role="button" tabIndex={0} title="eCollect • Smart Payment Solutions">
             <div className="brand-logo-img-wrapper">
-              <img 
-                src={isLightSidebar ? "/ecollect-logo-dark.png" : "/ecollect-logo.png"} 
-                alt="eCollect - Smart Payment Solutions" 
-                className={collapsed ? "sidebar-logo-collapsed-img" : "sidebar-logo-expanded-img"} 
+              <img
+                src={isLightSidebar ? "/ecollect-logo-dark.png" : "/ecollect-logo.png"}
+                alt="eCollect - Smart Payment Solutions"
+                className={collapsed ? "sidebar-logo-collapsed-img" : "sidebar-logo-expanded-img"}
               />
             </div>
           </div>
 
           {!isMobile && (
-            <button 
-              className="sidebar-collapse-trigger" 
+            <button
+              className="sidebar-collapse-trigger"
               onClick={onToggle}
               title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
               aria-label="Toggle sidebar collapse"
@@ -563,7 +602,7 @@ const Sidebar = ({
               {!collapsed && section.section && (
                 <div className="sidebar-group-heading">{section.section}</div>
               )}
-              
+
               <div className="sidebar-group-items">
                 {section.items.map((item, itemIdx) => {
                   const isActive = isPathActive(item.path);
@@ -597,7 +636,7 @@ const Sidebar = ({
 
         {/* Sidebar Footer / Logout */}
         <div className="sidebar-footer-wrapper">
-          <button 
+          <button
             className={`sidebar-logout-action ${isLoggingOut ? 'is-logging-out' : ''}`}
             onClick={handleLogout}
             disabled={isLoggingOut}

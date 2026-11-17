@@ -168,6 +168,25 @@ const AddBranch = () => {
   });
 
   const [errors, setErrors] = useState({});
+  const [existingMerchantBranches, setExistingMerchantBranches] = useState([]);
+
+  // Load registered branches for the selected merchant to validate branch code uniqueness merchant-wise
+  useEffect(() => {
+    const targetMid = formData.merchantId || currentMerchantId;
+    if (!targetMid) {
+      setExistingMerchantBranches([]);
+      return;
+    }
+
+    branchApi.getAll({ merchantId: targetMid, pageSize: 500 })
+      .then(res => {
+        const list = res?.data?.data || res?.data || [];
+        setExistingMerchantBranches(Array.isArray(list) ? list : []);
+      })
+      .catch(err => {
+        console.warn('Could not load existing merchant branches for validation:', err);
+      });
+  }, [formData.merchantId, currentMerchantId]);
 
   // Single-flight fetch external branch list with deduplication
   const fetchBranchList = useCallback(async (mid = null, force = false) => {
@@ -343,16 +362,30 @@ const AddBranch = () => {
     const selectedBranch = branchOptions.find(b => b.Branch_Code === selectedBranchCode);
     
     if (selectedBranch) {
+      const bCode = (selectedBranch.Branch_Code || '').trim();
       setFormData(prev => ({
         ...prev,
-        code: selectedBranch.Branch_Code || '',
-        external_branch_id: selectedBranch.Branch_Code || '',
+        code: bCode,
+        external_branch_id: bCode,
         name: selectedBranch.Branch_Name || '',
         address: selectedBranch.Address || prev.address || '',
         source_system: 'EXTERNAL'
       }));
       if (errors.name) setErrors(prev => ({ ...prev, name: null }));
-      if (errors.code) setErrors(prev => ({ ...prev, code: null }));
+      
+      // Validate branch code uniqueness merchant-wise
+      const isDuplicate = existingMerchantBranches.some(b => 
+        String(b.id) !== String(id) && 
+        (b.code || b.BranchCode || '').trim().toLowerCase() === bCode.toLowerCase()
+      );
+      if (isDuplicate) {
+        setErrors(prev => ({
+          ...prev,
+          code: `Branch code '${bCode}' is already registered for this merchant.`
+        }));
+      } else {
+        setErrors(prev => ({ ...prev, code: null }));
+      }
     }
   };
 
@@ -430,6 +463,23 @@ const AddBranch = () => {
       setErrors(prev => ({ ...prev, [name]: null }));
     }
 
+    // Real-time merchant-wise branch code validation
+    if (name === 'code' && value) {
+      const bCode = value.trim();
+      const isDuplicate = existingMerchantBranches.some(b => 
+        String(b.id) !== String(id) && 
+        (b.code || b.BranchCode || '').trim().toLowerCase() === bCode.toLowerCase()
+      );
+      if (isDuplicate) {
+        setErrors(prev => ({
+          ...prev,
+          code: `Branch code '${bCode}' is already registered for this merchant.`
+        }));
+      } else if (errors.code) {
+        setErrors(prev => ({ ...prev, code: null }));
+      }
+    }
+
     // Auto-detect State and District when a 6-digit Pincode is entered
     if (name === 'zipCode' && value && value.trim().length === 6 && /^\d{6}$/.test(value.trim())) {
       try {
@@ -456,7 +506,18 @@ const AddBranch = () => {
       tempErrors.merchantId = "Please select the respective merchant partner";
     }
     if (!formData.name?.trim()) tempErrors.name = "Branch Name is required";
-    if (!formData.code?.trim()) tempErrors.code = "Branch Code is required";
+    if (!formData.code?.trim()) {
+      tempErrors.code = "Branch Code is required";
+    } else {
+      const bCode = formData.code.trim();
+      const isDuplicate = existingMerchantBranches.some(b => 
+        String(b.id) !== String(id) && 
+        (b.code || b.BranchCode || '').trim().toLowerCase() === bCode.toLowerCase()
+      );
+      if (isDuplicate) {
+        tempErrors.code = `Branch code '${bCode}' is already registered for this merchant.`;
+      }
+    }
     if (!formData.address?.trim()) tempErrors.address = "Operating Street Address is required";
     if (!formData.city?.trim()) tempErrors.city = "City / District is required";
     if (!formData.state?.trim()) tempErrors.state = "State jurisdiction is required";
@@ -558,7 +619,11 @@ const AddBranch = () => {
       navigate('/branches');
     } catch (error) {
       console.error('Error saving branch:', error);
-      showError(error?.response?.data?.message || 'Failed to save branch. Please verify your entries.', 'Branch Save Failed');
+      const errMsg = error?.response?.data?.message || error?.message || 'Failed to save branch. Please verify your entries.';
+      if (errMsg.toLowerCase().includes('branch code') || errMsg.toLowerCase().includes('already registered')) {
+        setErrors(prev => ({ ...prev, code: errMsg }));
+      }
+      showError(errMsg, 'Branch Save Failed');
     } finally {
       setLoading(false);
     }
